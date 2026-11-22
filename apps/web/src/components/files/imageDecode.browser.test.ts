@@ -41,7 +41,8 @@ it("decodes HEIC under the desktop content security policy", async () => {
     );
     const result = await decoded;
     expect(result.error).toBeUndefined();
-    expect(result.blob?.type).toBe("image/png");
+    // WebCodecs tiles decode opaque, so they encode as JPEG; a native decode stays PNG.
+    expect(result.blob?.type).toMatch(/^image\/(jpeg|png)$/);
     const bitmap = await createImageBitmap(result.blob!);
     expect([bitmap.width, bitmap.height]).toEqual([128, 128]);
     bitmap.close();

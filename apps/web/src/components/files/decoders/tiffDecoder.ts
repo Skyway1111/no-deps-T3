@@ -272,6 +272,18 @@ export async function decodeTiff(buffer: ArrayBuffer) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   const palette = ifd.palette;
   if (photometric === 3 && (!palette || palette.length < 3 * (1 << bps))) throw new DecodeError("tiff-color-format");
+  // Common 8-bit chunky gray and RGB(A) copy bytes straight through; rows hold `spp` bytes per pixel, unpadded.
+  if (bps === 8 && !planar && (photometric === 1 || photometric === 2) && !(premultiplied && alphaSample >= 0)) {
+    const data = raw[0]!;
+    const rgb = photometric === 2;
+    for (let p = 0, i = 0, o = 0; p < width * height; p++, i += spp, o += 4) {
+      rgba[o] = data[i]!;
+      rgba[o + 1] = data[rgb ? i + 1 : i]!;
+      rgba[o + 2] = data[rgb ? i + 2 : i]!;
+      rgba[o + 3] = alphaSample >= 0 ? data[i + alphaSample]! : 255;
+    }
+    return { ...orient(rgba, width, height, ifd.orientation), alpha: alphaSample >= 0 };
+  }
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
       const o = (y * width + x) * 4;
@@ -298,7 +310,7 @@ export async function decodeTiff(buffer: ArrayBuffer) {
       rgba[o + 3] = a;
       if (premultiplied && a && a < 255) for (let c = 0; c < 3; c++) rgba[o + c] = (rgba[o + c]! * 255) / a;
     }
-  return orient(rgba, width, height, ifd.orientation);
+  return { ...orient(rgba, width, height, ifd.orientation), alpha: alphaSample >= 0 };
 }
 
 function undoPredictor(row: Uint8Array, samples: number, bps: number, le: boolean) {
@@ -311,18 +323,26 @@ function undoPredictor(row: Uint8Array, samples: number, bps: number, le: boolea
 }
 
 /** Applies EXIF-style orientation 1–8 to an RGBA buffer. */
-function orient(rgba: Uint8ClampedArray, width: number, height: number, orientation: number) {
+function orient(rgba: Uint8ClampedArray<ArrayBuffer>, width: number, height: number, orientation: number) {
   if (orientation <= 1 || orientation > 8) return { width, height, data: rgba };
   const swap = orientation >= 5;
   const [w, h] = swap ? [height, width] : [width, height];
   const out = new Uint8ClampedArray(rgba.length);
-  for (let y = 0; y < height; y++)
-    for (let x = 0; x < width; x++) {
-      const [tx, ty] = [
-        [x, y], [width - 1 - x, y], [width - 1 - x, height - 1 - y], [x, height - 1 - y],
-        [y, x], [height - 1 - y, x], [height - 1 - y, width - 1 - x], [y, width - 1 - x],
-      ][orientation - 1]!;
-      out.set(rgba.subarray((y * width + x) * 4, (y * width + x) * 4 + 4), (ty! * w + tx!) * 4);
-    }
+  const source = new Uint32Array(rgba.buffer, rgba.byteOffset, width * height);
+  const target = new Uint32Array(out.buffer);
+  // Pixel (x, y) lands at start + x * dx + y * dy in the oriented image.
+  const [start, dx, dy] = (
+    {
+      2: [width - 1, -1, w],
+      3: [(height - 1) * w + width - 1, -1, -w],
+      4: [(height - 1) * w, 1, -w],
+      5: [0, w, 1],
+      6: [height - 1, w, -1],
+      7: [(width - 1) * w + height - 1, -w, -1],
+      8: [(width - 1) * w, -w, 1],
+    } as Record<number, [number, number, number]>
+  )[orientation]!;
+  for (let y = 0, i = 0; y < height; y++)
+    for (let x = 0, at = start + y * dy; x < width; x++, i++, at += dx) target[at] = source[i]!;
   return { width: w, height: h, data: out };
 }

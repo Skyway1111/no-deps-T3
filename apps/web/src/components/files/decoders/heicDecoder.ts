@@ -260,10 +260,11 @@ export function iccProfileIsDisplayP3(view: DataView, start: number, end: number
 
 /** The largest JPEG embedded in an Exif payload: the camera's preview thumbnail. */
 export function exifThumbnail(exif: Uint8Array) {
-  for (let start = 0; start + 3 < exif.length; start++) {
-    if (exif[start] !== 0xff || exif[start + 1] !== 0xd8 || exif[start + 2] !== 0xff) continue;
-    for (let end = exif.length - 2; end > start; end--) if (exif[end] === 0xff && exif[end + 1] === 0xd9) return exif.subarray(start, end + 2);
-  }
+  // The last end-of-image marker closes the first start that precedes it: one pass each way.
+  let end = exif.length - 2;
+  while (end > 0 && !(exif[end] === 0xff && exif[end + 1] === 0xd9)) end--;
+  for (let start = 0; start + 3 < exif.length && start < end; start++)
+    if (exif[start] === 0xff && exif[start + 1] === 0xd8 && exif[start + 2] === 0xff) return exif.subarray(start, end + 2);
   return undefined;
 }
 
@@ -271,31 +272,37 @@ async function decodeTiles(image: HeifImage) {
   if (!image.codec || !image.config || typeof VideoDecoder === "undefined") return undefined;
   const config = { codec: image.codec, description: image.config, optimizeForLatency: true };
   if (!(await VideoDecoder.isConfigSupported(config).catch(() => ({ supported: false }))).supported) return undefined;
-  const frames: VideoFrame[] = [];
+  const canvas = new OffscreenCanvas(image.width, image.height);
+  const context = canvas.getContext("2d")!;
+  const columns = image.grid?.columns ?? 1;
+  let decoded = 0;
   let failure: unknown;
-  const decoder = new VideoDecoder({ output: (frame) => frames.push(frame), error: (cause) => (failure = cause) });
+  // Each tile is drawn and released as it arrives, so at most one decoded frame is alive at a time.
+  const decoder = new VideoDecoder({
+    output: (frame) => {
+      const index = frame.timestamp;
+      context.drawImage(frame, (index % columns) * frame.displayWidth, Math.floor(index / columns) * frame.displayHeight);
+      frame.close();
+      decoded++;
+    },
+    error: (cause) => (failure = cause),
+  });
   try {
     decoder.configure(config);
     image.tiles.forEach((tile, index) => decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: index, data: tile.data })));
     await decoder.flush();
-    if (failure || frames.length !== image.tiles.length) throw failure ?? new DecodeError("image-decode-failed");
-    frames.sort((a, b) => a.timestamp - b.timestamp);
-    const canvas = new OffscreenCanvas(image.width, image.height);
-    const context = canvas.getContext("2d")!;
-    const columns = image.grid?.columns ?? 1;
-    frames.forEach((frame, index) => {
-      const x = (index % columns) * frame.displayWidth;
-      const y = Math.floor(index / columns) * frame.displayHeight;
-      context.drawImage(frame, x, y);
-    });
+    if (failure || decoded !== image.tiles.length) throw failure ?? new DecodeError("image-decode-failed");
     return canvas;
+  } catch (cause) {
+    canvas.width = canvas.height = 0;
+    throw cause;
   } finally {
-    frames.forEach((frame) => frame.close());
     if (decoder.state !== "closed") decoder.close();
   }
 }
 
-function orientCanvas(source: OffscreenCanvas | ImageBitmap, image: HeifImage) {
+function orientCanvas(source: OffscreenCanvas, image: HeifImage) {
+  if (image.rotation === 0 && image.mirror === undefined) return source.transferToImageBitmap();
   const swap = image.rotation === 90 || image.rotation === 270;
   const canvas = new OffscreenCanvas(swap ? source.height : source.width, swap ? source.width : source.height);
   const context = canvas.getContext("2d")!;
@@ -303,6 +310,7 @@ function orientCanvas(source: OffscreenCanvas | ImageBitmap, image: HeifImage) {
   if (image.mirror !== undefined) context.scale(image.mirror === 0 ? -1 : 1, image.mirror === 1 ? -1 : 1);
   context.rotate((image.rotation * Math.PI) / 180);
   context.drawImage(source, -source.width / 2, -source.height / 2);
+  source.width = source.height = 0;
   return canvas.transferToImageBitmap();
 }
 
