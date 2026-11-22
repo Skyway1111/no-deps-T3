@@ -2051,7 +2051,6 @@
   "5ddb7a524b64a923": "Omgångsdiffar är inte tillgängliga eftersom projektet inte är ett git-repo.",
   "bc426d9d8f686f71": "Inga slutförda omgångar än.",
   "2c7dd1701c1e4878": "Leverantören sparade filinnehåll utan diff.",
-  "7af7238975f15a8f": "Läser in kod...",
   "c53cf4b26ec0586d": "Dator, {label}",
   "0c01f791ecef34ad": "T3 Code-miljö",
   "6ba599e5a409f99d": "Datorn finns inte i den här appen",
@@ -12467,5 +12466,16 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
+  "5cc99bf5a92d819d": "Visa alla oförändrade rader",
+  "c6c63ad0e52d852c": "Visa oförändrade rader ovanför",
+  "6412b8d2512e7fd2": "Visa oförändrade rader nedanför",
+  "1f0c3ed7cc3ce2a1": "{count, plural, one {# oförändrad rad} other {# oförändrade rader}}",
+  "f86d95ceb14aa55b": "Kommentera rader",
+  "884d27c40f91caee": "Sök",
+  "3d1e7ff5894d00dd": "Inga resultat",
+  "9a1dafe07b8ce33d": "{current} av {total}",
+  "a1ea56eada9c51c3": "Stäng sökning",
+  "6c2573ffb9eade31": "Ersätt",
+  "b4f718e51100ad40": "Ersätt alla"
 }

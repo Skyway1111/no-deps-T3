@@ -1,7 +1,6 @@
-import { DEFAULT_THEMES, preloadHighlighter } from "@pierre/diffs";
 import { EnvironmentId, ThreadId, type ProjectReadFileResult } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { StrictMode, type ReactNode } from "react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { cdp, userEvent } from "vite-plus/test/browser";
 import { act, fakeTimers, render } from "../../../test/render";
@@ -134,9 +133,6 @@ vi.mock(import("./FileBrowserPanel"), () => ({
     </div>
   ),
 }));
-vi.mock(import("../DiffWorkerPoolProvider"), () => ({
-  DiffWorkerPoolProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
 vi.mock(import("./projectFilesQueryState"), async (original) => ({
   ...(await original()),
   useProjectFileQuery: () => ({
@@ -234,9 +230,7 @@ function documentPreview(workspaceMutationId: string, fileRevision: string) {
 }
 
 function deepActiveElement() {
-  let active = document.activeElement;
-  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-  return active;
+  return document.activeElement;
 }
 
 describe("source file focus", () => {
@@ -246,7 +240,6 @@ describe("source file focus", () => {
     style.textContent = appCss;
     document.head.append(style);
     using _style = { [Symbol.dispose]: () => style.remove() };
-    await preloadHighlighter({ themes: Object.values(DEFAULT_THEMES), langs: ["typescript"] });
     const panel = () => (
       <div {...workspaceAreaProps("panel", 1, "Workspace panel")}>
         <div data-right-panel-surface-content>{filePreview("server.ts")}</div>
@@ -296,7 +289,6 @@ describe("source file focus", () => {
     style.textContent = appCss;
     document.head.append(style);
     using _style = { [Symbol.dispose]: () => style.remove() };
-    await preloadHighlighter({ themes: Object.values(DEFAULT_THEMES), langs: ["typescript"] });
     state.file = {
       relativePath: "server.ts",
       contents: "const server = 1;\n",
@@ -339,7 +331,6 @@ describe("source file scroll", () => {
     style.textContent = appCss;
     document.head.append(style);
     using _style = { [Symbol.dispose]: () => style.remove() };
-    await preloadHighlighter({ themes: Object.values(DEFAULT_THEMES), langs: ["typescript"] });
     const sourceFile = (relativePath: string, lines: number) => {
       const contents = Array.from({ length: lines }, (_, i) => `const line${i} = ${i};`).join("\n");
       state.file = { relativePath, contents, byteLength: contents.length, truncated: false };
@@ -406,7 +397,6 @@ describe("source file scroll", () => {
       style.textContent = appCss;
       document.head.append(style);
       using _style = { [Symbol.dispose]: () => style.remove() };
-      await preloadHighlighter({ themes: Object.values(DEFAULT_THEMES), langs: ["markdown"] });
 
       const lines = Array.from({ length: 400 }, (_, index) => `line ${index + 1} markdown content`);
       const contents = `${lines.join("\n")}\n`;
@@ -423,12 +413,10 @@ describe("source file scroll", () => {
         </div>,
       );
 
-      const shadowRoot = () => screen.container.querySelector("diffs-container")?.shadowRoot;
-      const rows = () => shadowRoot()?.querySelectorAll<HTMLElement>("[data-line]") ?? [];
+      const file = () => screen.container.querySelector("diffs-file");
+      const rows = () => file()?.querySelectorAll<HTMLElement>("[data-line]") ?? [];
       await vi.waitFor(() =>
-        expect(
-          shadowRoot()?.querySelector('[data-content][contenteditable="true"]'),
-        ).not.toBeNull(),
+        expect(file()?.querySelector('[data-content][contenteditable="true"]')).not.toBeNull(),
       );
 
       const scroller = screen.container.querySelector<HTMLElement>(".file-preview-virtualizer")!;
@@ -488,11 +476,11 @@ describe("source file scroll", () => {
       });
       await mouse("mouseReleased", startRect.left + 80, outsideEdgeY);
 
-      const overlayRanges = shadowRoot()!.querySelectorAll("[data-selection-range]");
+      const overlayRanges = file()!.querySelectorAll("[data-selection-range]");
       expect(overlayRanges.length).toBeGreaterThan(0);
 
       const clipboardData = new DataTransfer();
-      const contentEl = shadowRoot()!.querySelector("[data-content]")!;
+      const contentEl = file()!.querySelector("[data-content]")!;
       const handled = !contentEl.dispatchEvent(
         new ClipboardEvent("copy", {
           clipboardData,
@@ -514,7 +502,6 @@ describe("source file scroll", () => {
     style.textContent = appCss;
     document.head.append(style);
     using _style = { [Symbol.dispose]: () => style.remove() };
-    await preloadHighlighter({ themes: Object.values(DEFAULT_THEMES), langs: ["typescript"] });
     const wrapped = "wrap ".repeat(60);
     const lines = Array.from({ length: 800 }, (_, i) => `const line${i} = "${wrapped}";`);
     lines.push(
@@ -536,11 +523,8 @@ describe("source file scroll", () => {
       </div>,
     );
     await vi.waitFor(() => expect(scroller()?.scrollHeight).toBeGreaterThan(20_000));
-    const shadowRows = () =>
-      [...document.querySelectorAll("*")].flatMap((host) =>
-        host.shadowRoot ? [...host.shadowRoot.querySelectorAll<HTMLElement>("[data-line]")] : [],
-      );
-    await userEvent.click(shadowRows().find((row) => row.getAttribute("data-line") === "1")!);
+    const lineRows = () => [...document.querySelectorAll<HTMLElement>("diffs-file [data-line]")];
+    await userEvent.click(lineRows().find((row) => row.getAttribute("data-line") === "1")!);
     await vi.waitFor(() => expect(deepActiveElement()?.matches("[data-content]")).toBe(true));
     await userEvent.keyboard(
       isMacPlatform(navigator.platform) ? "{Meta>}f{/Meta}" : "{Control>}f{/Control}",
@@ -550,7 +534,7 @@ describe("source file scroll", () => {
 
     const visibleLines = () => {
       const viewport = scroller()!.getBoundingClientRect();
-      return shadowRows()
+      return lineRows()
         .filter((row) => {
           const box = row.getBoundingClientRect();
           return box.height > 0 && box.top >= viewport.top && box.bottom <= viewport.bottom;

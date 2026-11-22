@@ -1,24 +1,23 @@
-import {
-  cloneFileDiffMetadata,
-  type DiffLineAnnotation,
-  type FileDiffContentsLoader,
-  type FileDiffMetadata,
-  type SelectedLineRange,
-} from "@pierre/diffs";
-import { FileDiff } from "@pierre/diffs/react";
+import { cloneFileDiffMetadata } from "@t3tools/shared/diff/patch";
 import { useState } from "react";
 
 import { useRenderedAppearance } from "~/hooks/useTheme";
 import { resolveDiffThemeName } from "~/lib/diffRendering";
-import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
+import { FileDiff } from "~/ui-core/codeView/FileDiff";
+import type {
+  DiffLineAnnotation,
+  FileDiffContentsLoader,
+  FileDiffMetadata,
+  SelectedLineRange,
+} from "~/ui-core/codeView/types";
 
-import { DIFF_VIEW_UNSAFE_CSS } from "../../diffs/StyledDiffCodeView";
 import {
   getReviewPositionAnchor,
   PendingReviewCommentCard,
   toViewerSide,
 } from "../PullRequestReviewAnnotation";
 import type { PendingReviewComment } from "../pullRequestReviewStore";
+import "../../diffs/diffSurfaceTheme";
 import {
   commentDraftFor,
   GuideCommentDraft,
@@ -91,8 +90,6 @@ export function GuideFileDiff({
     disableFileHeader: true,
     theme: resolveDiffThemeName(resolvedTheme),
     themeType: resolvedTheme,
-    preferredHighlighter: PREFERRED_HIGHLIGHTER,
-    unsafeCSS: DIFF_VIEW_UNSAFE_CSS,
     enableGutterUtility: interactive,
     enableLineSelection: interactive,
     onGutterUtilityClick: beginComment,
@@ -100,7 +97,7 @@ export function GuideFileDiff({
     loadDiffFiles,
   };
   return (
-    <div className="border-t border-border/60">
+    <div className="diff-render-surface border-t border-border/60 [--code-background:var(--background)]">
       <FileDiff<FileAnnotation>
         fileDiff={expandable}
         options={options}

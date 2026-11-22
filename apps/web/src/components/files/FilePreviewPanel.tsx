@@ -32,24 +32,16 @@ import {
 } from "@t3tools/shared/filePreview";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
-import {
-  DEFAULT_TOKENIZE_MAX_LENGTH,
-  VirtualizedFile,
-  getFiletypeFromFileName,
-  type File as FileInstance,
-  type FileContents,
-  type PostRenderPhase,
-  type SelectedLineRange,
-} from "@pierre/diffs";
-import {
-  Editor,
-  type EditorChangeEvent,
-  type EditorFactory,
-  type EditorOptions,
-} from "@pierre/diffs/edit";
-import type { WorkerPoolManager } from "@pierre/diffs/worker";
-import { EditProvider, File, Virtualizer, useWorkerPool } from "@pierre/diffs/react";
-import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
+import type { Editor } from "~/ui-core/codeView/Editor";
+import { File, Virtualizer } from "~/ui-core/codeView/File";
+import type {
+  EditorChangeEvent,
+  EditorOptions,
+  FileContents,
+  FileViewInstance,
+  PostRenderPhase,
+  SelectedLineRange,
+} from "~/ui-core/codeView/types";
 import { useFilesystemReadAccess } from "~/state/filesystem";
 import {
   isAtomCommandInterrupted,
@@ -79,7 +71,6 @@ import { useTheme } from "~/hooks/useTheme";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
 import { resolveDiffThemeName } from "~/lib/diffRendering";
-import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { requestWorkspaceFocus } from "~/lib/workspaceFocus";
 import type { ChatFileAttachment } from "~/types";
@@ -119,10 +110,10 @@ import {
   remapFileCommentAnnotations,
   promptFileCommentEntries,
 } from "./fileCommentAnnotations";
+import "../diffs/diffSurfaceTheme";
 import { installFileEditorDismissal } from "./fileEditorDismissal";
 import {
   FILE_LINK_REVEAL_ATTRIBUTE,
-  FILE_LINK_REVEAL_UNSAFE_CSS,
   FILE_SURFACE_SUBHEADER_CLASS,
   FileSurfaceAction,
   FileSurfaceFailure,
@@ -183,9 +174,9 @@ const FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
 const RENDER_MARKDOWN_STORAGE_KEY = "t3code.renderMarkdown";
 const RENDER_BROWSER_FILE_STORAGE_KEY = "t3code.renderBrowserFile";
 const RENDER_TABLE_STORAGE_KEY = "t3code.renderTable";
-type FilePostRender = <LAnnotation>(
+type FilePostRender = (
   fileContainer: HTMLElement,
-  instance: FileInstance<LAnnotation, undefined>,
+  instance: FileViewInstance,
   phase: PostRenderPhase,
 ) => void;
 
@@ -595,16 +586,17 @@ function clampFileLine(contents: string, requestedLine: number): number {
 }
 
 function updateFileLinkReveal(fileContainer: HTMLElement, line: number | null): void {
-  const root = fileContainer.shadowRoot ?? fileContainer;
-  for (const element of root.querySelectorAll<HTMLElement>(`[${FILE_LINK_REVEAL_ATTRIBUTE}]`)) {
+  for (const element of fileContainer.querySelectorAll<HTMLElement>(
+    `[${FILE_LINK_REVEAL_ATTRIBUTE}]`,
+  )) {
     element.removeAttribute(FILE_LINK_REVEAL_ATTRIBUTE);
   }
   if (line === null) return;
 
-  root
+  fileContainer
     .querySelector<HTMLElement>(`[data-line="${line}"]`)
     ?.setAttribute(FILE_LINK_REVEAL_ATTRIBUTE, "");
-  root
+  fileContainer
     .querySelector<HTMLElement>(`[data-column-number="${line}"]`)
     ?.setAttribute(FILE_LINK_REVEAL_ATTRIBUTE, "");
 }
@@ -670,12 +662,9 @@ function useFileLineReveal(
       return;
     }
 
-    const contents = instance.file?.contents;
     const targetLine =
-      revealLine === null || contents === undefined ? null : clampFileLine(contents, revealLine);
+      revealLine === null ? null : clampFileLine(instance.file.contents, revealLine);
     updateFileLinkReveal(fileContainer, targetLine);
-
-    if (!(instance instanceof VirtualizedFile)) return;
 
     if (state.latestRequestId !== revealRequestId) {
       cancelPendingReveal();
@@ -732,8 +721,7 @@ function useFileLineReveal(
         scrollContainer.scrollTop +
         fileContainer.getBoundingClientRect().top -
         scrollContainerRect.top;
-      const root = fileContainer.shadowRoot ?? fileContainer;
-      const renderedLineElement = root.querySelector<HTMLElement>(`[data-line="${line}"]`);
+      const renderedLineElement = fileContainer.querySelector<HTMLElement>(`[data-line="${line}"]`);
       const renderedLineRect = renderedLineElement?.getBoundingClientRect();
 
       return resolveCenteredFileLineScrollTop({
@@ -770,8 +758,8 @@ function useFileLineReveal(
       };
       scrollContainer.addEventListener("wheel", cancelGuard, { passive: true });
       scrollContainer.addEventListener("touchstart", cancelGuard, { passive: true });
-      // Capture gutter pointer events before Pierre stops propagation so comments can cancel the reveal
-      // guard.
+      // Capture gutter pointer events before the gutter stops propagation, so comments cancel the
+      // reveal guard.
       scrollContainer.addEventListener("pointerdown", cancelGuard, {
         passive: true,
         capture: true,
@@ -804,13 +792,10 @@ function useFileLineReveal(
           return;
         }
 
-        // Wait for contents and metrics; missing data would clamp fresh-mount reveals to line 1 and mark them
-        // handled.
-        const currentContents = instance.file?.contents;
-        const line =
-          currentContents === undefined ? null : clampFileLine(currentContents, revealLine);
-        const targetTop = line === null ? null : resolveScrollTarget(line);
-        if (line === null || targetTop === null) {
+        // Wait for metrics; a missing row would clamp a fresh-mount reveal to line 1 and mark it handled.
+        const line = clampFileLine(instance.file.contents, revealLine);
+        const targetTop = resolveScrollTarget(line);
+        if (targetTop === null) {
           if (attempt < REVEAL_MAX_ATTEMPTS) scheduleReveal(attempt + 1);
           return;
         }
@@ -828,12 +813,7 @@ function useFileLineReveal(
 
 const EMPTY_REVIEW_COMMENTS: ReadonlyArray<ReviewCommentContext> = [];
 
-const createFileEditor: EditorFactory<FileCommentAnnotationGroup, undefined> = (
-  editorType,
-  options,
-  editStateKey,
-) => new Editor(editorType, options, editStateKey);
-type FileEditor = Editor<"file", FileCommentAnnotationGroup, undefined>;
+type FileEditor = Editor<FileCommentAnnotationGroup>;
 
 function editableFileContents(
   environmentId: EnvironmentId,
@@ -846,43 +826,6 @@ function editableFileContents(
     contents,
     cacheKey: `editor:${environmentId}:${projectFileCacheKey(cwd, relativePath, contents)}`,
   };
-}
-
-function needsWorkerHighlight(workerPool: WorkerPoolManager | undefined, file: FileContents) {
-  if (workerPool?.isWorkingPool() !== true) return false;
-  if ((file.lang ?? getFiletypeFromFileName(file.name)) === "text") return false;
-  let lines = 1;
-  for (
-    let index = file.contents.indexOf("\n");
-    index !== -1;
-    index = file.contents.indexOf("\n", index + 1)
-  ) {
-    lines += 1;
-  }
-  return lines <= DEFAULT_TOKENIZE_MAX_LENGTH;
-}
-
-/** Enable editing only after worker highlighting renders; active edit sessions highlight on the main
- * thread. */
-function useEditableAfterHighlight(file: FileContents) {
-  const workerPool = useWorkerPool();
-  const [highlightedFile, setHighlightedFile] = useState<FileContents | null>(null);
-  const needsHighlight = needsWorkerHighlight(workerPool, file);
-  const ready = !needsHighlight || highlightedFile === file;
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- primes the worker pool's highlight cache for this file and falls back to plain text if it fails
-  useEffect(() => {
-    if (ready || workerPool === undefined) return;
-    workerPool.primeFileHighlightCache(file).catch(() => setHighlightedFile(file));
-  }, [file, ready, workerPool]);
-
-  const onPostRender = (renderedFile: FileContents | undefined, phase: PostRenderPhase) => {
-    if (ready || phase === "unmount" || renderedFile?.cacheKey !== file.cacheKey) return;
-    // Cache results arrive just before instance rendering; seeing the cache during render means rows are
-    // highlighted.
-    if (workerPool?.getFileResultCache(file) !== undefined) setHighlightedFile(file);
-  };
-  return { ready, onPostRender };
 }
 
 interface EditableFileSurfaceProps {
@@ -936,7 +879,6 @@ function EditableFileSurface({
     setSelectionOverride({ revealRequestId, range });
   };
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const selectionFrameRef = useRef<number | null>(null);
   const saveTarget = { environmentId, cwd, relativePath };
   useFileSaveSession(saveTarget, onPendingChange);
   // Retain file identity for echoed editor changes; only external changes replace the editor's draft.
@@ -948,10 +890,8 @@ function EditableFileSurface({
     setExternalFile(editableFileContents(environmentId, cwd, relativePath, contents));
     setEditedContents(null);
   }
-  const { ready: editable, onPostRender: onEditablePostRender } =
-    useEditableAfterHighlight(externalFile);
   const editorRef = useRef<FileEditor | null>(null);
-  const editorOptions: EditorOptions<"file", FileCommentAnnotationGroup, undefined> = {
+  const editorOptions: EditorOptions<FileEditor> = {
     onAttach: (editor) => {
       editorRef.current = editor;
       onEditorChange(editor);
@@ -965,7 +905,7 @@ function EditableFileSurface({
   const handleEditChange = ({
     file,
     lineAnnotations: nextLineAnnotations,
-  }: EditorChangeEvent<"file", FileCommentAnnotationGroup, undefined>) => {
+  }: EditorChangeEvent<FileCommentAnnotationGroup>) => {
     if (file.contents === getProjectFileContents(environmentId, cwd, relativePath)) return;
     setEditedContents(file.contents);
     setProjectFileQueryData(environmentId, cwd, relativePath, file.contents);
@@ -1094,90 +1034,59 @@ function EditableFileSurface({
     }
   };
 
-  const handlePostRender: FilePostRender = (fileContainer, instance, phase) => {
-    onPostRender(fileContainer, instance, phase);
-    onEditablePostRender(instance.file, phase);
-
-    if (selectionFrameRef.current !== null) {
-      cancelAnimationFrame(selectionFrameRef.current);
-      selectionFrameRef.current = null;
-    }
-    if (phase === "unmount") return;
-
-    selectionFrameRef.current = requestAnimationFrame(() => {
-      selectionFrameRef.current = null;
-      if (!fileContainer.isConnected) return;
-      instance.setSelectedLines(selectedRange, { notify: false });
-    });
-  };
-
   return (
-    <EditProvider createEditor={createFileEditor}>
-      <div ref={surfaceRef} className="flex min-h-0 flex-1">
-        <Virtualizer
-          className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
-          config={{
-            overscrollSize: 600,
-            intersectionObserverMargin: 1200,
+    <div ref={surfaceRef} className="flex min-h-0 flex-1">
+      <Virtualizer className="file-preview-virtualizer min-h-0 flex-1 overflow-auto">
+        <File<FileCommentAnnotationGroup>
+          file={externalFile}
+          edit
+          editorOptions={editorOptions}
+          onEditChange={handleEditChange}
+          options={{
+            enableGutterUtility: !hasOpenCommentForm,
+            enableLineSelection: !hasOpenCommentForm,
+            onGutterUtilityClick: setSelectedRange,
+            onLineSelectionChange: setSelectedRange,
+            onLineSelectionEnd: handleLineSelectionEnd,
+            overflow: wordWrap ? "wrap" : "scroll",
+            theme: resolveDiffThemeName(resolvedTheme),
+            themeType: resolvedTheme,
+            onPostRender,
           }}
-        >
-          <File<FileCommentAnnotationGroup>
-            file={externalFile}
-            edit={editable}
-            editorOptions={editorOptions}
-            onEditChange={handleEditChange}
-            options={{
-              disableFileHeader: true,
-              enableGutterUtility: !hasOpenCommentForm,
-              enableLineSelection: !hasOpenCommentForm,
-              onGutterUtilityClick: setSelectedRange,
-              onLineSelectionChange: setSelectedRange,
-              onLineSelectionEnd: handleLineSelectionEnd,
-              overflow: wordWrap ? "wrap" : "scroll",
-              theme: resolveDiffThemeName(resolvedTheme),
-              preferredHighlighter: PREFERRED_HIGHLIGHTER,
-              themeType: resolvedTheme,
-              unsafeCSS: FILE_LINK_REVEAL_UNSAFE_CSS,
-              onPostRender: handlePostRender,
-            }}
-            selectedLines={selectedRange}
-            lineAnnotations={lineAnnotations}
-            renderAnnotation={(annotation) => {
-              // Sent comments stay annotated so a failed send can restore them at remapped lines.
-              const entries = promptFileCommentEntries(
-                annotation.metadata.entries,
-                promptCommentIds,
-              );
-              if (entries.length === 0) return null;
-              return (
-                <div className="py-1">
-                  {entries.map((entry) => (
-                    <DiffCommentAnnotation
-                      key={entry.id}
-                      environmentId={environmentId}
-                      projectId={projectId}
-                      ownerKey={JSON.stringify([
-                        environmentId,
-                        composerDraftTarget,
-                        relativePath,
-                        entry.id,
-                      ])}
-                      kind={entry.kind}
-                      rangeLabel={formatFileCommentRange(entry.startLine, entry.endLine, messages)}
-                      text={entry.text}
-                      onCancel={() => removeAnnotationEntry(entry.id)}
-                      onComment={(text) => submitAnnotationEntry(entry.id, text)}
-                      onDelete={() => removeAnnotationEntry(entry.id)}
-                    />
-                  ))}
-                </div>
-              );
-            }}
-            className="min-h-full"
-          />
-        </Virtualizer>
-      </div>
-    </EditProvider>
+          selectedLines={selectedRange}
+          lineAnnotations={lineAnnotations}
+          renderAnnotation={(annotation) => {
+            // Sent comments stay annotated so a failed send can restore them at remapped lines.
+            const entries = promptFileCommentEntries(annotation.metadata.entries, promptCommentIds);
+            if (entries.length === 0) return null;
+            return (
+              <div className="py-1">
+                {entries.map((entry) => (
+                  <DiffCommentAnnotation
+                    key={entry.id}
+                    environmentId={environmentId}
+                    projectId={projectId}
+                    ownerKey={JSON.stringify([
+                      environmentId,
+                      composerDraftTarget,
+                      relativePath,
+                      entry.id,
+                    ])}
+                    kind={entry.kind}
+                    rangeLabel={formatFileCommentRange(entry.startLine, entry.endLine, messages)}
+                    text={entry.text}
+                    onCancel={() => removeAnnotationEntry(entry.id)}
+                    onComment={(text) => submitAnnotationEntry(entry.id, text)}
+                    onDelete={() => removeAnnotationEntry(entry.id)}
+                  />
+                ))}
+              </div>
+            );
+          }}
+          className="min-h-full"
+        />
+      </Virtualizer>
+    </div>
   );
 }
 
@@ -1900,23 +1809,21 @@ export default function FilePreviewPanel({
                 wordWrap={wordWrap}
               />
             ) : (
-              <DiffWorkerPoolProvider>
-                <EditableFileSurface
-                  key={`${relativePath}:${resolvedTheme}`}
-                  environmentId={environmentId}
-                  projectId={projectId}
-                  cwd={cwd}
-                  relativePath={relativePath}
-                  composerDraftTarget={composerDraftTarget}
-                  contents={file.data.contents}
-                  resolvedTheme={resolvedTheme}
-                  revealRequestId={revealRequestId}
-                  wordWrap={wordWrap}
-                  onPostRender={onFilePostRender}
-                  onPendingChange={onPendingChange}
-                  onEditorChange={handleEditorChangeStable}
-                />
-              </DiffWorkerPoolProvider>
+              <EditableFileSurface
+                key={relativePath}
+                environmentId={environmentId}
+                projectId={projectId}
+                cwd={cwd}
+                relativePath={relativePath}
+                composerDraftTarget={composerDraftTarget}
+                contents={file.data.contents}
+                resolvedTheme={resolvedTheme}
+                revealRequestId={revealRequestId}
+                wordWrap={wordWrap}
+                onPostRender={onFilePostRender}
+                onPendingChange={onPendingChange}
+                onEditorChange={handleEditorChangeStable}
+              />
             )
           ) : null}
         </div>

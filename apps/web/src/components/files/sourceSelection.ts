@@ -33,6 +33,18 @@ function sameRange(a: StaticRange | undefined, b: StaticRange | undefined) {
   );
 }
 
+/** A snapshot of the selection's range; a live one would follow the rows a render replaces. */
+function currentRange(selection: Selection | null): StaticRange | undefined {
+  if (!selection || selection.rangeCount === 0) return undefined;
+  const range = selection.getRangeAt(0);
+  return new StaticRange({
+    startContainer: range.startContainer,
+    startOffset: range.startOffset,
+    endContainer: range.endContainer,
+    endOffset: range.endOffset,
+  });
+}
+
 function rowOf(node: Node) {
   const element = node instanceof Element ? node : node.parentElement;
   return element?.closest<HTMLElement>("[data-line]") ?? null;
@@ -88,7 +100,7 @@ export class SourceSelection {
     return low;
   }
 
-  #mounted(root: ShadowRoot): Mounted | undefined {
+  #mounted(root: HTMLElement): Mounted | undefined {
     const rows = root.querySelectorAll<HTMLElement>("[data-line]");
     const first = rows[0];
     const last = rows[rows.length - 1];
@@ -151,16 +163,9 @@ export class SourceSelection {
    * mounted rows keeps its offset when that offset lies past the edge, and a render
    * (`afterRender`) keeps every end its unmounted row left between rows.
    */
-  #read(root: ShadowRoot, afterRender: boolean) {
+  #read(root: HTMLElement, afterRender: boolean) {
     const selection = document.getSelection();
-    let range: StaticRange | undefined;
-    try {
-      range = selection?.getComposedRanges({ shadowRoots: [root] })[0];
-    } catch {
-      // Engines without composed ranges keep their own selection and copy.
-      this.#ends = undefined;
-      return undefined;
-    }
+    const range = currentRange(selection);
     const parked = this.#parked;
     if (
       parked?.clippedByRender &&
@@ -192,7 +197,7 @@ export class SourceSelection {
     );
     const backward = selection.direction === "backward";
     const previous = this.#ends;
-    // Select All spans the shadow tree, so it holds every mounted row from outside them.
+    // Select All selects the file's code, so it holds every mounted row from outside them.
     const holdsEveryRow =
       !start.inRow && !end.inRow && start.offset === mounted.start && end.offset === mounted.end;
     if (!afterRender && holdsEveryRow) {
@@ -223,18 +228,18 @@ export class SourceSelection {
   }
 
   /** Call when the browser's selection changes. */
-  sync(root: ShadowRoot, text: string) {
+  sync(root: HTMLElement, text: string) {
     this.#use(text);
     this.#read(root, false);
   }
 
-  #draw(root: ShadowRoot, mounted: Mounted | undefined) {
+  #draw(mounted: Mounted | undefined) {
     this.#parked = undefined;
     if (!mounted || !this.#ends) return;
     const anchor = this.#pointAt(this.#ends.anchor, mounted);
     const focus = this.#pointAt(this.#ends.focus, mounted);
     const selection = document.getSelection();
-    const range = selection?.getComposedRanges({ shadowRoots: [root] })[0];
+    const range = currentRange(selection);
     const { anchor: anchorOffset, focus: focusOffset } = this.#ends;
     const clipped =
       anchorOffset !== focusOffset &&
@@ -259,17 +264,14 @@ export class SourceSelection {
     selection?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
     if (clipped) {
       // A projected endpoint can become an interior point when its DOM row survives the next render.
-      this.#parked = {
-        range: selection?.getComposedRanges({ shadowRoots: [root] })[0],
-        clippedByRender: true,
-      };
+      this.#parked = { range: currentRange(selection), clippedByRender: true };
     }
   }
 
   /** Call after rows mount or unmount, to draw the selection onto the rows now there. */
-  render(root: ShadowRoot, text: string) {
+  render(root: HTMLElement, text: string) {
     this.#use(text);
-    if (this.#ends) this.#draw(root, this.#read(root, true));
+    if (this.#ends) this.#draw(this.#read(root, true));
   }
 
   press(extending: boolean) {
@@ -278,17 +280,17 @@ export class SourceSelection {
     if (!extending) this.#parked = undefined;
   }
 
-  release(root: ShadowRoot, text: string) {
+  release(root: HTMLElement, text: string) {
     if (!this.#pressed) return;
     this.#use(text);
     const mounted = this.#read(root, false);
     this.#pressed = false;
     this.#clicking = false;
-    this.#draw(root, mounted);
+    this.#draw(mounted);
   }
 
   /** The text to copy when the browser's own copy would miss part of it, else `undefined`. */
-  copy(root: ShadowRoot, text: string) {
+  copy(root: HTMLElement, text: string) {
     this.#use(text);
     const mounted = this.#read(root, false);
     if (!mounted || !this.#ends) return undefined;

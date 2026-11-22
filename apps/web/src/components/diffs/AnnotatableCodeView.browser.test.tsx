@@ -1,5 +1,4 @@
-import type { CodeViewDiffItem, FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
-import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
+import { parsePatchFiles } from "@t3tools/shared/diff/patch";
 import { StrictMode, type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -7,6 +6,7 @@ import { act, render } from "../../../test/render";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { buildFileDiffIdentityKey } from "~/lib/diffRendering";
+import type { CodeViewItem, FileDiffMetadata, SelectedLineRange } from "~/ui-core/codeView/types";
 
 type ViewerProps = Omit<ComponentProps<typeof StyledDiffCodeView<unknown>>, "options"> & {
   options: {
@@ -14,7 +14,7 @@ type ViewerProps = Omit<ComponentProps<typeof StyledDiffCodeView<unknown>>, "opt
     enableGutterUtility: boolean;
     onGutterUtilityClick: (
       range: SelectedLineRange,
-      context: { item: CodeViewDiffItem<unknown> },
+      context: { item: CodeViewItem<unknown> },
     ) => void;
   };
 };

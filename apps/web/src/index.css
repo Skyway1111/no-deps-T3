@@ -1311,7 +1311,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
 /* A diff header's copy button shows on file hover or focus. */
 @media (hover: hover) {
-  diffs-container:not(:hover) [data-diff-copy-path]:not(:focus-within) {
+  diffs-file:not(:hover) [data-diff-copy-path]:not(:focus-within) {
     opacity: 0;
   }
 }
@@ -1801,11 +1801,9 @@ code {
   font-size: var(--font-size-code, inherit);
 }
 
-/* @pierre/diffs surfaces (diffs, file previews, annotatable code, search
-   lines) render inside shadow roots but consult these hooks with their own
-   literal stacks as fallback. Custom properties inherit across the shadow
-   boundary, so defining them once here routes every code surface through the
-   appearance font tokens. */
+/* Code surfaces (diffs, file previews, annotatable code, search lines) consult these hooks
+   with their own literal stacks as fallback, so every code surface follows the appearance
+   font tokens. */
 :root {
   --diffs-font-family: var(--font-mono);
   --diffs-header-font-family: var(--font-sans);
@@ -2363,7 +2361,10 @@ code {
   --trees-git-untracked-color-override: var(--diff-addition);
 }
 
-.diff-render-surface diffs-container {
+/* Code surfaces: the diff panel, pull request and guide diffs, and file previews. Their rows
+   are light DOM under `diffs-file`, themed through the --diffs-* hooks below and the scoped
+   DIFF_SURFACE_THEME_UNSAFE_CSS (components/diffs/diffSurfaceTheme.ts). */
+.diff-render-surface diffs-file {
   border: 0;
   border-radius: 0;
   overflow: clip;
@@ -2371,25 +2372,230 @@ code {
   color: var(--code-foreground);
 }
 
-/* Pierre's find panel is a sibling of the diff containers, so it misses their theme tokens.
-   The top inset clears the 32px sticky file header and its line counts. */
-.diff-render-surface > [data-search-panel] {
-  --diffs-search-panel-bg: var(--popover);
-  --diffs-search-panel-fg: var(--popover-foreground);
-  --diffs-search-panel-modified: var(--primary);
-  --diffs-header-font-fallback: var(--font-sans);
-  --diffs-search-panel-inset-top: 40px;
-}
-
-/* Pierre's file renderer owns its own surface tokens. Keep the root of a file
-   preview on the same themeable code surface as the diff panel. */
-.diff-render-surface diffs-container,
-.file-preview-virtualizer diffs-container {
+.diff-render-surface diffs-file,
+.file-preview-virtualizer diffs-file {
   --diffs-bg: var(--code-background) !important;
   --diffs-light-bg: var(--code-background) !important;
   --diffs-dark-bg: var(--code-background) !important;
   background-color: var(--code-background) !important;
   color: var(--code-foreground) !important;
+}
+
+/* Translucent find matches keep the syntax colours under them. The top inset clears the 32px
+   sticky file header and its line counts. */
+.diff-render-surface {
+  --diffs-bg-search-match-override: light-dark(#ff963288, #ff963266);
+  --diffs-bg-search-match-current-override: color-mix(
+    in lab,
+    var(--diffs-modified-base, #009fff) 45%,
+    transparent
+  );
+  --diffs-fg-search-match-override: currentColor;
+}
+
+.diff-render-surface > [data-search-panel] {
+  --diffs-search-panel-bg: var(--popover);
+  --diffs-search-panel-fg: var(--popover-foreground);
+  --diffs-search-panel-modified: var(--primary);
+  --diffs-search-panel-inset-top: 40px;
+}
+
+/* A 1fr track's automatic minimum grows with the currently mounted lines. In split wrap mode
+   that shifts width between columns and rewraps rows; keep both code columns the same width. */
+.diff-render-surface [data-diff-type="split"][data-overflow="wrap"] {
+  --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
+}
+
+.diff-render-surface :is([data-line], [data-line-annotation])[data-selected-line] {
+  --diffs-line-bg: light-dark(
+    color-mix(
+      in lab,
+      var(--code-background) 88%,
+      color-mix(in srgb, var(--code-background) 50%, var(--diffs-modified-base))
+    ),
+    color-mix(
+      in lab,
+      var(--code-background) 80%,
+      color-mix(in srgb, var(--code-background) 70%, var(--diffs-modified-base))
+    )
+  ) !important;
+}
+
+.diff-render-surface :is([data-gutter-buffer], [data-column-number])[data-selected-line] {
+  --diffs-line-bg: light-dark(
+    color-mix(
+      in lab,
+      var(--code-background) 91%,
+      color-mix(in srgb, var(--code-background) 35%, var(--diffs-modified-base))
+    ),
+    color-mix(
+      in lab,
+      var(--code-background) 85%,
+      color-mix(in srgb, var(--code-background) 60%, var(--diffs-modified-base))
+    )
+  ) !important;
+}
+
+.diff-render-surface
+  [data-indicators="bars"]
+  :is([data-column-number], [data-gutter-buffer="annotation"])[data-selected-line] {
+  position: relative;
+}
+
+.diff-render-surface
+  [data-indicators="bars"]
+  :is([data-column-number], [data-gutter-buffer="annotation"])[data-selected-line]::before {
+  position: absolute !important;
+  inset-block: 0 !important;
+  inset-inline-start: 0 !important;
+  display: block !important;
+  width: 4px !important;
+  height: auto !important;
+  content: "" !important;
+  background-color: var(--diffs-modified-base) !important;
+  background-image: none !important;
+}
+
+.diff-render-surface [data-diffs-header] {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background-color: var(--code-background) !important;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1;
+  height: 32px;
+  min-height: 32px;
+  padding-block: 0;
+  padding-inline: 8px 12px;
+}
+
+.diff-render-surface [data-diffs-header]:hover {
+  /* A native scrollbar gutter cannot be painted by descendants. Use an inset edge cue instead
+     of a full-width band that would look accidentally clipped at the gutter. */
+  box-shadow: inset 3px 0 color-mix(in srgb, var(--code-foreground) 24%, transparent);
+}
+
+/* Hunk separators are the way to the unchanged lines between hunks. They sit one step off the
+   code surface so they read as quiet controls; hover brings them forward. */
+.diff-render-surface :is([data-separator="line-info"], [data-separator="line-info-basic"]) {
+  height: 24px;
+  margin-block: 0;
+  --diffs-bg-separator: color-mix(in srgb, var(--code-background) 97%, var(--code-foreground));
+}
+
+.diff-render-surface
+  :is([data-separator="line-info"], [data-separator="line-info-basic"])
+  :is([data-separator-content], [data-expand-button]) {
+  color: color-mix(in srgb, var(--code-foreground) 50%, var(--code-background));
+}
+
+.diff-render-surface
+  :is([data-separator="line-info"], [data-separator="line-info-basic"])
+  [data-separator-content] {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.diff-render-surface
+  :is([data-separator="line-info"], [data-separator="line-info-basic"])[data-expand-index]
+  :is([data-separator-content], [data-expand-button]):hover {
+  color: var(--code-foreground);
+  background-color: color-mix(in srgb, var(--code-background) 92%, var(--code-foreground));
+}
+
+.diff-render-surface [data-diffs-header] :is([data-header-content], [data-metadata]) {
+  align-items: center;
+  line-height: 1;
+}
+
+/* File names clip with overflow: hidden for their start ellipsis. A 1em line box cuts off
+   descenders; give the clipped names room inside the fixed-height header. */
+.diff-render-surface [data-diffs-header] :is([data-title], [data-prev-name]) {
+  line-height: 16px;
+}
+
+.diff-render-surface [data-diffs-header] [data-metadata] {
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-render-surface [data-diffs-header] :is([data-additions-count], [data-deletions-count]) {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.diff-render-surface [data-title] {
+  cursor: pointer;
+  transition: color 120ms ease;
+  font-family: var(--font-sans);
+}
+
+.diff-render-surface [data-title]:hover {
+  color: color-mix(in srgb, var(--code-foreground) 84%, var(--primary));
+}
+
+/* Expanding a file mounts its body all at once; easing it in matches the 200ms the app's
+   collapsibles take. Appearance only: the viewer owns geometry, so height cannot animate. */
+.diff-render-surface [data-entering] {
+  transition: opacity 200ms ease-out;
+}
+
+@starting-style {
+  .diff-render-surface [data-entering] {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diff-render-surface [data-entering] {
+    transition: none;
+  }
+}
+
+/* A file with cut lines cannot load the unchanged lines around them. */
+diffs-file[data-cut-lines] :is([data-expand-button], [data-expand-all-button]) {
+  display: none;
+}
+
+::highlight(t3-cut-line-note) {
+  color: var(--color-warning-foreground);
+  background-color: color-mix(in srgb, var(--color-warning) 18%, transparent);
+}
+
+/* Tint through --diffs-line-bg, not background-color, so the line's own states still mix in. */
+.file-preview-virtualizer [data-file-link-reveal][data-line] {
+  --diffs-line-bg: light-dark(
+    color-mix(
+      in lab,
+      var(--diffs-computed-diff-line-bg) 82%,
+      var(--diffs-bg-selection-override, var(--diffs-selection-base))
+    ),
+    color-mix(
+      in lab,
+      var(--diffs-computed-diff-line-bg) 75%,
+      var(--diffs-bg-selection-override, var(--diffs-selection-base))
+    )
+  ) !important;
+}
+
+.file-preview-virtualizer [data-file-link-reveal][data-column-number] {
+  background-color: light-dark(
+    color-mix(
+      in lab,
+      var(--diffs-computed-diff-line-bg) 75%,
+      var(--diffs-bg-selection-number-override, var(--diffs-selection-base))
+    ),
+    color-mix(
+      in lab,
+      var(--diffs-computed-diff-line-bg) 60%,
+      var(--diffs-bg-selection-number-override, var(--diffs-selection-base))
+    )
+  ) !important;
+  color: var(--diffs-selection-number-fg) !important;
 }
 
 .ultrathink-frame {

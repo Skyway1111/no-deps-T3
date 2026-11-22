@@ -13,11 +13,6 @@ export function getDiffHeaderClickAction(event: MouseEvent) {
     (node): node is HTMLElement =>
       node instanceof HTMLElement && node.hasAttribute("data-diffs-header"),
   );
-  const root = header?.getRootNode();
-  // Pierre renders the prefix through a slot; its React controls live on the shadow host.
-  const fileKey =
-    root instanceof ShadowRoot
-      ? root.host.querySelector("[data-diff-file-key]")?.getAttribute("data-diff-file-key")
-      : null;
+  const fileKey = header?.querySelector("[data-diff-file-key]")?.getAttribute("data-diff-file-key");
   return fileKey ? { type: "toggle" as const, fileKey } : null;
 }

@@ -1,5 +1,3 @@
-import type { CodeViewHandle } from "@pierre/diffs/react";
-import { WorkerPoolManager } from "@pierre/diffs/worker";
 import { useState, type Ref } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { cdp } from "vite-plus/test/browser";
@@ -13,31 +11,17 @@ vi.mock(import("../../hooks/useTheme"), async (original) => ({
 
 import { buildFileDiffEntries, getRenderablePatch } from "../../lib/diffRendering";
 import { getDiffHeaderClickAction } from "./diffHeaderClick";
+import type { CodeViewHandle } from "~/ui-core/codeView/types";
 import { StyledDiffCodeView } from "./StyledDiffCodeView";
 
-/** Records each worker pool's initialization so the test can wait for highlighting. */
-function captureWorkerPools() {
-  const pools = new Map<WorkerPoolManager, Promise<void>>();
-  const initialize = WorkerPoolManager.prototype.initialize;
-  const spy = vi.spyOn(WorkerPoolManager.prototype, "initialize").mockImplementation(function (
-    this: WorkerPoolManager,
-    ...args
-  ) {
-    const pending = initialize.apply(this, args);
-    pools.set(this, pending);
-    return pending;
-  });
-  return { pools, [Symbol.dispose]: () => spy.mockRestore() };
-}
-
-// Exercises the production click helper against Pierre's real shadow DOM.
+// Exercises the production click helper against the viewer's real DOM.
 function RepeatedDiffs({
   entries,
   viewerRef,
   onOpen,
 }: {
   entries: ReturnType<typeof buildFileDiffEntries>;
-  viewerRef: Ref<CodeViewHandle<undefined, undefined>>;
+  viewerRef: Ref<CodeViewHandle<undefined>>;
   onOpen: (path: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
@@ -95,11 +79,9 @@ describe("repeated diff blocks", () => {
         .join(""),
     );
     if (parsed?.kind !== "files") throw new Error("Expected file diffs");
-    using captured = captureWorkerPools();
-    const { pools } = captured;
     const entries = buildFileDiffEntries(parsed.files);
     const onOpen = vi.fn();
-    let viewer: CodeViewHandle<undefined, undefined> | null = null;
+    let viewer: CodeViewHandle<undefined> | null = null;
     await using _screen = await render(
       <RepeatedDiffs
         entries={entries}
@@ -111,15 +93,10 @@ describe("repeated diff blocks", () => {
       // This viewer fixture does not navigate or read router state.
       { router: false },
     );
-    const pool = [...pools.keys()][0]!;
-    await act(async () => {
-      await pools.get(pool);
-      await Promise.all(parsed.files.map((file) => pool.primeDiffHighlightCache(file)));
-    });
     const flush = () => act(async () => viewer?.getInstance()?.render(true));
     await flush();
-    const blocks = () => [...document.querySelectorAll("diffs-container")];
-    const body = (index: number) => blocks()[index]!.shadowRoot!.querySelector("[data-diff]");
+    const blocks = () => [...document.querySelectorAll("diffs-file")];
+    const body = (index: number) => blocks()[index]!.querySelector("[data-diff]");
     const click = async (element: Element) => {
       await act(async () =>
         element.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true })),
@@ -139,14 +116,14 @@ describe("repeated diff blocks", () => {
       expect(body(2)?.textContent).toContain("second");
     });
 
-    await click(blocks()[1]!.shadowRoot!.querySelector("[data-diffs-header]")!);
+    await click(blocks()[1]!.querySelector("[data-diffs-header]")!);
     await expectExpanded([true, false, true]);
-    await click(blocks()[1]!.shadowRoot!.querySelector("[data-title] bdi")!);
+    await click(blocks()[1]!.querySelector("[data-title] bdi")!);
     expect(onOpen).toHaveBeenCalledExactlyOnceWith("same.ts");
     await expectExpanded([true, false, true]);
     await click(blocks()[1]!.querySelector("button")!);
     await expectExpanded([true, true, true]);
-    await click(blocks()[0]!.shadowRoot!.querySelector("[data-diffs-header]")!);
+    await click(blocks()[0]!.querySelector("[data-diffs-header]")!);
     await expectExpanded([false, true, true]);
   });
 });

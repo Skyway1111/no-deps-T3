@@ -2050,7 +2050,6 @@
   "5ddb7a524b64a923": "Diffs der Runden sind nicht verfügbar, weil dieses Projekt kein Git-Repository ist.",
   "bc426d9d8f686f71": "Noch keine abgeschlossenen Runden.",
   "2c7dd1701c1e4878": "Der Anbieter hat Dateiinhalt ohne Diff aufgezeichnet.",
-  "7af7238975f15a8f": "Code wird geladen...",
   "c53cf4b26ec0586d": "Rechner, {label}",
   "0c01f791ecef34ad": "T3-Code-Umgebung",
   "6ba599e5a409f99d": "Rechner nicht in dieser App",
@@ -12460,5 +12459,16 @@
   "27d76249d09eb69f": "Review-Leitfaden bereit",
   "faa3bb26abb39c93": "Review-Leitfaden fehlgeschlagen",
   "b7df38b7d8792d78": "Leitfaden öffnen",
-  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden"
+  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
+  "5cc99bf5a92d819d": "Alle unveränderten Zeilen einblenden",
+  "c6c63ad0e52d852c": "Unveränderte Zeilen darüber einblenden",
+  "6412b8d2512e7fd2": "Unveränderte Zeilen darunter einblenden",
+  "1f0c3ed7cc3ce2a1": "{count, plural, one {# unveränderte Zeile} other {# unveränderte Zeilen}}",
+  "f86d95ceb14aa55b": "Zeilen kommentieren",
+  "884d27c40f91caee": "Suchen",
+  "3d1e7ff5894d00dd": "Keine Ergebnisse",
+  "9a1dafe07b8ce33d": "{current} von {total}",
+  "a1ea56eada9c51c3": "Suche schließen",
+  "6c2573ffb9eade31": "Ersetzen",
+  "b4f718e51100ad40": "Alle ersetzen"
 }

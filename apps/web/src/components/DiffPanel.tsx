@@ -1,7 +1,7 @@
 import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
-import type { FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffContentsLoader, FileDiffMetadata } from "~/ui-core/codeView/types";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -61,7 +61,6 @@ import {
   resolveDiffThemeName,
   resolveFileDiffPath,
 } from "../lib/diffRendering";
-import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
 import { areAllDiffFilesCollapsed, toggleAllDiffFiles } from "../lib/diffCollapse";
 import { LIVE_REFRESH_MIN_INTERVAL_MS, useLiveRefresh } from "../hooks/useLiveRefresh";
 import {
@@ -1742,8 +1741,7 @@ export default function DiffPanel({
                     }}
                     {...(lazySource
                       ? {
-                          unsafeCSSExtra:
-                            "[data-additions-count], [data-deletions-count] { display: none; }",
+                          hideLineCounts: true,
                           renderHeaderMetadata: (fileDiff: FileDiffMetadata) => {
                             const stat = fileStats.get(resolveFileDiffPath(fileDiff));
                             return stat ? (
@@ -1777,7 +1775,6 @@ export default function DiffPanel({
                       lineDiffType: "none",
                       overflow: wordWrap ? "wrap" : "scroll",
                       theme: resolveDiffThemeName(resolvedTheme),
-                      preferredHighlighter: PREFERRED_HIGHLIGHTER,
                       themeType: resolvedTheme as DiffThemeType,
                       stickyHeaders: true,
                       onPostRender: flushCodeView,

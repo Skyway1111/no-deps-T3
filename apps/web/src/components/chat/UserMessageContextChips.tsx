@@ -11,8 +11,7 @@ import { useRightPanelStore } from "~/rightPanelStore";
 import { COMPOSER_CONTEXT_KINDS } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { use, type ReactNode } from "react";
-import { FileDiff } from "@pierre/diffs/react";
-import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
+import { FileDiff } from "~/ui-core/codeView/FileDiff";
 import {
   type ChatFileAttachment,
   type ChatImageAttachment,
@@ -24,7 +23,6 @@ import {
   resolveDiffThemeName,
   resolveFileDiffPath,
 } from "../../lib/diffRendering";
-import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import ChatMarkdown from "../ChatMarkdown";
 import { EnvironmentContextChip } from "../EnvironmentContextChip";
 import { ThreadContextChip } from "../ThreadContextChip";
@@ -632,20 +630,19 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
         />
       )}
       {renderablePatch?.kind === "files" && (
-        <DiffWorkerPoolProvider>
+        <>
           {renderablePatch.files.map((fileDiff) => (
             <FileDiff
               key={resolveFileDiffPath(fileDiff)}
               fileDiff={fileDiff}
               options={{
-                collapsed: false,
                 diffStyle: "unified",
                 theme: resolveDiffThemeName(renderedAppearance),
-                preferredHighlighter: PREFERRED_HIGHLIGHTER,
+                themeType: renderedAppearance,
               }}
             />
           ))}
-        </DiffWorkerPoolProvider>
+        </>
       )}
       {renderablePatch?.kind === "raw" && (
         <pre className="overflow-x-auto rounded-md bg-muted/40 p-2 text-xs">

@@ -14,12 +14,13 @@ import {
 } from "@t3tools/shared/pullRequestAnchor";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import type {
+  CodeViewAnnotationArgs,
+  CodeViewDiffItem,
   CodeViewItem,
   DiffLineAnnotation,
   FileDiffMetadata,
   SelectedLineRange,
-} from "@pierre/diffs";
-import type { CodeViewAnnotationArgs, CodeViewDiffItem } from "@pierre/diffs/react";
+} from "~/ui-core/codeView/types";
 import type {
   EnvironmentId,
   PullRequestDetailView,
@@ -95,7 +96,6 @@ import {
   type RenderablePatch,
 } from "~/lib/diffRendering";
 import { APP_BASE_NAME } from "~/branding";
-import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
 import { cn } from "~/lib/utils";
 import { createPullRequestDiffFileContentsLoader } from "~/lib/diffFileContents";
 import {
@@ -110,7 +110,6 @@ import { useAtomCommand } from "~/state/use-atom-command";
 
 import { ChatMarkdownAssetImage } from "../chat/ChatMarkdownMedia";
 import { DiffPanelLoadingState } from "../DiffPanelShell";
-import { useDiffWorkerPool, useDiffWorkerPoolReady } from "../DiffWorkerPoolProvider";
 import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
 import { DiffFileTree } from "../diffs/DiffFileTree";
 import { FileExplorerPane } from "../files/FileExplorerPane";
@@ -147,7 +146,7 @@ import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentat
 import { PullRequestDiffUnavailableState } from "./PullRequestDiffUnavailableState";
 import { usePullRequestFilesViewed } from "./usePullRequestFilesViewed";
 import { hasCutLines } from "@t3tools/shared/diffCutLines";
-import { CUT_LINES_CSS, markCutLineNotes } from "./cutLineNotes";
+import { markCutLineNotes } from "./cutLineNotes";
 import {
   nextPendingReviewCommentId,
   pullRequestReviewKey,
@@ -202,12 +201,6 @@ interface DiffSlice {
 }
 
 // Show host counts outside the shadow root; hunk totals are zero when hosts withhold hunks.
-const REPLACE_FILE_COUNTS_CSS = `
-[data-diffs-header] [data-additions-count],
-[data-diffs-header] [data-deletions-count] {
-  display: none !important;
-}`;
-
 const NO_SLICES: ReadonlyArray<DiffSlice> = [];
 
 // Query results outlive the panel's slices, so their parses survive closing and reopening
@@ -452,8 +445,6 @@ function PullRequestCodeTab({
   const messages = useMessages();
   const fixFindingLabel = requestedFixFindingLabel ?? gt("Fix in a thread");
   const resolvedTheme = useRenderedAppearance();
-  // Initialize the shared tokenizer and workers while the diff request is still pending.
-  const workerPoolReady = useDiffWorkerPoolReady(useDiffWorkerPool());
   const settings = useClientSettings((settings) => ({
     diffFilesCollapsed: settings.diffFilesCollapsed,
     diffIgnoreWhitespace: settings.diffIgnoreWhitespace,
@@ -1200,7 +1191,6 @@ function PullRequestCodeTab({
     lineDiffType: "none" as const,
     overflow: wordWrap ? ("wrap" as const) : ("scroll" as const),
     theme: resolveDiffThemeName(resolvedTheme),
-    preferredHighlighter: PREFERRED_HIGHLIGHTER,
     themeType: resolvedTheme,
     stickyHeaders: true,
     // Full contents would not match the cut lines, and would bring back the lines just cut.
@@ -1880,11 +1870,6 @@ function PullRequestCodeTab({
     );
   }
 
-  // Wait here rather than in the viewer's own placeholder, so panel focus stays on this scroller.
-  if (!workerPoolReady) {
-    return withToolbar(diffLoading);
-  }
-
   const orphanThreads = detail.reviewThreads.filter((thread) => !placedThreadIds.has(thread.id));
   const orphanFiles = new Map<string, PullRequestReviewThread[]>();
   for (const thread of orphanThreads) {
@@ -1960,7 +1945,6 @@ function PullRequestCodeTab({
           onTouchStartCapture={codeViewReveal.cancel}
           onPointerDownCapture={codeViewReveal.cancel}
           onKeyDownCapture={codeViewReveal.cancel}
-          // Headers live in shadow DOM; composedPath crosses that boundary.
           onClickCapture={(event) => {
             const composedPath = event.nativeEvent.composedPath?.() ?? [];
             for (const node of composedPath) {
@@ -1986,7 +1970,7 @@ function PullRequestCodeTab({
             <StyledDiffCodeView<ReviewAnnotationGroup>
               className="@container h-full overflow-auto [scrollbar-gutter:stable]"
               containerRef={(node) => {
-                // Pierre sets tabIndex -1 on this root and forwards no data attributes.
+                // The viewer forwards no data attributes to its scroller.
                 node?.setAttribute("data-workspace-focus-default", "");
                 scrollerRef(node);
               }}
@@ -1999,7 +1983,7 @@ function PullRequestCodeTab({
               renderHeaderPrefix={renderHeaderPrefix}
               renderHeaderMetadata={renderHeaderMetadata}
               renderAnnotation={renderAnnotation}
-              unsafeCSSExtra={`${REPLACE_FILE_COUNTS_CSS}\n${CUT_LINES_CSS}`}
+              hideLineCounts
             />
           </FileViewedToggleContext>
         </div>

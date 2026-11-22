@@ -1,16 +1,8 @@
-import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { cdp, userEvent } from "vite-plus/test/browser";
 import "~/index.css";
 
 import { render } from "../../../test/render";
-
-import { getSyntaxHighlighterPromise } from "~/lib/syntaxHighlighting";
-
-// The pool starts its workers before showing any code, which can outlast a cold CI browser.
-vi.mock(import("~/components/DiffWorkerPoolProvider"), () => ({
-  DiffWorkerPoolProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
 
 import ReadOnlySourcePreview from "./ReadOnlySourcePreview";
 
@@ -28,14 +20,12 @@ function copiedText(target: Element) {
 
 describe("ReadOnlySourcePreview", () => {
   it("copies the whole file after Select All, wherever the preview is scrolled", async () => {
-    // File paints nothing until the shared highlighter has loaded; once it has, mount renders synchronously.
-    await getSyntaxHighlighterPromise("text");
     await using screen = await render(
       <div className="flex h-[400px] flex-col">
         <ReadOnlySourcePreview name="notes.txt" text={text} wordWrap={false} />
       </div>,
     );
-    const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+    const root = screen.container.querySelector("diffs-file")!;
     const rows = () => root.querySelectorAll("[data-line]");
     await vi.waitFor(() => expect(rows()[0]?.textContent).toBe("line 1"));
     // Only rows near the viewport are mounted, so the browser's own copy would stop there.
@@ -70,13 +60,12 @@ describe("ReadOnlySourcePreview", () => {
     ["a carriage return and line feed", "\r\n"],
   ])("copies the whole of a file whose lines end in %s", async (_name, ending) => {
     const contents = text.replaceAll("\n", ending);
-    await getSyntaxHighlighterPromise("text");
     await using screen = await render(
       <div className="flex h-[400px] flex-col">
         <ReadOnlySourcePreview name="notes.txt" text={contents} wordWrap={false} />
       </div>,
     );
-    const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+    const root = screen.container.querySelector("diffs-file")!;
     const rows = () => root.querySelectorAll("[data-line]");
     await vi.waitFor(() => expect(rows()[0]?.textContent).toBe("line 1"));
 
@@ -95,13 +84,12 @@ describe("ReadOnlySourcePreview", () => {
   ])(
     "restores and copies a partial selection after scrolling away and back ($height px)",
     async ({ contents, height }) => {
-      await getSyntaxHighlighterPromise("text");
       await using screen = await render(
         <div className="flex flex-col" style={{ height }}>
           <ReadOnlySourcePreview name="notes.txt" text={contents} wordWrap={false} />
         </div>,
       );
-      const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+      const root = screen.container.querySelector("diffs-file")!;
       const rows = () => root.querySelectorAll("[data-line]");
       await vi.waitFor(() => expect(rows()[0]?.textContent).toBe("line 1"));
 
@@ -123,13 +111,12 @@ describe("ReadOnlySourcePreview", () => {
   );
 
   it("drops a selection scrolled out of the mounted window when a click lands on its edge", async () => {
-    await getSyntaxHighlighterPromise("text");
     await using screen = await render(
       <div className="flex h-[400px] flex-col">
         <ReadOnlySourcePreview name="notes.txt" text={text} wordWrap={false} />
       </div>,
     );
-    const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+    const root = screen.container.querySelector("diffs-file")!;
     const rows = () => root.querySelectorAll("[data-line]");
     await vi.waitFor(() => expect(rows()[0]?.textContent).toBe("line 1"));
 
@@ -147,13 +134,12 @@ describe("ReadOnlySourcePreview", () => {
   });
 
   it("copies a drag that autoscrolls past the edge of the preview", async () => {
-    await getSyntaxHighlighterPromise("text");
     await using screen = await render(
       <div className="flex h-[400px] flex-col">
         <ReadOnlySourcePreview name="notes.txt" text={text} wordWrap={false} />
       </div>,
     );
-    const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+    const root = screen.container.querySelector("diffs-file")!;
     const rows = () => root.querySelectorAll("[data-line]");
     await vi.waitFor(() => expect(rows()[0]?.textContent).toBe("line 1"));
 
@@ -187,13 +173,12 @@ describe("ReadOnlySourcePreview", () => {
   });
 
   it("extends a selection with Shift+click after its anchor scrolls out of the mounted window", async () => {
-    await getSyntaxHighlighterPromise("text");
     await using screen = await render(
       <div className="flex h-[400px] flex-col">
         <ReadOnlySourcePreview name="notes.txt" text={text} wordWrap={false} />
       </div>,
     );
-    const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+    const root = screen.container.querySelector("diffs-file")!;
     const rows = () => root.querySelectorAll("[data-line]");
     await vi.waitFor(() => expect(rows()[0]?.textContent).toBe("line 1"));
 
@@ -206,7 +191,7 @@ describe("ReadOnlySourcePreview", () => {
       modifiers: ["Shift"],
     });
 
-    const clicked = document.getSelection()!.getComposedRanges({ shadowRoots: [root] })[0]!;
+    const clicked = document.getSelection()!.getRangeAt(0);
     const lastLine = clicked.endContainer.textContent!;
     expect(Number(lastLine.replace("line ", ""))).toBeGreaterThan(250);
     expect(copiedText(rows()[0]!)).toBe(

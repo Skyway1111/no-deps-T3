@@ -1,4 +1,4 @@
-import type { CodeViewScrollTarget } from "@pierre/diffs";
+import type { CodeViewScrollTarget } from "~/ui-core/codeView/types";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createCodeViewFileReveal } from "./useCodeViewFileReveal";

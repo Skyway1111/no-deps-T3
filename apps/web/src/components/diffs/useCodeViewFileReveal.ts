@@ -3,7 +3,7 @@ import type {
   SelectedLineRange,
   FileDiffMetadata,
   SelectionSide,
-} from "@pierre/diffs";
+} from "~/ui-core/codeView/types";
 import { useState } from "react";
 
 interface FileRevealHandle {

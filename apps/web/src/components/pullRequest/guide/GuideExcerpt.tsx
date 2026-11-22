@@ -1,10 +1,3 @@
-import type {
-  DiffLineAnnotation,
-  FileDiffContentsLoader,
-  FileDiffMetadata,
-  SelectedLineRange,
-} from "@pierre/diffs";
-import { FileDiff } from "@pierre/diffs/react";
 import type { PullRequestReviewGuideExcerpt, PullRequestReviewPosition } from "@t3tools/contracts";
 import { ArrowUpRightIcon } from "~/ui-core/icons";
 import { T, useGT, Var } from "@t3tools/shared/i18n/react";
@@ -16,7 +9,13 @@ import {
   resolveDiffThemeName,
   resolveFileDiffPreviousPath,
 } from "~/lib/diffRendering";
-import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
+import { FileDiff } from "~/ui-core/codeView/FileDiff";
+import type {
+  DiffLineAnnotation,
+  FileDiffContentsLoader,
+  FileDiffMetadata,
+  SelectedLineRange,
+} from "~/ui-core/codeView/types";
 import {
   buildDiffReviewComment,
   diffReviewSelectionId,
@@ -25,7 +24,6 @@ import {
 } from "~/reviewCommentContext";
 
 import { DiffCommentAnnotation } from "../../diffs/DiffCommentAnnotation";
-import { DIFF_VIEW_UNSAFE_CSS } from "../../diffs/StyledDiffCodeView";
 import { Button } from "../../ui/button";
 import {
   getReviewPositionAnchor,
@@ -38,12 +36,7 @@ import type { PullRequestCompletionScope } from "../PullRequestMarkdownTextarea"
 import { excerptLoader } from "./GuideExcerpt.logic";
 import { GuideNoteMarker } from "./GuideNotes";
 import { GuideProse } from "./GuideProse";
-
-const EXCERPT_UNSAFE_CSS = `${DIFF_VIEW_UNSAFE_CSS}
-[data-code]::-webkit-scrollbar-thumb {
-  background-color: var(--diffs-bg-context);
-}
-`;
+import "../../diffs/diffSurfaceTheme";
 
 export interface ExcerptNoteMarker {
   readonly line: number;
@@ -247,8 +240,6 @@ function ExcerptDiff({
     overflow: "scroll" as const,
     theme: resolveDiffThemeName(resolvedTheme),
     themeType: resolvedTheme,
-    preferredHighlighter: PREFERRED_HIGHLIGHTER,
-    unsafeCSS: EXCERPT_UNSAFE_CSS,
     enableGutterUtility: interactive,
     enableLineSelection: interactive,
     onGutterUtilityClick: beginComment,
@@ -259,7 +250,7 @@ function ExcerptDiff({
   };
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-border/60">
+    <div className="diff-render-surface min-w-0 overflow-hidden rounded-lg border border-border/60 [--code-background:var(--background)]">
       <FileDiff<ExcerptAnnotation>
         fileDiff={slice.fileDiff}
         options={options}

@@ -15,16 +15,21 @@ function dismissFileEditorInteraction({
   onDismiss();
   editor.setSelections([]);
 
-  const file = root.querySelector<HTMLElement>("diffs-container");
-  const activeElement = file?.shadowRoot?.activeElement;
-  if (activeElement instanceof HTMLElement) {
+  const activeElement = document.activeElement;
+  if (
+    activeElement instanceof HTMLElement &&
+    root.querySelector("diffs-file")?.contains(activeElement)
+  ) {
     activeElement.blur();
   }
 }
 
 function isFileEditorFocused(root: HTMLElement): boolean {
-  const file = root.querySelector<HTMLElement>("diffs-container");
-  return file?.shadowRoot?.activeElement?.hasAttribute("data-content") === true;
+  const activeElement = document.activeElement;
+  return (
+    activeElement?.hasAttribute("data-content") === true &&
+    root.querySelector("diffs-file")?.contains(activeElement) === true
+  );
 }
 
 export function installFileEditorDismissal({

@@ -1,4 +1,4 @@
-import type { CodeViewScrollTarget } from "@pierre/diffs";
+import type { CodeViewScrollTarget } from "~/ui-core/codeView/types";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createCodeViewScrollRestore } from "./useCodeViewScrollRestore";
@@ -37,8 +37,7 @@ describe("createCodeViewScrollRestore", () => {
 
     const again = viewer(10_000);
     mount("thread-a", again);
-    // Pierre subtracts the 32px sticky header from an unclamped position target.
-    expect(again.scrolls).toEqual([{ type: "position", position: 4032 }]);
+    expect(again.scrolls).toEqual([{ type: "position", position: 4000 }]);
   });
 
   it("loads more files until the position is reachable, then gives up once none remain", () => {
@@ -57,7 +56,7 @@ describe("createCodeViewScrollRestore", () => {
     loading.instance.scrollHeight = 10_000;
     restore.flush();
     restore.flush();
-    expect(loading.scrolls).toEqual([{ type: "position", position: 4032 }]);
+    expect(loading.scrolls).toEqual([{ type: "position", position: 4000 }]);
 
     const shrunk = viewer(2000);
     const settling = mount("thread-c", shrunk, false);

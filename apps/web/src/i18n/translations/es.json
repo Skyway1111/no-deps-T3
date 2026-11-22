@@ -2051,7 +2051,6 @@
   "5ddb7a524b64a923": "Los diffs de los turnos no están disponibles porque este proyecto no es un repositorio git.",
   "bc426d9d8f686f71": "Aún no hay turnos completados.",
   "2c7dd1701c1e4878": "El proveedor registró el contenido del archivo sin un diff.",
-  "7af7238975f15a8f": "Cargando código...",
   "c53cf4b26ec0586d": "Máquina, {label}",
   "0c01f791ecef34ad": "Entorno de T3 Code",
   "6ba599e5a409f99d": "Máquina que no está en esta app",
@@ -12455,5 +12454,16 @@
   "27d76249d09eb69f": "Guía de revisión lista",
   "faa3bb26abb39c93": "Falló la guía de revisión",
   "b7df38b7d8792d78": "Abrir guía",
-  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión"
+  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión",
+  "5cc99bf5a92d819d": "Mostrar todas las líneas sin cambios",
+  "c6c63ad0e52d852c": "Mostrar las líneas sin cambios de arriba",
+  "6412b8d2512e7fd2": "Mostrar las líneas sin cambios de abajo",
+  "1f0c3ed7cc3ce2a1": "{count, plural, one {# línea sin cambios} other {# líneas sin cambios}}",
+  "f86d95ceb14aa55b": "Comentar las líneas",
+  "884d27c40f91caee": "Buscar",
+  "3d1e7ff5894d00dd": "Sin resultados",
+  "9a1dafe07b8ce33d": "{current} de {total}",
+  "a1ea56eada9c51c3": "Cerrar búsqueda",
+  "6c2573ffb9eade31": "Reemplazar",
+  "b4f718e51100ad40": "Reemplazar todo"
 }

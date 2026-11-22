@@ -1,12 +1,13 @@
 import type {
   AnnotationSide,
   CodeViewDiffItem,
+  CodeViewHandle,
   CodeViewItem,
+  CodeViewProps,
   DiffLineAnnotation,
   FileDiffMetadata,
   SelectedLineRange,
-} from "@pierre/diffs";
-import type { CodeViewHandle, CodeViewProps } from "@pierre/diffs/react";
+} from "~/ui-core/codeView/types";
 import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
 import { useState, type ReactNode, type Ref } from "react";
 
@@ -35,7 +36,7 @@ interface DiffCommentAnnotationGroup {
 }
 
 type DiffCommentLineAnnotation = DiffLineAnnotation<DiffCommentAnnotationGroup>;
-export type AnnotatableCodeViewHandle = CodeViewHandle<DiffCommentAnnotationGroup, undefined>;
+export type AnnotatableCodeViewHandle = CodeViewHandle<DiffCommentAnnotationGroup>;
 const EMPTY_REVIEW_COMMENTS: ReadonlyArray<ReviewCommentContext> = [];
 
 function annotationSide(range: SelectedLineRange): AnnotationSide {
@@ -88,10 +89,10 @@ interface AnnotatableCodeViewProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
   options: StyledDiffCodeViewOptions<DiffCommentAnnotationGroup>;
   viewerRef?: Ref<AnnotatableCodeViewHandle>;
-  onScroll?: CodeViewProps<DiffCommentAnnotationGroup, undefined>["onScroll"];
+  onScroll?: CodeViewProps<DiffCommentAnnotationGroup>["onScroll"];
   className?: string;
   renderCodeViewFooter?: () => ReactNode;
-  unsafeCSSExtra?: string;
+  hideLineCounts?: boolean;
   renderHeaderMetadata?: (fileDiff: FileDiffMetadata) => ReactNode;
   renderHeaderFilenameSuffix: (fileDiff: FileDiffMetadata) => ReactNode;
   renderHeaderPrefix: (
@@ -120,7 +121,7 @@ export function AnnotatableCodeView({
   onScroll,
   className,
   renderCodeViewFooter,
-  unsafeCSSExtra,
+  hideLineCounts,
   renderHeaderMetadata,
   renderHeaderFilenameSuffix,
   renderHeaderPrefix,
@@ -264,7 +265,7 @@ export function AnnotatableCodeView({
       {...(viewerRef ? { viewerRef } : {})}
       {...(onScroll ? { onScroll } : {})}
       {...(className ? { className } : {})}
-      {...(unsafeCSSExtra ? { unsafeCSSExtra } : {})}
+      {...(hideLineCounts ? { hideLineCounts } : {})}
       {...(renderHeaderMetadata
         ? {
             renderHeaderMetadata: (item: CodeViewItem<DiffCommentAnnotationGroup>) =>

@@ -16,7 +16,7 @@ import {
 } from "react";
 
 /** Prefix sums over item sizes: O(log n) update, append, offset → index lookup, and prefix query. */
-class Fenwick {
+export class Fenwick {
   private tree: Float64Array;
   private values: Float64Array;
   private n: number;

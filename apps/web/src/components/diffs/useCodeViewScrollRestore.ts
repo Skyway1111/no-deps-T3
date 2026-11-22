@@ -1,4 +1,4 @@
-import type { CodeViewScrollTarget } from "@pierre/diffs";
+import type { CodeViewScrollTarget } from "~/ui-core/codeView/types";
 import { useEffect, useState } from "react";
 
 interface Viewer {
@@ -33,8 +33,7 @@ export function createCodeViewScrollRestore() {
       loadMore?.();
       return;
     }
-    // Pierre lands an unclamped position target one sticky header (32px) above it.
-    const position = pending + 32 <= maxScrollTop ? pending + 32 : maxScrollTop;
+    const position = Math.min(pending, maxScrollTop);
     pending = null;
     if (position > 0) handle.scrollTo({ type: "position", position });
   };
