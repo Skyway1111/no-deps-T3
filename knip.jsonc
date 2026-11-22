@@ -69,19 +69,13 @@
       // The Vite+ web build prerequisite.
       // Native and disk-loaded provider packages stay external to the bundle; the
       // CLI archive and desktop sidecar stage them from this manifest.
-      "ignoreDependencies": [
-        "@effect/platform-node-shared",
-        "@t3tools/web",
-        "ffi-rs",
-        "transcribe-cpp",
-      ],
+      "ignoreDependencies": ["@effect/platform-node-shared", "@t3tools/web", "transcribe-cpp"],
     },
     "apps/desktop": {
       // Electron loads these bundles by filename rather than importing them.
       "entry": [
         "gnome-extension/extension.js!",
         "src/electron/WindowsForegroundFocusWorker.ts!",
-        "src/snapShot/GlobalShiftShortcutWorker.ts!",
         "src/snapShot/RegionSnapShotWorker.ts!",
         "src/snapShot/SnapShotAccessibilityWorker.ts!",
         "src/boot.ts!",

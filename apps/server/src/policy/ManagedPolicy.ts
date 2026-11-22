@@ -4,7 +4,6 @@
  *
  * @module ManagedPolicy
  */
-import * as NodeModule from "node:module";
 
 import { ManagedPolicyDocument, type ManagedPolicySummary } from "@t3tools/contracts";
 import * as Config from "effect/Config";
@@ -207,14 +206,7 @@ const make = Effect.gen(function* () {
   return policy;
 });
 
-// A single-executable server resolves packages on disk only through `require`.
-const requireForFfi = NodeModule.createRequire(import.meta.url);
-
-export const layer = Layer.effect(ManagedPolicy, make).pipe(
-  Layer.provide(
-    layerWindowsRegistry(async () => requireForFfi("ffi-rs") as typeof import("ffi-rs")),
-  ),
-);
+export const layer = Layer.effect(ManagedPolicy, make).pipe(Layer.provide(layerWindowsRegistry));
 
 /** A policy for tests; `undefined` means unmanaged. */
 export const layerTest = (document?: ManagedPolicyDocument) =>

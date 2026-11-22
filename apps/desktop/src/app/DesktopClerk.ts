@@ -93,7 +93,6 @@ function createDesktopClerkBridge(stateDir: string, isDevelopment: boolean, user
       userDataPath,
     ),
     manageSingleInstanceLock: false,
-    passkeys: true,
     renderer: {
       scheme: ElectronProtocol.getDesktopScheme(isDevelopment),
       host: ElectronProtocol.DESKTOP_HOST,

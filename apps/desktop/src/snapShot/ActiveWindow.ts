@@ -4,7 +4,7 @@ import * as NodeChildProcess from "node:child_process";
 
 import * as Schema from "effect/Schema";
 
-import { loadWindowsForegroundApi } from "../electron/WindowsForeground.ts";
+import { foregroundWindow } from "@t3tools/shared/sys/win";
 
 /** id is CGWindowNumber on macOS or HWND on Windows, matching the capture backend. */
 export type ActiveWindow = {
@@ -156,20 +156,24 @@ async function macActiveWindow(): Promise<ActiveWindow | undefined> {
 }
 
 async function windowsActiveWindow(): Promise<ActiveWindow | undefined> {
-  const api = await loadWindowsForegroundApi();
-  const handle = api.getForegroundWindow();
-  if (handle === 0n) return undefined;
-  const bounds = api.getWindowRect(handle);
-  if (!bounds) return undefined;
-  const { processId } = api.getWindowThreadAndProcessId(handle);
-  const path = processId === 0 ? "" : api.getProcessImagePath(processId);
-  const name = path.split(/[\\/]/).pop() ?? "";
+  const window = await foregroundWindow();
+  if (!window?.rect) return undefined;
+  const { left, top, right, bottom } = window.rect;
   return {
     platform: "windows",
-    id: Number(handle),
-    title: api.getWindowText(handle),
-    bounds,
-    owner: { name, processId, path },
+    id: Number(window.hwnd),
+    title: window.title,
+    bounds: {
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    },
+    owner: {
+      name: window.imagePath.split(/[\\/]/).pop() ?? "",
+      processId: window.pid,
+      path: window.imagePath,
+    },
   };
 }
 

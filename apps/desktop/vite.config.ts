@@ -7,7 +7,7 @@ import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-ex
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 const repoEnv = loadRepoEnv();
-const domTests = ["src/preview/PickPreload.test.ts"];
+const domTests = ["src/preview/ElementContext.test.ts", "src/preview/PickPreload.test.ts"];
 
 // Install only bundle externals; the server bundle already carries its dependency tree.
 const isMainProcessExternal = (id: string) =>
@@ -91,7 +91,6 @@ export default defineConfig({
       define: publicConfigDefine,
       entry: [
         "src/electron/WindowsForegroundFocusWorker.ts",
-        "src/snapShot/GlobalShiftShortcutWorker.ts",
         "src/snapShot/RegionSnapShotWorker.ts",
         "src/snapShot/SnapShotAccessibilityWorker.ts",
       ],
@@ -136,10 +135,7 @@ export default defineConfig({
       outExtensions: () => ({ js: ".cjs" }),
       entry: ["src/preview-pick-preload.ts"],
       deps: {
-        alwaysBundle: (id) =>
-          id === "react-grab" ||
-          id.startsWith("react-grab/") ||
-          id === "@t3tools/shared/keybindingMatching",
+        alwaysBundle: (id) => id === "@t3tools/shared/keybindingMatching",
       },
     },
     {
@@ -188,10 +184,7 @@ export default defineConfig({
           include: domTests,
           // Guest preloads run in the page; these tests drive them against a DOM.
           environment: "jsdom",
-          setupFiles: [
-            "../../packages/shared/src/testing/providerEnv.ts",
-            "../../packages/shared/src/testing/gitEnv.ts",
-          ],
+          setupFiles: ["../../packages/shared/src/testing/providerEnv.ts"],
         },
       },
     ],

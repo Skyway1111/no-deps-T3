@@ -98,9 +98,5 @@ The generator also reuses an installed sibling package's notice when both packag
 same normalized repository and license. A name-and-version override always wins over these
 repository fallbacks.
 
-The `@react-grab/cli` override uses the root React Grab repository's MIT license because the CLI's
-npm archive omits both its license field and license file. Keep the override until the published
-CLI package carries that metadata itself.
-
 Generated mobile files live under `apps/mobile/.generated/` and are ignored. Do not commit or edit
 them; updating dependencies or configuration is enough for the next build to refresh the output.

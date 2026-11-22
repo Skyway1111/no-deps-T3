@@ -237,6 +237,21 @@
       ]
     },
     {
+      "bundles": ["desktop", "web"],
+      "license": "OFL-1.1",
+      "name": "Inter",
+      "sourceUrl": "https://github.com/rsms/inter",
+      "generatedNotices": [
+        {
+          "licenseId": "OFL-1.1",
+          "copyrights": [
+            "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)"
+          ],
+          "preamble": ["Unmodified Inter variable font subsets, as packaged by Fontsource."]
+        }
+      ]
+    },
+    {
       "bundles": ["ios", "android", "mobile", "web", "desktop"],
       "license": "OFL-1.1",
       "name": "KaTeX mathematical fonts",
@@ -314,15 +329,6 @@
       "generatedNotice": {
         "licenseId": "Apache-2.0",
         "copyrights": ["Copyright 2021-2024 The Connect Authors"]
-      }
-    },
-    {
-      "license": "MIT",
-      "name": "@react-grab/cli",
-      "sourceUrl": "https://github.com/aidenybai/react-grab/tree/main/packages/cli",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2025 Aiden Bai"]
       }
     },
     {
@@ -411,83 +417,6 @@
     {
       "license": "MIT",
       "name": "objc-js"
-    },
-    {
-      "name": "@yuuang/ffi-rs-android-arm64",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-darwin-arm64",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-darwin-x64",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-linux-arm-gnueabihf",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-linux-arm64-gnu",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-linux-arm64-musl",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-linux-x64-gnu",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-linux-x64-musl",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-win32-arm64-msvc",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-win32-ia32-msvc",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
-    },
-    {
-      "name": "@yuuang/ffi-rs-win32-x64-msvc",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2019 zhangyuang"]
-      }
     },
     {
       "repositoryUrl": "https://github.com/facebook/metro",

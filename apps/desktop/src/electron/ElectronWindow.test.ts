@@ -11,10 +11,9 @@ const {
   activateWindowsForegroundMock,
   appFocusMock,
   browserWindowMock,
-  foregroundWindowMock,
   getAllWindowsMock,
   getFocusedWindowMock,
-  loadWindowsForegroundApiMock,
+  foregroundHandleMock,
   shellHostedForegroundMock,
   startWindowsForegroundFocusThreadMock,
   windowsForegroundFocusMock,
@@ -24,10 +23,9 @@ const {
   activateWindowsForegroundMock: vi.fn(),
   appFocusMock: vi.fn(),
   browserWindowMock: vi.fn(function BrowserWindowMock() {}),
-  foregroundWindowMock: vi.fn<() => bigint>(),
   getAllWindowsMock: vi.fn(),
   getFocusedWindowMock: vi.fn(),
-  loadWindowsForegroundApiMock: vi.fn<() => Promise<{ getForegroundWindow: () => bigint }>>(),
+  foregroundHandleMock: vi.fn<() => Promise<bigint | undefined>>(),
   shellHostedForegroundMock: vi.fn(),
   startWindowsForegroundFocusThreadMock: vi.fn(),
   windowsForegroundFocusMock: vi.fn(),
@@ -38,7 +36,8 @@ const {
 vi.mock("./WindowsForeground.ts", () => ({
   activateWindowsForeground: activateWindowsForegroundMock,
   isWindowsShellHostedForeground: shellHostedForegroundMock,
-  loadWindowsForegroundApi: loadWindowsForegroundApiMock,
+  windowHandle: (buffer: Buffer) => BigInt(buffer.readUInt32LE()),
+  windowsForegroundHandle: foregroundHandleMock,
 }));
 
 vi.mock("./WindowsForegroundFocusThread.ts", () => ({
@@ -94,12 +93,9 @@ describe("ElectronWindow", () => {
     activateWindowsForegroundMock.mockReset().mockResolvedValue(undefined);
     appFocusMock.mockReset();
     browserWindowMock.mockReset();
-    foregroundWindowMock.mockReset().mockReturnValue(0n);
     getAllWindowsMock.mockReset();
     getFocusedWindowMock.mockReset();
-    loadWindowsForegroundApiMock
-      .mockReset()
-      .mockImplementation(() => Promise.resolve({ getForegroundWindow: foregroundWindowMock }));
+    foregroundHandleMock.mockReset().mockResolvedValue(undefined);
     shellHostedForegroundMock.mockReset().mockResolvedValue(false);
     startWindowsForegroundFocusThreadMock.mockReset().mockReturnValue({
       prepare: windowsForegroundPrepareMock,
@@ -118,8 +114,8 @@ describe("ElectronWindow", () => {
         new Error("Windows initially refused foreground activation"),
       );
       const queryStarted = Promise.withResolvers<void>();
-      const foreground = Promise.withResolvers<{ getForegroundWindow: () => bigint }>();
-      loadWindowsForegroundApiMock.mockImplementation(() => {
+      const foreground = Promise.withResolvers<bigint | undefined>();
+      foregroundHandleMock.mockImplementation(() => {
         queryStarted.resolve();
         return foreground.promise;
       });
@@ -139,7 +135,7 @@ describe("ElectronWindow", () => {
         .pipe(Effect.forkChild({ startImmediately: true }));
       yield* Effect.promise(() => queryStarted.promise);
       window.isDestroyed.mockReturnValue(true);
-      foreground.resolve({ getForegroundWindow: foregroundWindowMock });
+      foreground.resolve(undefined);
       yield* Fiber.join(revealFiber);
 
       assert.lengthOf(windowsForegroundFocusMock.mock.calls, 0);

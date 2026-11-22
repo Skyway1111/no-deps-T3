@@ -17,7 +17,8 @@ import * as Electron from "electron";
 import {
   activateWindowsForeground,
   isWindowsShellHostedForeground,
-  loadWindowsForegroundApi,
+  windowHandle,
+  windowsForegroundHandle,
 } from "./WindowsForeground.ts";
 import { startWindowsForegroundFocusThread } from "./WindowsForegroundFocusThread.ts";
 
@@ -33,13 +34,9 @@ function windowsForegroundFocusTarget(window: Electron.BrowserWindow) {
 }
 
 async function isWindowsBrowserWindowForeground(window: Electron.BrowserWindow): Promise<boolean> {
-  const foreground = await loadWindowsForegroundApi()
-    .then((api) => api.getForegroundWindow())
-    .catch(() => undefined);
-  if (window.isDestroyed() || foreground === undefined || foreground === 0n) return false;
-  const handle = window.getNativeWindowHandle();
-  const hwnd = handle.length === 8 ? handle.readBigUInt64LE() : BigInt(handle.readUInt32LE());
-  return foreground === hwnd;
+  const foreground = await windowsForegroundHandle().catch(() => undefined);
+  if (window.isDestroyed() || foreground === undefined) return false;
+  return foreground === windowHandle(window.getNativeWindowHandle());
 }
 
 const ElectronWindowCreateOptions = Schema.Struct({

@@ -6,12 +6,15 @@ fn main() {
         Some("fuzzy") => t3_sys::fuzzy::run(rest),
         Some("flock") => t3_sys::flock::run(rest),
         Some("keyring") => t3_sys::keyring::run(rest),
+        Some("clonefile") => t3_sys::clonefile::run(rest),
+        Some("reg-read") => t3_sys::registry::run(rest),
+        Some("win") => t3_sys::win::run(rest),
         Some("--version") => {
             println!("t3-sys {}", env!("CARGO_PKG_VERSION"));
             0
         }
         _ => {
-            eprintln!("usage: t3-sys pty|fuzzy|flock|keyring ...");
+            eprintln!("usage: t3-sys pty|fuzzy|flock|keyring|clonefile|reg-read|win ...");
             2
         }
     };

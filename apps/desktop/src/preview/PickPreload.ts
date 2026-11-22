@@ -1,6 +1,5 @@
 // @effect-diagnostics globalDate:off globalTimers:off - This isolated Electron preload does not run inside an Effect runtime.
 import { ipcRenderer } from "electron";
-import { getElementContext } from "react-grab/primitives";
 import { matchesKeybindingShortcut } from "@t3tools/shared/keybindingMatching";
 import type {
   DesktopPreviewAnnotationTheme,
@@ -8,7 +7,6 @@ import type {
   DesktopPreviewAnnotationVoiceEvent,
   DesktopPreviewAnnotationVoiceState,
   PickedElementPayload,
-  PickedElementStackFrame,
   PreviewAnnotationPayload,
   PreviewAnnotationPoint,
   PreviewAnnotationRect,
@@ -19,6 +17,7 @@ import type {
 } from "@t3tools/contracts";
 
 import { createAnnotationIdSource } from "./AnnotationIds.ts";
+import { getElementContext } from "./ElementContext.ts";
 import { resolveAnnotationSubmission } from "./AnnotationKeyboard.ts";
 import {
   addStrokePoint,
@@ -55,7 +54,6 @@ const Z_INDEX_OVERLAY = 2147483646;
 const PRIMARY = "var(--t3-primary)";
 const PRIMARY_FILL = "color-mix(in srgb, var(--t3-primary) 10%, transparent)";
 const MAX_MARQUEE_ELEMENTS = 20;
-const ELEMENT_CONTEXT_TIMEOUT_MS = 5_000;
 const CONTENT_LAYER_Z_INDEX = 1;
 const CHROME_LAYER_Z_INDEX = 10;
 // Page dialogs (Radix, react-remove-scroll) dismiss, refocus or block scrolling on document events
@@ -431,35 +429,8 @@ function updateSelectedVisual(target: SelectedElement): void {
   target.label.style.transform = `translate(${Math.max(4, rect.x)}px, ${Math.max(4, rect.y - 22)}px)`;
 }
 
-function toStackFrame(frame: {
-  functionName?: string;
-  fileName?: string;
-  lineNumber?: number;
-  columnNumber?: number;
-}): PickedElementStackFrame {
-  return {
-    functionName: frame.functionName ?? null,
-    fileName: frame.fileName ?? null,
-    lineNumber: frame.lineNumber ?? null,
-    columnNumber: frame.columnNumber ?? null,
-  };
-}
-
-/** React-internals lookups can remain pending forever; bound them so submit cannot stall the overlay. */
-function withCaptureTimeout<A>(promise: Promise<A>, millis: number): Promise<A | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([
-    promise,
-    new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), millis);
-    }),
-  ]).finally(() => clearTimeout(timer));
-}
-
-const HTML_PREVIEW_MAX_CHARS = 500;
-
-/** Preserve the tag, HTML, and crop rect when React context lookup fails or stalls. */
-async function captureElement(element: Element): Promise<PickedElementPayload> {
+/** Keep the tag, HTML, and crop rect when React context lookup throws. */
+function captureElement(element: Element): PickedElementPayload {
   const base = {
     pageUrl: location.href,
     pageTitle: document.title?.trim() || null,
@@ -467,32 +438,18 @@ async function captureElement(element: Element): Promise<PickedElementPayload> {
     pickedAt: new Date().toISOString(),
   };
   try {
-    const context = await withCaptureTimeout(
-      Promise.resolve(getElementContext(element)),
-      ELEMENT_CONTEXT_TIMEOUT_MS,
-    );
-    if (context) {
-      const stack = (context.stack ?? []).map(toStackFrame);
-      return {
-        ...base,
-        selector: context.selector,
-        htmlPreview: context.htmlPreview ?? "",
-        componentName: context.componentName,
-        source: stack[0] ?? null,
-        stack,
-        styles: context.styles ?? "",
-      };
-    }
-  } catch {}
-  return {
-    ...base,
-    selector: null,
-    htmlPreview: element.outerHTML.slice(0, HTML_PREVIEW_MAX_CHARS),
-    componentName: null,
-    source: null,
-    stack: [],
-    styles: "",
-  };
+    return { ...base, ...getElementContext(element) };
+  } catch {
+    return {
+      ...base,
+      selector: null,
+      htmlPreview: element.outerHTML.slice(0, 500),
+      componentName: null,
+      source: null,
+      stack: [],
+      styles: "",
+    };
+  }
 }
 
 function createButton(label: string, title: string): HTMLButtonElement {
@@ -1759,9 +1716,9 @@ function startAnnotation(
     const submittedRegions = [...regions];
     const submittedStrokes = [...strokes];
     const submittedStyleChanges = Array.from(styleChanges.values(), (change) => ({ ...change }));
-    void Promise.all(
-      Array.from(selected.values()).map(async (target) => {
-        const element = await captureElement(target.element);
+    void Promise.resolve(
+      Array.from(selected.values(), (target) => {
+        const element = captureElement(target.element);
         for (const change of submittedStyleChanges) {
           if (change.targetId === target.id && element.selector !== null) {
             change.selector = element.selector;

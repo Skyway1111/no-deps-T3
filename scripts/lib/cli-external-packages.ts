@@ -3,13 +3,10 @@
 const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   // Cursor ships computed Webpack imports and platform helper packages.
   "@cursor/sdk",
-  "ffi-rs",
-  "@yuuang/",
   "transcribe-cpp",
   "@transcribe-cpp/",
   "koffi",
   "@koromix/",
-  "@clerk/electron-passkeys",
   "node-gyp-build",
   "node-addon-api",
   "bufferutil",

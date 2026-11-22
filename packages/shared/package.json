@@ -743,9 +743,18 @@
       "types": "./src/sys/dbus.ts",
       "import": "./src/sys/dbus.ts"
     },
+    "./fonts/inter.css": "./src/fonts/inter.css",
+    "./sys/clonefile": {
+      "types": "./src/sys/clonefile.ts",
+      "import": "./src/sys/clonefile.ts"
+    },
     "./sys/keyring": {
       "types": "./src/sys/keyring.ts",
       "import": "./src/sys/keyring.ts"
+    },
+    "./sys/win": {
+      "types": "./src/sys/win.ts",
+      "import": "./src/sys/win.ts"
     }
   },
   "scripts": {
@@ -754,8 +763,7 @@
   },
   "dependencies": {
     "@t3tools/contracts": "workspace:*",
-    "effect": "catalog:",
-    "ffi-rs": "1.3.2"
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",

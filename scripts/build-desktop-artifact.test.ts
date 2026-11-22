@@ -648,12 +648,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@opencode-ai/sdk": "^1.3.15",
           "@pierre/diffs": "1.3.0",
         },
-        desktopDependencies: { "@clerk/electron-passkeys": "0.0.3" },
+        desktopDependencies: { "electron-webauthn": "0.2.0" },
         arch: "arm64",
       }),
       {
         "@cursor/sdk": "1.0.22",
-        "@clerk/electron-passkeys": "0.0.3",
+        "electron-webauthn": "0.2.0",
       },
     );
 

@@ -1,3 +1,4 @@
+import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
@@ -32,4 +33,22 @@ export function t3SysPath(): string {
     .find((candidate) => NodeFS.statSync(candidate, { throwIfNoEntry: false })?.isFile());
   if (!found) throw new Error(`The t3-sys helper is missing. Looked in: ${candidates.join(", ")}`);
   return (resolved = found);
+}
+
+/** Runs `t3-sys ...args` to completion; rejects only when the helper is missing or cannot start. */
+export function runT3Sys(
+  args: ReadonlyArray<string>,
+): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = NodeChildProcess.execFile(
+      t3SysPath(),
+      args,
+      { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error && typeof error.code !== "number") return reject(error);
+        resolve({ code: typeof error?.code === "number" ? error.code : 0, stdout, stderr });
+      },
+    );
+    child.stdin?.end();
+  });
 }

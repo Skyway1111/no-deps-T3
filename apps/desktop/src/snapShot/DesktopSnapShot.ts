@@ -811,7 +811,6 @@ export const make = Effect.gen(function* () {
         ),
     dataHome: path.dirname(environment.linuxApplicationsDir),
   };
-  const shiftShortcutWorkerPath = path.join(__dirname, "snapShot", "GlobalShiftShortcutWorker.cjs");
   const shortcutConfig = new CaptureShortcutConfig(home);
   const accessibilityWorkerPath = path.join(
     __dirname,
@@ -859,7 +858,7 @@ export const make = Effect.gen(function* () {
   ) =>
     environment.platform === "darwin"
       ? startMacModifierPairShortcutProcess(modifier, onTrigger, onFailure)
-      : startGlobalShiftShortcutProcess(shiftShortcutWorkerPath, modifier, onTrigger, onFailure);
+      : startGlobalShiftShortcutProcess(modifier, onTrigger, onFailure);
 
   const releaseShortcut = () => {
     shortcutGeneration++;

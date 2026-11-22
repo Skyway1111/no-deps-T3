@@ -15,7 +15,12 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import * as HostProcess from "./HostProcess.ts";
+import {
+  type RegistryTree,
+  type RegistryValue,
+  RegistryReadError,
+  readWindowsRegistryTree,
+} from "./sys/registry.ts";
 
 export class ManagedPolicyFileError extends Schema.TaggedError<ManagedPolicyFileError>()(
   "ManagedPolicyFileError",
@@ -140,198 +145,49 @@ const PLUTIL = "/usr/bin/plutil";
 export class WindowsRegistryError extends Schema.TaggedError<WindowsRegistryError>()(
   "WindowsRegistryError",
   {
-    /** The Win32 error, such as 5 for access denied; absent when the registry API cannot load. */
+    /** The Win32 error, such as 5 for access denied; absent when the registry reader cannot run. */
     code: Schema.optional(Schema.Number),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
-    return this.code === undefined ? "the registry API cannot load" : `Windows error ${this.code}`;
+    return this.code === undefined
+      ? "the registry reader cannot run"
+      : `Windows error ${this.code}`;
   }
 }
 
-/** A registry value; REG_EXPAND_SZ and every other type read as `other`. */
-export type RegistryValue =
-  | { readonly name: string; readonly type: "REG_SZ"; readonly data: string }
-  | { readonly name: string; readonly type: "REG_DWORD"; readonly data: number }
-  | { readonly name: string; readonly type: "other" };
-
-export interface RegistryKey {
-  readonly values: ReadonlyArray<RegistryValue>;
-  readonly subkeys: ReadonlyArray<string>;
-}
-
 /**
- * Reads the registry through the Win32 API in this process. A missing key and a failed read come
- * back apart, and blocked registry tools such as reg.exe do not matter.
+ * Reads the registry through the Win32 API in the `t3-sys` helper. A missing key and a failed read
+ * come back apart, and blocked registry tools such as reg.exe do not matter.
  */
 export class WindowsRegistry extends Context.Service<
   WindowsRegistry,
   {
-    /** The values and subkey names of HKLM\\`subkey` in the 64-bit view; undefined when absent. */
-    readonly readMachineKey: (
+    /** HKLM\\`subkey` in the 64-bit view with all its subkeys; undefined when absent. */
+    readonly readMachineTree: (
       subkey: string,
-    ) => Effect.Effect<RegistryKey | undefined, WindowsRegistryError>;
+    ) => Effect.Effect<RegistryTree | undefined, WindowsRegistryError>;
   }
 >()("@t3tools/shared/managedPolicyFile/WindowsRegistry") {}
 
-// (HKEY)(LONG)0x80000002, sign-extended to 64 bits.
-const HKEY_LOCAL_MACHINE = -0x7ffffffen;
-const KEY_READ = 0x20019;
-const KEY_WOW64_64KEY = 0x100;
-const REG_SZ = 1;
-const REG_DWORD = 4;
-const ERROR_FILE_NOT_FOUND = 2;
-const ERROR_MORE_DATA = 234;
-const ERROR_NO_MORE_ITEMS = 259;
-// Value and key names are at most 16,383 characters.
-const MAX_NAME_CHARS = 16_384;
-
-class Win32Failure extends Schema.TaggedError<Win32Failure>()("Win32Failure", {
-  code: Schema.Number,
-}) {
-  override get message(): string {
-    return `Windows error ${this.code}`;
-  }
-}
-
-const isWin32Failure = Schema.is(Win32Failure);
-
-/**
- * Each app passes how it loads ffi-rs: a server single-executable resolves packages on disk only
- * through `require`, and the desktop's CommonJS bundle loads them with `import()`.
- */
-export const layerWindowsRegistry = (loadFfi: () => Promise<typeof import("ffi-rs")>) =>
-  Layer.effect(
-    WindowsRegistry,
-    Effect.gen(function* () {
-      const architecture = yield* HostProcess.Architecture;
-      const loadApi = yield* Effect.cached(
-        Effect.tryPromise({
-          try: async () => {
-            // HKEY_LOCAL_MACHINE, key handles, and the null pointers below are 64-bit.
-            if (architecture !== "x64" && architecture !== "arm64") {
-              throw new Error(`no registry access on ${architecture}`);
-            }
-            const { DataType, load, open } = await loadFfi();
-            open({ library: "t3-advapi32", path: "advapi32.dll" });
-            const call = (
-              funcName: string,
-              paramsType: Array<(typeof DataType)[keyof typeof DataType]>,
-              paramsValue: Array<unknown>,
-            ): number =>
-              load({
-                library: "t3-advapi32",
-                funcName,
-                retType: DataType.I32,
-                paramsType,
-                paramsValue,
-              } as Parameters<typeof load>[0]) as number;
-            const { BigInt: Handle, U32, U8Array: Out, WString } = DataType;
-            return {
-              open: (subkey: string, handle: Buffer) =>
-                call(
-                  "RegOpenKeyExW",
-                  [Handle, WString, U32, U32, Out],
-                  [HKEY_LOCAL_MACHINE, subkey, 0, KEY_READ | KEY_WOW64_64KEY, handle],
-                ),
-              enumValue: (
-                key: bigint,
-                index: number,
-                name: Buffer,
-                nameChars: Buffer,
-                type: Buffer,
-                data: Buffer,
-                dataBytes: Buffer,
-              ) =>
-                call(
-                  "RegEnumValueW",
-                  [Handle, U32, Out, Out, Handle, Out, Out, Out],
-                  [key, index, name, nameChars, 0n, type, data, dataBytes],
-                ),
-              enumKey: (key: bigint, index: number, name: Buffer, nameChars: Buffer) =>
-                call(
-                  "RegEnumKeyExW",
-                  [Handle, U32, Out, Out, Handle, Handle, Handle, Handle],
-                  [key, index, name, nameChars, 0n, 0n, 0n, 0n],
-                ),
-              close: (key: bigint) => call("RegCloseKey", [Handle], [key]),
-            };
-          },
-          catch: (cause) => new WindowsRegistryError({ cause }),
-        }),
-      );
-
-      const readKey = (api: Effect.Success<typeof loadApi>, subkey: string) => {
-        const handle = Buffer.alloc(8);
-        const opened = api.open(subkey, handle);
-        if (opened === ERROR_FILE_NOT_FOUND) return undefined;
-        if (opened !== 0) throw new Win32Failure({ code: opened });
-        const key = handle.readBigInt64LE();
-        try {
-          const name = Buffer.alloc(MAX_NAME_CHARS * 2);
-          const chars = Buffer.alloc(4);
-          const values: Array<RegistryValue> = [];
-          for (let index = 0; ; index++) {
-            let data = Buffer.alloc(64 * 1024);
-            const type = Buffer.alloc(4);
-            const bytes = Buffer.alloc(4);
-            const attempt = () => {
-              chars.writeUInt32LE(MAX_NAME_CHARS);
-              bytes.writeUInt32LE(data.length);
-              return api.enumValue(key, index, name, chars, type, data, bytes);
-            };
-            let code = attempt();
-            // The value is larger than the buffer; the API reported the size it needs.
-            if (code === ERROR_MORE_DATA) {
-              data = Buffer.alloc(bytes.readUInt32LE());
-              code = attempt();
-            }
-            if (code === ERROR_NO_MORE_ITEMS) break;
-            if (code !== 0) throw new Win32Failure({ code: code });
-            const valueName = name.subarray(0, chars.readUInt32LE() * 2).toString("utf16le");
-            const stored = data.subarray(0, bytes.readUInt32LE());
-            const valueType = type.readUInt32LE();
-            values.push(
-              valueType === REG_SZ
-                ? {
-                    name: valueName,
-                    type: "REG_SZ",
-                    data: stored.toString("utf16le").replace(/\0+$/, ""),
-                  }
-                : valueType === REG_DWORD && stored.length === 4
-                  ? { name: valueName, type: "REG_DWORD", data: stored.readUInt32LE() }
-                  : { name: valueName, type: "other" },
-            );
-          }
-          const subkeys: Array<string> = [];
-          for (let index = 0; ; index++) {
-            chars.writeUInt32LE(MAX_NAME_CHARS);
-            const code = api.enumKey(key, index, name, chars);
-            if (code === ERROR_NO_MORE_ITEMS) break;
-            if (code !== 0) throw new Win32Failure({ code: code });
-            subkeys.push(name.subarray(0, chars.readUInt32LE() * 2).toString("utf16le"));
-          }
-          return { values, subkeys };
-        } finally {
-          api.close(key);
-        }
-      };
-
-      return WindowsRegistry.of({
-        readMachineKey: Effect.fn("WindowsRegistry.readMachineKey")(function* (subkey) {
-          const api = yield* loadApi;
-          return yield* Effect.try({
-            try: () => readKey(api, subkey),
-            catch: (cause) =>
-              new WindowsRegistryError(
-                isWin32Failure(cause) ? { code: cause.code, cause } : { cause },
-              ),
-          });
-        }),
-      });
-    }),
-  );
+export const layerWindowsRegistry = Layer.succeed(
+  WindowsRegistry,
+  WindowsRegistry.of({
+    readMachineTree: Effect.fn("WindowsRegistry.readMachineTree")((subkey: string) =>
+      Effect.tryPromise({
+        try: () => readWindowsRegistryTree(subkey),
+        catch: (cause) =>
+          new WindowsRegistryError({
+            ...(cause instanceof RegistryReadError && cause.code !== undefined
+              ? { code: cause.code }
+              : {}),
+            cause,
+          }),
+      }),
+    ),
+  }),
+);
 
 // A hung query must not hang startup; a timeout reads as a failed query.
 const run = Effect.fnUntraced(
@@ -520,34 +376,30 @@ const readPlatformPolicy = Effect.fnUntraced(function* (
   }
   if (platform === "win32") {
     const path = WINDOWS_POLICY_KEY;
-    const registry = yield* WindowsRegistry;
-    const readKey = (subkey: string) =>
-      registry.readMachineKey(subkey).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ManagedPolicyFileError({
-              path,
-              reason:
-                cause.code === undefined
-                  ? "this T3 Code install cannot load its registry reader; reinstall T3 Code"
-                  : `the registry cannot be read (${cause.message})`,
-              cause,
-            }),
-        ),
-      );
     const refuse = (reason: string) => new ManagedPolicyFileError({ path, reason });
-    const root = yield* readKey(WINDOWS_POLICY_SUBKEY);
+    const root = yield* (yield* WindowsRegistry).readMachineTree(WINDOWS_POLICY_SUBKEY).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ManagedPolicyFileError({
+            path,
+            reason:
+              cause.code === undefined
+                ? "this T3 Code install cannot load its registry reader; reinstall T3 Code"
+                : `the registry cannot be read (${cause.message})`,
+            cause,
+          }),
+      ),
+    );
     if (root === undefined) return undefined;
+    const subkeys = Object.entries(root.subkeys);
     const json = root.values.find((value) => value.name.toLowerCase() === "policy");
     if (json !== undefined) {
       // Not Configured clears a list policy's values but can leave its empty subkey behind.
-      let templateSettings = root.values.length > 1;
-      for (const subkey of root.subkeys) {
-        if (templateSettings) break;
-        const child = yield* readKey(`${WINDOWS_POLICY_SUBKEY}\\${subkey}`);
-        templateSettings =
-          child !== undefined && (child.values.length > 0 || child.subkeys.length > 0);
-      }
+      const templateSettings =
+        root.values.length > 1 ||
+        subkeys.some(
+          ([, child]) => child.values.length > 0 || Object.keys(child.subkeys).length > 0,
+        );
       if (templateSettings) {
         return yield* refuse(
           "it holds both a Policy value and Group Policy settings; deploy the policy one way",
@@ -557,16 +409,15 @@ const readPlatformPolicy = Effect.fnUntraced(function* (
       return { source: path, document: yield* decodeDocument(path, json.data) };
     }
     const values: Array<PolicyRegistryValue> = root.values.map((value) => ({ ...value, key: "" }));
-    for (const subkey of root.subkeys) {
+    for (const [subkey, checkboxes] of subkeys) {
       // Registry names ignore case.
       const list = Object.keys(WINDOWS_POLICY_LISTS).find(
         (name) => name.toLowerCase() === subkey.toLowerCase(),
       );
       if (list === undefined) return yield* refuse(`${subkey} is not a T3 Code policy key`);
-      const checkboxes = yield* readKey(`${WINDOWS_POLICY_SUBKEY}\\${subkey}`);
-      if (checkboxes === undefined) continue;
-      if (checkboxes.subkeys.length > 0) {
-        return yield* refuse(`${subkey}\\${checkboxes.subkeys[0]} is not a T3 Code policy key`);
+      const nested = Object.keys(checkboxes.subkeys)[0];
+      if (nested !== undefined) {
+        return yield* refuse(`${subkey}\\${nested} is not a T3 Code policy key`);
       }
       values.push(...checkboxes.values.map((value) => ({ ...value, key: list })));
     }

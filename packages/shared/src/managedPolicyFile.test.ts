@@ -13,22 +13,20 @@ import {
   MACOS_MANAGED_PREFERENCES_PATH,
   managedPolicyPath,
   readManagedPolicy,
-  type RegistryKey,
   WINDOWS_POLICY_KEY,
-  layerWindowsRegistry,
   WindowsRegistry,
   WindowsRegistryError,
 } from "./managedPolicyFile.ts";
+import { type RegistryTree, readWindowsRegistryTree } from "./sys/registry.ts";
 
 const policy = JSON.stringify({ schemaVersion: 1, organization: "Example Corp" });
 
 /** What a command prints and exits with. */
 type Result = { readonly stdout: string; readonly exitCode: number };
 
-/** Keys below the policy key ("" for the key itself), or the error every read fails with. */
-type RegistryAnswer = Readonly<Record<string, RegistryKey>> | WindowsRegistryError;
+/** The policy key's tree, undefined when absent, or the error reading it fails with. */
+type RegistryAnswer = RegistryTree | undefined | WindowsRegistryError;
 const isRegistryError = Schema.is(WindowsRegistryError);
-const POLICY_SUBKEY = WINDOWS_POLICY_KEY.slice("HKLM\\".length);
 
 /** Files that exist, what a command prints and exits with by command name, and the registry. */
 const machine = (
@@ -40,10 +38,8 @@ const machine = (
     Layer.succeed(
       WindowsRegistry,
       WindowsRegistry.of({
-        readMachineKey: (subkey) =>
-          isRegistryError(registry)
-            ? Effect.fail(registry)
-            : Effect.succeed(registry[subkey.slice(POLICY_SUBKEY.length + 1)]),
+        readMachineTree: () =>
+          isRegistryError(registry) ? Effect.fail(registry) : Effect.succeed(registry),
       }),
     ),
     FileSystem.layerNoop({
@@ -76,11 +72,11 @@ const machine = (
 
 /** A policy key holding `values`, with checkbox subkeys of `name=0|1` entries. */
 const policyKey = (
-  values: RegistryKey["values"],
+  values: RegistryTree["values"],
   subkeys: Readonly<Record<string, Readonly<Record<string, number>>>> = {},
-): Readonly<Record<string, RegistryKey>> => ({
-  "": { values, subkeys: Object.keys(subkeys) },
-  ...Object.fromEntries(
+): RegistryTree => ({
+  values,
+  subkeys: Object.fromEntries(
     Object.entries(subkeys).map(([name, boxes]) => [
       name,
       {
@@ -89,7 +85,7 @@ const policyKey = (
           type: "REG_DWORD" as const,
           data,
         })),
-        subkeys: [],
+        subkeys: {},
       },
     ]),
   ),
@@ -101,7 +97,7 @@ const read = (
   platform: NodeJS.Platform,
   files: Readonly<Record<string, string>>,
   commands: Parameters<typeof machine>[1] = {},
-  registry: RegistryAnswer = {},
+  registry: RegistryAnswer = undefined,
 ) =>
   readManagedPolicy(platform).pipe(
     Effect.map((found) => found?.source),
@@ -175,8 +171,8 @@ describe("readManagedPolicy", () => {
         const json = policyKey([text("Policy", policy)]);
 
         assert.equal(yield* win32({}, json), WINDOWS_POLICY_KEY);
-        assert.isUndefined(yield* win32({}, {}));
-        assert.equal(yield* win32(file, {}), managedPolicyPath("win32"));
+        assert.isUndefined(yield* win32({}, undefined));
+        assert.equal(yield* win32(file, undefined), managedPolicyPath("win32"));
         assert.include(yield* win32(file, json), "deploy the policy one way");
         // A read that fails, here access denied, is not read as no policy, file or not.
         for (const files of [{}, file]) {
@@ -298,8 +294,13 @@ describe("readManagedPolicy", () => {
         [policyKey([organization], { Other: { x: 1 } }), "Other is not a T3 Code policy key"],
         [
           {
-            ...policyKey([organization, dword("Clients", 1)], { Clients: { desktop: 1 } }),
-            Clients: { values: [dword("desktop", 1)], subkeys: ["Nested"] },
+            values: [organization, dword("Clients", 1)],
+            subkeys: {
+              Clients: {
+                values: [dword("desktop", 1)],
+                subkeys: { Nested: { values: [], subkeys: {} } },
+              },
+            },
           },
           "Clients\\Nested is not a T3 Code policy key",
         ],
@@ -327,28 +328,31 @@ describe("readManagedPolicy", () => {
   );
 
   it.effect.runIf(HostProcess.Platform.defaultValue() === "win32")(
-    "lists registry values and subkeys through the Win32 API",
+    "reads registry values and subkeys through the Win32 API",
     () =>
       Effect.gen(function* () {
-        const registry = yield* WindowsRegistry;
-        const version = yield* registry.readMachineKey(
-          "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+        const version = yield* Effect.promise(() =>
+          readWindowsRegistryTree("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 0),
         );
         const value = (name: string) => version?.values.find((entry) => entry.name === name);
         const product = value("ProductName");
         assert.match(product?.type === "REG_SZ" ? product.data : "", /Windows/);
         assert.equal(value("CurrentMajorVersionNumber")?.type, "REG_DWORD");
-        assert.isUndefined(yield* registry.readMachineKey("SOFTWARE\\T3CodeNoSuchKey"));
-        const windows = yield* registry.readMachineKey(
-          "SOFTWARE\\Microsoft\\Windows\\CurrentVersion",
+        assert.isUndefined(
+          yield* Effect.promise(() => readWindowsRegistryTree("SOFTWARE\\T3CodeNoSuchKey")),
+        );
+        const windows = yield* Effect.promise(() =>
+          readWindowsRegistryTree("SOFTWARE\\Microsoft\\Windows\\CurrentVersion", 0),
         );
         // REG_EXPAND_SZ, which would otherwise expand the user's variables.
         assert.equal(
           windows?.values.find((entry) => entry.name === "ProgramFilesPath")?.type,
           "other",
         );
-        const parent = yield* registry.readMachineKey("SOFTWARE\\Microsoft\\Windows NT");
-        assert.isTrue(parent?.subkeys.includes("CurrentVersion"));
-      }).pipe(Effect.provide(layerWindowsRegistry(() => import("ffi-rs")))),
+        const parent = yield* Effect.promise(() =>
+          readWindowsRegistryTree("SOFTWARE\\Microsoft\\Windows NT", 1),
+        );
+        assert.isDefined(parent?.subkeys.CurrentVersion);
+      }),
   );
 });

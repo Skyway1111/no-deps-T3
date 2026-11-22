@@ -1,11 +1,5 @@
 /** Keep bundler externals aligned with the staged production dependency list. */
-const DESKTOP_RUNTIME_EXTERNAL_PREFIXES = [
-  "@crowecawcaw/xa11y",
-  "@clerk/electron-passkeys",
-  "electron-webauthn",
-  "ffi-rs",
-  "@yuuang/",
-] as const;
+const DESKTOP_RUNTIME_EXTERNAL_PREFIXES = ["@crowecawcaw/xa11y", "electron-webauthn"] as const;
 
 export function isDesktopRuntimeExternalDependency(id: string): boolean {
   return DESKTOP_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix));
