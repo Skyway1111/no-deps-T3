@@ -68,6 +68,14 @@ struct WebKitSettings {
     _private: [u8; 0],
 }
 #[repr(C)]
+struct WebKitFeature {
+    _private: [u8; 0],
+}
+#[repr(C)]
+struct WebKitFeatureList {
+    _private: [u8; 0],
+}
+#[repr(C)]
 struct WebKitWebInspector {
     _private: [u8; 0],
 }
@@ -260,6 +268,16 @@ extern "C" {
     );
     fn webkit_web_view_get_settings(web_view: *mut WebKitWebView) -> *mut WebKitSettings;
     fn webkit_settings_set_enable_developer_extras(settings: *mut WebKitSettings, enabled: c_int);
+    fn webkit_settings_get_all_features() -> *mut WebKitFeatureList;
+    fn webkit_settings_set_feature_enabled(
+        settings: *mut WebKitSettings,
+        feature: *mut WebKitFeature,
+        enabled: c_int,
+    );
+    fn webkit_feature_list_get_length(list: *mut WebKitFeatureList) -> usize;
+    fn webkit_feature_list_get(list: *mut WebKitFeatureList, index: usize) -> *mut WebKitFeature;
+    fn webkit_feature_list_unref(list: *mut WebKitFeatureList);
+    fn webkit_feature_get_identifier(feature: *mut WebKitFeature) -> *const c_char;
     fn webkit_web_view_get_inspector(web_view: *mut WebKitWebView) -> *mut WebKitWebInspector;
     fn webkit_web_inspector_show(inspector: *mut WebKitWebInspector);
     fn webkit_web_view_go_back(web_view: *mut WebKitWebView);
@@ -413,10 +431,7 @@ impl DesktopPlatform for LinuxPlatform {
             let main_webview = main_webview_widget as *mut WebKitWebView;
             g_object_unref(ucm as *mut c_void);
 
-            if config.devtools {
-                let settings = webkit_web_view_get_settings(main_webview);
-                webkit_settings_set_enable_developer_extras(settings, 1);
-            }
+            configure_webview(main_webview, config.devtools);
 
             // Horizontal split pane: main T3 WebView (left) + embedded preview WebView stack (right)
             let paned_widget = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
@@ -466,6 +481,7 @@ impl DesktopPlatform for LinuxPlatform {
             webkit_web_view_load_uri(main_webview, url_c.as_ptr());
 
             gtk_widget_show_all(window_widget);
+            super::refresh::pace_frame_clock(window_widget.cast());
             // Keep preview pane hidden until a preview tab is created & shown.
             gtk_widget_hide(preview_stack_widget);
 
@@ -729,10 +745,7 @@ impl HostActions for LinuxHost {
             unsafe {
                 let widget = webkit_web_view_new();
                 let webview = widget as *mut WebKitWebView;
-                if ui.devtools {
-                    let settings = webkit_web_view_get_settings(webview);
-                    webkit_settings_set_enable_developer_extras(settings, 1);
-                }
+                configure_webview(webview, ui.devtools);
                 if let Some(zoom) = zoom_factor {
                     webkit_web_view_set_zoom_level(webview, zoom);
                 }
@@ -1195,4 +1208,22 @@ mod tests {
         assert!(is_dark_theme_name("Adwaita:dark"));
         assert!(!is_dark_theme_name("Adwaita"));
     }
+}
+
+unsafe fn configure_webview(webview: *mut WebKitWebView, devtools: bool) {
+    let settings = webkit_web_view_get_settings(webview);
+    if devtools {
+        webkit_settings_set_enable_developer_extras(settings, 1);
+    }
+    // On by default, it holds rendering near 60 fps on high-refresh displays; see refresh.rs.
+    let features = webkit_settings_get_all_features();
+    for i in 0..webkit_feature_list_get_length(features) {
+        let feature = webkit_feature_list_get(features, i);
+        if CStr::from_ptr(webkit_feature_get_identifier(feature))
+            == c"PreferPageRenderingUpdatesNear60FPS"
+        {
+            webkit_settings_set_feature_enabled(settings, feature, 0);
+        }
+    }
+    webkit_feature_list_unref(features);
 }

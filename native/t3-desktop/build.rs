@@ -16,6 +16,14 @@ fn main() {
 }
 
 fn link_linux_webkit() {
+    // Interposed over GDK/libdrm for WebKit's vblank pacing; see src/platform/refresh.rs.
+    for sym in [
+        "drmWaitVBlank",
+        "gdk_monitor_get_width_mm",
+        "gdk_monitor_get_height_mm",
+    ] {
+        println!("cargo:rustc-link-arg-bins=-Wl,--export-dynamic-symbol={sym}");
+    }
     let pkg_config = env::var("PKG_CONFIG").unwrap_or_else(|_| "pkg-config".to_string());
     let packages = ["gtk+-3.0", "webkit2gtk-4.1", "javascriptcoregtk-4.1"];
 
