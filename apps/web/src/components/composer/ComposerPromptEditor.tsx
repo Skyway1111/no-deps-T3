@@ -631,11 +631,7 @@ function ComposerPromptEditorInner(
     if (initial && !focused) {
       window.requestAnimationFrame(() => {
         if (!destroyedRef.current && domRef.current) {
-          applyFlatSelectionToDom(
-            domRef.current,
-            stateRef.current.doc,
-            stateRef.current.selection,
-          );
+          applyFlatSelectionToDom(domRef.current, stateRef.current.doc, stateRef.current.selection);
           revealCaretInScroller(domRef.current);
         }
       });

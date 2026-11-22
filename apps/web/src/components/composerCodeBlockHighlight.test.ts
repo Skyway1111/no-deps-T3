@@ -46,7 +46,9 @@ describe("highlighting composer code blocks", () => {
     const language = 'gitignore title=".gitignore"';
     expect(highlighter.getSpans(language, code)).toBe(highlighter.getSpans("ts", "other"));
 
-    highlighter.syncDoc({ blocks: [{ kind: "codeBlock", language, fence: "```", close: "\n```", code }] });
+    highlighter.syncDoc({
+      blocks: [{ kind: "codeBlock", language, fence: "```", close: "\n```", code }],
+    });
     await updated.promise;
 
     expect(vi.mocked(getSyntaxHighlighterPromise)).toHaveBeenLastCalledWith("ini");
