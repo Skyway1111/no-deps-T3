@@ -13,7 +13,15 @@ import {
 } from "~/ui-core/router";
 import { msg, T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { CheckIcon, CopyIcon } from "~/ui-core/icons";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { APP_DISPLAY_NAME, APP_VERSION } from "../branding";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
@@ -23,10 +31,7 @@ import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { UseInAnotherAppDialogHost } from "../components/mcp/UseInAnotherAppDialog";
 import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachineDialog";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
-import { DevReplayHost } from "../components/DevReplayHost";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
-import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
-import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
@@ -62,6 +67,27 @@ import { readProject } from "../state/entities";
 import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
 import { isChunkLoadError } from "../lib/chunkReloadGuard";
 import { shouldResumeSnapShotSetupOnStartup } from "../lib/snapShotSetupResume";
+import { hasCloudPublicConfig } from "../cloud/publicConfig";
+import {
+  readRelayClientInstallDialogState,
+  subscribeRelayClientInstallDialog,
+} from "../cloud/relayClientInstallDialog";
+
+const ConnectOnboardingDialog = lazy(() =>
+  import("../components/cloud/ConnectOnboardingDialog").then((module) => ({
+    default: module.ConnectOnboardingDialog,
+  })),
+);
+const RelayClientInstallDialog = lazy(() =>
+  import("../components/cloud/RelayClientInstallDialog").then((module) => ({
+    default: module.RelayClientInstallDialog,
+  })),
+);
+const DevReplayHost = import.meta.env.DEV
+  ? lazy(() =>
+      import("../components/DevReplayHost").then((module) => ({ default: module.DevReplayHost })),
+    )
+  : null;
 
 declare module "~/ui-core/router" {
   interface RouteContext {
@@ -199,8 +225,12 @@ function RootRouteBranch() {
         </>
       ) : null}
       {isElectron ? <RunningThreadKeepAlive /> : null}
-      <RelayClientInstallDialog />
-      <ConnectOnboardingDialog />
+      <RelayClientInstallDialogSlot />
+      {hasCloudPublicConfig() ? (
+        <Suspense fallback={null}>
+          <ConnectOnboardingDialog />
+        </Suspense>
+      ) : null}
       <SshPasswordPromptDialog />
       <SnapShotCoordinator />
       <ReopenClosedViewShortcut />
@@ -211,7 +241,11 @@ function RootRouteBranch() {
       <ConnectDeviceApprovalCoordinator />
       <AddProjectToMachineDialogHost />
       <UseInAnotherAppDialogHost />
-      {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
+      {DevReplayHost && primaryEnvironmentAuthenticated ? (
+        <Suspense fallback={null}>
+          <DevReplayHost />
+        </Suspense>
+      ) : null}
     </>
   );
   const appShell = (
@@ -247,6 +281,21 @@ function RootRouteBranch() {
       <ThemeEditorHost />
     </>
   );
+}
+
+// Loads the dialog with its first request, then stays mounted so the close animation runs.
+function RelayClientInstallDialogSlot() {
+  const requested = useSyncExternalStore(
+    subscribeRelayClientInstallDialog,
+    () => readRelayClientInstallDialogState().status !== "idle",
+  );
+  const [mounted, setMounted] = useState(false);
+  if (requested && !mounted) setMounted(true);
+  return mounted ? (
+    <Suspense fallback={null}>
+      <RelayClientInstallDialog />
+    </Suspense>
+  ) : null;
 }
 
 function RootRouteErrorView({ error }: ErrorComponentProps) {

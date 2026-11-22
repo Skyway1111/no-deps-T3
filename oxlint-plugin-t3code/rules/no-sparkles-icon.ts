@@ -5,6 +5,8 @@ const SPARKLE_NAME = /sparkle/iu;
 // Material (`auto_awesome`) names reach native icons as plain strings.
 const SPARKLE_SYMBOL_NAME = /^(?:(?:[\w]+\.)*sparkles?(?:\.[\w.]+)?|auto_awesome(?:_\w+)?)$/u;
 const TABLER_SOURCE = /^@tabler\/icons(?:-react|-react-native)?(?:\/|$)/u;
+// The web icon set, through the `~` alias or a relative path.
+const UI_CORE_ICONS_SOURCE = /(?:^~|\.)\/(?:\.\.\/)*ui-core\/icons$/u;
 
 const MESSAGE =
   "Sparkles says 'AI', not what the control does. Pick an icon for the action itself, such as Bot for agent work or ShieldCheck for Auto mode.";
@@ -21,7 +23,7 @@ export default defineRule({
     return {
       ImportDeclaration(node) {
         const source = node.source.value;
-        if (source === "lucide" || source === "lucide-react" || TABLER_SOURCE.test(source)) {
+        if (UI_CORE_ICONS_SOURCE.test(source) || TABLER_SOURCE.test(source)) {
           if (TABLER_SOURCE.test(source) && SPARKLE_NAME.test(source.split("/").at(-1) ?? "")) {
             context.report({ node: node.source, message: MESSAGE });
             return;

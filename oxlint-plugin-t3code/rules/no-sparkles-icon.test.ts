@@ -10,7 +10,7 @@ describe("t3code/no-sparkles-icon", () => {
   rule.valid(
     "allows icons that name the action",
     `
-      import { BotIcon, ShieldCheckIcon } from "lucide-react";
+      import { BotIcon, ShieldCheckIcon } from "~/ui-core/icons";
       import IconRobot from "@tabler/icons-react-native/IconRobot";
 
       const icon = <SymbolView name={{ ios: "puzzlepiece", android: "extension" }} />;
@@ -25,14 +25,17 @@ describe("t3code/no-sparkles-icon", () => {
     `,
   );
 
-  rule.invalid("reports Lucide sparkles icons", `import { SparklesIcon } from "lucide-react";`);
+  rule.invalid("reports web sparkles icons", `import { SparklesIcon } from "~/ui-core/icons";`);
 
   rule.invalid(
-    "reports every Lucide sparkle variant",
-    `import { Sparkle, WandSparklesIcon, LucideSparkles } from "lucide-react";`,
+    "reports every sparkle variant",
+    `import { Sparkle, WandSparklesIcon, SparklesIcon as AiIcon } from "~/ui-core/icons";`,
   );
 
-  rule.invalid("reports Lucide icon nodes", `import { Sparkles } from "lucide";`);
+  rule.invalid(
+    "reports relative web icon imports",
+    `import { SparklesIcon } from "../../ui-core/icons";`,
+  );
 
   rule.invalid(
     "reports Tabler sparkles deep imports",

@@ -25,16 +25,16 @@ import { envTrampoline, supportsEnvChdir } from "@t3tools/shared/envTrampoline";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as SpawnWorker from "../process/SpawnWorker.ts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
-import {
-  query as claudeQuery,
-  type ModelInfo as ClaudeModelInfo,
-  type Options as ClaudeQueryOptions,
-  type SlashCommand as ClaudeSlashCommand,
-  type SDKControlGetUsageResponse,
-  type SDKUserMessage,
-  type SettingSource,
-  type SpawnOptions as ClaudeSpawnOptions,
+import type {
+  ModelInfo as ClaudeModelInfo,
+  Options as ClaudeQueryOptions,
+  SlashCommand as ClaudeSlashCommand,
+  SDKControlGetUsageResponse,
+  SDKUserMessage,
+  SettingSource,
+  SpawnOptions as ClaudeSpawnOptions,
 } from "@anthropic-ai/claude-agent-sdk";
+import { loadClaudeAgentSdk } from "./claudeAgentSdk.ts";
 
 import {
   buildServerProvider,
@@ -519,7 +519,7 @@ const probeClaudeCapabilities = (
           : undefined;
     return yield* Effect.tryPromise({
       try: async () => {
-        const q = claudeQuery({
+        const q = (await loadClaudeAgentSdk()).query({
           // oxlint-disable-next-line require-yield -- never yields, so no prompt reaches the API
           prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
             await waitForAbortSignal(abort.signal);

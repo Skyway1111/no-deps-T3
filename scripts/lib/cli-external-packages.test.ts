@@ -32,11 +32,8 @@ const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(PackageMan
 describe("shouldBundleCliDependency", () => {
   it("leaves native addons and their dlopen wrappers external", () => {
     for (const id of [
-      "node-pty",
       "ffi-rs",
       "@yuuang/ffi-rs-win32-x64-msvc",
-      "@ff-labs/fff-node",
-      "@napi-rs/keyring",
       "transcribe-cpp",
       "@transcribe-cpp/win32-x64-cpu-vulkan",
       "koffi",

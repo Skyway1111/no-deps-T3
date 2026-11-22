@@ -268,7 +268,8 @@ export function startAppServices(): AppRouter {
   }
 
   installDesktopPasteAsText(window.desktopBridge, window);
-  guardDomAgainstPageTranslation();
+  // Electron has no page translation, so it keeps the unwrapped DOM methods React calls per mutation.
+  if (!isElectron) guardDomAgainstPageTranslation();
 
   startClientAppearance();
   startI18n();

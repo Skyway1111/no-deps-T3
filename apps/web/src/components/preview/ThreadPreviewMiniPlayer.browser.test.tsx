@@ -95,6 +95,7 @@ it("holds its frame through a source change and stops when the gesture is interr
         }),
       ),
     );
+  await expect.element(screen.getByTestId("stream")).toBeInTheDocument();
   const viewId = screen.getByTestId("stream").element().getAttribute("data-view-id")!;
   const portrait = rect();
 
@@ -148,6 +149,7 @@ it("keeps one stream when switching between threads floating the same device", a
   container.style.cssText = "display:flex;position:fixed;inset:0;width:1200px;height:800px";
   await using screen = await render(harness(threadRef), { container });
   const viewId = () => screen.getByTestId("stream").element().getAttribute("data-view-id");
+  await expect.element(screen.getByTestId("stream")).toBeInTheDocument();
   const first = viewId();
 
   // The stream session is keyed by view, so a new view id reconnects the device.

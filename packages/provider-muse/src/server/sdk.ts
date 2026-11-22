@@ -3,11 +3,11 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- FileSystem.realPath is Node's JS realpath; museCanonicalPath needs the native one.
 import * as NodeFSP from "node:fs/promises";
 
-import {
+import type {
+  Connection,
+  ProcessExit,
+  SpawnedMspConnection,
   spawnMspConnection,
-  type Connection,
-  type ProcessExit,
-  type SpawnedMspConnection,
 } from "@muse-code/sdk";
 import type { RuntimeMode } from "@t3tools/contracts";
 import { envTrampoline, supportsEnvChdir } from "@t3tools/shared/envTrampoline";
@@ -167,8 +167,11 @@ export function museInitializeParams(readOnly = false) {
 /** Owns cleanup before the handshake, even if initialize never replies. */
 export async function createMuseSdkHost(
   options: MuseSdkHostOptions,
-  spawn: typeof spawnMspConnection = spawnMspConnection,
+  spawn?: typeof spawnMspConnection,
 ): Promise<MuseSdkHost> {
+  options.signal?.throwIfAborted();
+  // Loaded on first launch so server start doesn't evaluate the SDK.
+  spawn ??= (await import("@muse-code/sdk")).spawnMspConnection;
   options.signal?.throwIfAborted();
   const launch = options.launch ?? { command: options.binaryPath, args: [] };
   const handshake = spawn({

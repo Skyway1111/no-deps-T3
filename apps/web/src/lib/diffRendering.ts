@@ -4,19 +4,10 @@ import type { FileDiffMetadata } from "@pierre/diffs/types";
 import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../i18n/messages";
-import { READABLE_LIGHT_THEME_NAME } from "./readableSyntaxTheme";
+// Registers the readable light theme that DIFF_THEME_NAMES.light names.
+import "./readableSyntaxTheme";
 
-// Light mode uses a darker pierre-light so syntax stays readable on every code surface.
-export const DIFF_THEME_NAMES = {
-  light: READABLE_LIGHT_THEME_NAME,
-  dark: "pierre-dark",
-} as const;
-
-export type DiffThemeName = (typeof DIFF_THEME_NAMES)[keyof typeof DIFF_THEME_NAMES];
-
-export function resolveDiffThemeName(theme: "light" | "dark"): DiffThemeName {
-  return DIFF_THEME_NAMES[theme];
-}
+export { DIFF_THEME_NAMES, type DiffThemeName, resolveDiffThemeName } from "./diffTheme";
 
 const FNV_OFFSET_BASIS_32 = 0x811c9dc5;
 const FNV_PRIME_32 = 0x01000193;

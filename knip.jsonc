@@ -71,7 +71,6 @@
       "ignoreDependencies": [
         "@effect/platform-node-shared",
         "@t3tools/web",
-        "@napi-rs/keyring",
         "ffi-rs",
         "transcribe-cpp",
       ],
@@ -94,9 +93,8 @@
         "src/mac-permission-preload.ts!",
         "src/preview/Annotation.css!",
       ],
-      // The injected runtime resolves Playwright by string; release tooling runs
-      // electron-builder from this workspace, outside its package scripts.
-      "ignoreDependencies": ["playwright-core", "electron-builder"],
+      // Release tooling runs electron-builder from this workspace, outside its package scripts.
+      "ignoreDependencies": ["electron-builder"],
     },
     "apps/web": {
       // Worktree setup (scripts/setup-worktree.ts) runs this directly, and evidence

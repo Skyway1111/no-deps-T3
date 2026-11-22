@@ -5,8 +5,10 @@ import { previewPdfAssetUrl } from "@t3tools/shared/preview";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
 import { PanelRightIcon, PictureInPicture2Icon as PictureInPicture2, XIcon } from "~/ui-core/icons";
 import {
+  lazy,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  Suspense,
   useEffect,
   useEffectEvent,
   useRef,
@@ -54,7 +56,6 @@ import {
 import { useRightPanelStore } from "~/rightPanelStore";
 import { useDeviceState } from "~/state/device";
 
-import { DeviceStreamView } from "../device/DeviceStreamView";
 import type { DeviceScreenSize } from "@t3tools/client-runtime/device/stream";
 import { Atom } from "effect/reactivity";
 import { deviceScreenKey, deviceStreamScreenAtom } from "../device/deviceStreamSession";
@@ -75,6 +76,11 @@ import {
   resolveDeviceMiniPlayerSourceSize,
   resolvePreviewMiniPlayerSourceSize,
 } from "./previewMiniPlayerLayout";
+
+// Device frames and their 3D models load only when a device stream plays here.
+const DeviceStreamView = lazy(() =>
+  import("../device/DeviceStreamView").then((module) => ({ default: module.DeviceStreamView })),
+);
 
 interface Props {
   readonly threadRef: ScopedThreadRef;
@@ -421,17 +427,19 @@ function DeviceMiniPlayer({
           className="pointer-events-auto absolute inset-0 overflow-hidden rounded-[inherit]"
           style={{ zIndex: PREVIEW_MINI_PLAYER_WEBVIEW_Z_INDEX }}
         >
-          <DeviceStreamView
-            environmentId={threadRef.environmentId}
-            platform={source.platform}
-            deviceId={source.deviceId}
-            hostId={source.hostId}
-            deviceName={device?.name ?? source.name}
-            deviceDescription={`${hostLabel} · ${device?.version ?? source.platform}`}
-            visible
-            viewId={viewId}
-            serveSimOnly={host?.kind === "simlock"}
-          />
+          <Suspense fallback={null}>
+            <DeviceStreamView
+              environmentId={threadRef.environmentId}
+              platform={source.platform}
+              deviceId={source.deviceId}
+              hostId={source.hostId}
+              deviceName={device?.name ?? source.name}
+              deviceDescription={`${hostLabel} · ${device?.version ?? source.platform}`}
+              visible
+              viewId={viewId}
+              serveSimOnly={host?.kind === "simlock"}
+            />
+          </Suspense>
         </div>
       )}
     </MiniPlayerShell>

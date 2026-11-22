@@ -233,7 +233,7 @@ export function RightPanelSurfaceContent(props: {
     case "pull-requests":
       return <ThreadPullRequestsPanel threadRef={threadRef} />;
     case "thread":
-      // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
+      // Not lazy: a re-suspending boundary hides the composer and tears down its layout effects.
       return (
         <SideThreadPane
           key={surface.id}

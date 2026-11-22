@@ -1,9 +1,9 @@
-import {
-  type ModelInfo as ClaudeModelInfo,
-  resolveSettings as resolveClaudeSettings,
-  type SettingSource,
-  type Settings as ClaudeSdkSettings,
+import type {
+  ModelInfo as ClaudeModelInfo,
+  SettingSource,
+  Settings as ClaudeSdkSettings,
 } from "@anthropic-ai/claude-agent-sdk";
+import { resolveSettings as resolveClaudeSettings } from "./claudeAgentSdk.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";

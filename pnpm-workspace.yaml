@@ -20,7 +20,6 @@ allowBuilds:
   esbuild: true
   # Ships prebuilds; its host-architecture probe triggers source builds during cross-packaging.
   koffi: false
-  node-pty: true
   # Ships N-API prebuilds; its install script only rebuilds from source.
   objc-js: false
   "react-native-enriched-markdown@file:apps/mobile/deps/react-native-enriched-markdown-1.2.0-t3.18-16db4c75.tgz": true
@@ -73,12 +72,10 @@ catalog:
   jose: 6.2.2
   lightningcss: 1.33.0
   objc-js: 1.5.0
-  pele: ^1.8.0
   plist: 3.1.1
   react: 19.3.0
   react-dom: 19.3.0
   tailwindcss: 4.3.3
-  tldts: 7.4.2
   undici: 8.12.4
   vite: npm:@voidzero-dev/vite-plus-core@1.4.0
   vite-plus: 1.4.0
@@ -86,25 +83,15 @@ catalog:
   yaml: ^2.9.0
   # Markdown pipeline: the server counts find matches with the same parser the
   # web renders with, so both must resolve to one version.
-  mdast-util-directive: 3.1.0
-  micromark-extension-directive: 4.0.0
-  micromark-util-character: 2.1.1
-  micromark-util-decode-string: 2.0.1
   micromark-util-types: 2.0.2
-  rehype-raw: 7.0.0
-  rehype-sanitize: 6.0.0
-  remark-breaks: 4.0.0
   remark-gfm: 4.0.1
   remark-parse: 11.0.0
-  remark-rehype: 11.1.2
   unified: 11.0.5
 
 overrides:
   # Pin every patched package, including transitive dependencies, so lockfile-free
   # release installs cannot drift past the patch. Update these with patchedDependencies.
   react-native-image-viewing: 0.2.2
-  mdast-util-math: 3.0.0
-  micromark-extension-llm-math: 3.1.0
   micromark: 4.0.2
   mdast-util-to-hast: 13.2.1
   alchemy: "catalog:"
@@ -114,13 +101,10 @@ overrides:
   "@cursor/sdk": 1.4.2
   expo-sharing: 58.0.22
   expo-widgets: 58.0.27
-  "@ff-labs/fff-node": 0.11.0
   "@legendapp/list": 3.7.3
   "@pierre/diffs": 1.7.0-beta.4
   "@react-native-menu/menu": 2.0.0
   "@react-navigation/native-stack": 7.21.0
-  dbus-next: 0.10.2
-  node-pty: 1.2.0-beta.15
   react-native-gesture-handler: 3.5.0
   react-native-reanimated: 4.7.1
   react-native-keyboard-controller: 1.23.0
@@ -140,9 +124,6 @@ overrides:
   # @cloudflare/unenv-preset peers on this exact version, but alchemy's runtime
   # takes a caret range, so lockfile-free installs drift to a newer prerelease.
   unenv: 2.0.0-rc.24
-  # The dbus-next patch drops usocket from the package, but pnpm resolves from the
-  # registry manifest, so the edge has to be cut here as well.
-  "dbus-next>usocket": "-"
   # The SDK always receives the user's Claude executable, so its bundled binaries are unused.
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-darwin-arm64": "-"
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-darwin-x64": "-"
@@ -175,8 +156,6 @@ overrides:
   "expo-sharing>@expo/config-types": 58.0.3
   # @pierre/trees pins @pierre/theming 1.0.0, whose peer range predates @pierre/theme 2.
   "@pierre/trees>@pierre/theming": 1.0.2
-  # Resolve below remark-math so Vite, Metro and Node use the same tokenizer.
-  "remark-math>micromark-extension-math": npm:micromark-extension-llm-math@3.1.0
   micromark-extension-gfm-table: 2.1.1
   # Keep one copy of these native-binary packages. lightningcss ships 11 platform binaries per
   # version, and the workspaces' tailwindcss ^4 ranges drift into two 4.3.x copies of the family.
@@ -299,8 +278,6 @@ peerDependencyRules:
 # pnpm 12 links agent skills that dependencies ship into .claude/skills once
 # approved. We curate our own skills, so deny these to keep installs quiet.
 permissions:
-  "@tanstack/router-plugin":
-    skills: false
   drizzle-kit:
     skills: false
   expo-sqlite:
@@ -325,12 +302,6 @@ minimumReleaseAgeExclude:
   - "@anthropic-ai/claude-agent-sdk@0.3.321"
   - "@pierre/diffs@1.7.0-beta.4"
   - "@pierre/highlights@0.5.0"
-  - "@cursor/sdk-darwin-arm64@1.4.1"
-  - "@cursor/sdk-darwin-x64@1.4.1"
-  - "@cursor/sdk-linux-arm64@1.4.1"
-  - "@cursor/sdk-linux-x64@1.4.1"
-  - "@cursor/sdk-win32-x64@1.4.1"
-  - "@cursor/sdk@1.4.1"
   - "@effect/atom-react@4.1.5"
   - "@effect/graphql-generator@4.1.5"
   - "@effect/openapi-generator@4.1.5"

@@ -37,35 +37,37 @@ import {
   type ClaudeModelLedger,
 } from "../../provider/ClaudeTurnTokenUsage.ts";
 import { toMcpElicitationResponse } from "../../provider/CodexMcpElicitation.ts";
+import type {
+  CanUseTool,
+  ElicitationRequest,
+  ElicitationResult,
+  EffortLevel,
+  ForkSessionOptions,
+  ForkSessionResult,
+  HookCallback,
+  McpServerStatus as ClaudeMcpServerStatus,
+  Options as ClaudeQueryOptions,
+  PermissionMode,
+  PermissionResult,
+  PermissionUpdate,
+  Query as ClaudeQuery,
+  Settings as ClaudeSdkSettings,
+  SpawnOptions as ClaudeSpawnOptions,
+  SpawnedProcess as ClaudeSpawnedProcess,
+  SDKAssistantMessage,
+  SDKAPIRetryMessage,
+  SDKMessage,
+  SDKRateLimitInfo,
+  SDKResultMessage,
+  SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import {
-  type CanUseTool,
-  type ElicitationRequest,
-  type ElicitationResult,
   forkSession as forkClaudeSession,
-  type EffortLevel,
-  type ForkSessionOptions,
-  type ForkSessionResult,
   getSessionMessages,
   getSubagentMessages,
-  type HookCallback,
-  type McpServerStatus as ClaudeMcpServerStatus,
-  query,
+  loadClaudeAgentSdk,
   resolveSettings as resolveClaudeSettings,
-  type Options as ClaudeQueryOptions,
-  type PermissionMode,
-  type PermissionResult,
-  type PermissionUpdate,
-  type Query as ClaudeQuery,
-  type Settings as ClaudeSdkSettings,
-  type SpawnOptions as ClaudeSpawnOptions,
-  type SpawnedProcess as ClaudeSpawnedProcess,
-  type SDKAssistantMessage,
-  type SDKAPIRetryMessage,
-  type SDKMessage,
-  type SDKRateLimitInfo,
-  type SDKResultMessage,
-  type SDKUserMessage,
-} from "@anthropic-ai/claude-agent-sdk";
+} from "../../provider/claudeAgentSdk.ts";
 import type {
   AskUserQuestionInput,
   WebSearchOutput,
@@ -1686,6 +1688,7 @@ export const layerQueryRunner: Layer.Layer<
         });
         return child;
       };
+      const { query } = yield* Effect.promise(loadClaudeAgentSdk);
       const queryRuntime = yield* Effect.uninterruptibleMask((restore) =>
         Effect.try({
           try: () =>

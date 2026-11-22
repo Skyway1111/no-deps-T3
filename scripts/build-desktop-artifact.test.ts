@@ -650,19 +650,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@pierre/diffs": "1.3.0",
           "node-pty": "1.1.0",
         },
-        desktopDependencies: {
-          "@napi-rs/keyring": "1.3.0",
-          "playwright-core": "1.60.0",
-        },
+        desktopDependencies: { "@clerk/electron-passkeys": "0.0.3" },
         arch: "arm64",
         fffNodeVersion: "0.9.4",
       }),
       {
         "@cursor/sdk": "1.0.22",
-        "@ff-labs/fff-node": "0.9.4",
-        "node-pty": "1.1.0",
-        "@napi-rs/keyring": "1.3.0",
-        "playwright-core": "1.60.0",
+        "@clerk/electron-passkeys": "0.0.3",
         "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
       },
     );
@@ -676,8 +670,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         fffNodeVersion: "0.9.4",
       }),
       {
-        "@ff-labs/fff-node": "0.9.4",
-        "node-pty": "1.1.0",
         "@crowecawcaw/xa11y": "0.13.0",
         "@ff-labs/fff-bin-linux-x64-gnu": "0.9.4",
         "@ff-labs/fff-bin-linux-x64-musl": "0.9.4",

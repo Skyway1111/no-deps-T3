@@ -59,9 +59,6 @@ const ICON_COLORS: Record<string, readonly [light: string, dark: string]> = {
   zip: ["#d47628", "#ffa359"],
 };
 
-// Every icon references the one shared sprite, so it is in the document before any renders.
-ensurePierreIconSprite();
-
 export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
   pathValue: string;
   kind: "file" | "directory";
@@ -79,6 +76,8 @@ export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
     );
   }
 
+  // Every icon references one shared sprite; build it with the first icon, not at app boot.
+  ensurePierreIconSprite();
   const colors = ICON_COLORS[icon.token ?? "default"] ?? ICON_COLORS.default;
   return (
     <svg

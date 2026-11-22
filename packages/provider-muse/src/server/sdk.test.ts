@@ -94,6 +94,7 @@ describe("Muse SDK host", () => {
         runtimeMode: mode,
         environment: { PATH: "/bin" },
       });
+      await fake.initializing.promise;
       expect(vi.mocked(spawnMspConnection).mock.lastCall?.[0]).toMatchObject({
         command: "/custom/muse",
         cwd: "/workspace",

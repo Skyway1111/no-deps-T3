@@ -239,8 +239,6 @@ catalogs:
 
 overrides:
   react-native-image-viewing: 0.2.2
-  mdast-util-math: 3.0.0
-  micromark-extension-llm-math: 3.1.0
   micromark: 4.0.2
   mdast-util-to-hast: 13.2.1
   alchemy: 2.0.0-beta.85
@@ -250,13 +248,10 @@ overrides:
   '@cursor/sdk': 1.4.2
   expo-sharing: 58.0.22
   expo-widgets: 58.0.27
-  '@ff-labs/fff-node': 0.11.0
   '@legendapp/list': 3.7.3
   '@pierre/diffs': 1.7.0-beta.4
   '@react-native-menu/menu': 2.0.0
   '@react-navigation/native-stack': 7.21.0
-  dbus-next: 0.10.2
-  node-pty: 1.2.0-beta.15
   react-native-gesture-handler: 3.5.0
   react-native-reanimated: 4.7.1
   react-native-keyboard-controller: 1.23.0
@@ -269,7 +264,6 @@ overrides:
   '@exodus/bytes>@noble/hashes': 1.8.0
   '@react-navigation/core': 7.24.0
   unenv: 2.0.0-rc.24
-  dbus-next>usocket: '-'
   '@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-darwin-arm64': '-'
   '@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-darwin-x64': '-'
   '@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-linux-arm64': '-'
@@ -300,7 +294,6 @@ overrides:
   expo-sharing>@expo/config-plugins: 58.0.12
   expo-sharing>@expo/config-types: 58.0.3
   '@pierre/trees>@pierre/theming': 1.0.2
-  remark-math>micromark-extension-math: npm:micromark-extension-llm-math@3.1.0
   micromark-extension-gfm-table: 2.1.1
   '@tailwindcss/node': 4.3.3
   '@tailwindcss/oxide': 4.3.3
