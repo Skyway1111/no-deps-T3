@@ -106,12 +106,7 @@ const browserTestProject = {
   extends: true,
   // Pre-bundle lazy browser and worker dependencies to avoid mid-run reloads.
   optimizeDeps: {
-    include: [
-      "vite-plus/test/browser",
-      "@effect/vitest",
-      "@pierre/diffs/ssr",
-      "effect/testing",
-    ],
+    include: ["vite-plus/test/browser", "@effect/vitest", "effect/testing"],
   },
   test: {
     name: "browser",
@@ -322,10 +317,6 @@ export default defineConfig(({ command }) => {
       include: [
         "@clerk/clerk-js",
         "@clerk/react/internal",
-        "@pierre/diffs",
-        "@pierre/diffs/edit",
-        "@pierre/diffs/react",
-        "@pierre/diffs/worker/worker.js",
         "effect/Array",
         "effect/Order",
         "react-dom/client",

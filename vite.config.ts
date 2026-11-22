@@ -41,7 +41,7 @@ const RESTRICTED_IMPORT_PATHS = [
       "Import from an explicit @t3tools/client-runtime/* subpath. The package has no root export.",
   },
   {
-    name: "@pierre/diffs/react",
+    name: "~/ui-core/codeView/CodeView",
     importNames: ["CodeView"],
     message: "Use StyledDiffCodeView so web diff surfaces share styling and virtualized geometry.",
   },

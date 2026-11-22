@@ -55,8 +55,6 @@ catalog:
   "@legendapp/list": 3.7.3
   "@noble/curves": 1.9.1
   "@noble/hashes": 1.8.0
-  "@pierre/diffs": 1.7.0-beta.4
-  "@pierre/highlights": 0.5.0
   "@tailwindcss/node": 4.3.3
   "@tailwindcss/oxide": 4.3.3
   "@tailwindcss/vite": 4.3.3
@@ -101,7 +99,6 @@ overrides:
   expo-sharing: 58.0.22
   expo-widgets: 58.0.27
   "@legendapp/list": 3.7.3
-  "@pierre/diffs": 1.7.0-beta.4
   "@react-native-menu/menu": 2.0.0
   "@react-navigation/native-stack": 7.21.0
   react-native-gesture-handler: 3.5.0
@@ -220,10 +217,6 @@ patchedDependencies:
   # Android: an RNHostView without a scrolling descendant (an app bar's buttons) is no longer the
   # scroll target a Material bottom sheet picks, so sheet content can sit below its header.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
-  # Exports the dependency-light subpaths mobile and the web diff parser import, re-measures
-  # editor carets when the code font changes, stops the find bar reclaiming focus from the file,
-  # and keeps drag selections intact across virtualized scroll renders.
-  "@pierre/diffs@1.7.0-beta.4": patches/@pierre__diffs@1.7.0-beta.4.patch
   "@react-native-menu/menu@2.0.0": patches/@react-native-menu__menu@2.0.0.patch
   "@react-navigation/native-stack@7.21.0": patches/@react-navigation%2Fnative-stack@7.21.0.patch
   react-native-gesture-handler@3.5.0: patches/react-native-gesture-handler@3.5.0.patch
@@ -296,8 +289,6 @@ minimumReleaseAgeExclude:
   - "@effect/tsgo-win32-x64@0.67.1"
   - "@effect/tsgo@0.67.1"
   - "@anthropic-ai/claude-agent-sdk@0.3.321"
-  - "@pierre/diffs@1.7.0-beta.4"
-  - "@pierre/highlights@0.5.0"
   - "@effect/atom-react@4.1.5"
   - "@effect/graphql-generator@4.1.5"
   - "@effect/openapi-generator@4.1.5"

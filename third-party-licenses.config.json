@@ -366,20 +366,6 @@
       }
     },
     {
-      "name": "@pierre/theming",
-      "generatedNotice": {
-        "licenseId": "Apache-2.0",
-        "copyrights": ["Copyright 2025 Pierre Computer Company"]
-      }
-    },
-    {
-      "name": "lru_map",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2010-2016 Rasmus Andersson <https://rsms.me/>"]
-      }
-    },
-    {
       "name": "@electron-internal/extract-zip",
       "generatedNotice": {
         "licenseId": "BSD-2-Clause",
