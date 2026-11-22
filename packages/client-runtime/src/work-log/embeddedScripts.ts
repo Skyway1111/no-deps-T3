@@ -1,4 +1,4 @@
-import { getFiletypeFromFileName } from "@pierre/diffs/utils/getFiletypeFromFileName";
+import { getFiletypeFromFileName } from "@t3tools/shared/highlight/languages";
 import {
   parseShellCommands,
   type ShellCommand as Command,

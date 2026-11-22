@@ -759,6 +759,22 @@
     "./file-icons": {
       "types": "./src/fileIcons/index.ts",
       "import": "./src/fileIcons/index.ts"
+    },
+    "./highlight": {
+      "types": "./src/highlight/index.ts",
+      "import": "./src/highlight/index.ts"
+    },
+    "./highlight/themes": {
+      "types": "./src/highlight/themes.ts",
+      "import": "./src/highlight/themes.ts"
+    },
+    "./highlight/languages": {
+      "types": "./src/highlight/languages.ts",
+      "import": "./src/highlight/languages.ts"
+    },
+    "./diff/patch": {
+      "types": "./src/diff/patch.ts",
+      "import": "./src/diff/patch.ts"
     }
   },
   "scripts": {

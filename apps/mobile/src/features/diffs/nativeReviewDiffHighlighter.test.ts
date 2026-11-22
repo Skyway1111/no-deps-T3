@@ -13,20 +13,15 @@ const tokenization = vi.hoisted(() => ({
   afterCall: undefined as (() => void) | undefined,
 }));
 
-vi.mock("react-native-nitro-modules", async () => {
-  const { createWasmHighlightsModule } = await import("../../lib/highlights.testing");
-  const module = createWasmHighlightsModule();
+vi.mock("@t3tools/shared/highlight", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@t3tools/shared/highlight")>();
   return {
-    NitroModules: {
-      hasHybridObject: () => true,
-      createHybridObject: () => ({
-        tokenize(code: string, language: number) {
-          tokenization.calls.push(code);
-          const records = module.tokenize(code, language);
-          tokenization.afterCall?.();
-          return records;
-        },
-      }),
+    ...actual,
+    tokenizeCompact(code: string, language: string) {
+      tokenization.calls.push(code);
+      const tokens = actual.tokenizeCompact(code, language);
+      tokenization.afterCall?.();
+      return tokens;
     },
   };
 });

@@ -197,9 +197,6 @@ catalogs:
     '@noble/hashes':
       specifier: 1.8.0
       version: 1.8.0
-    '@pierre/highlights':
-      specifier: 0.5.0
-      version: 0.5.0
     '@types/plist':
       specifier: 3.0.5
       version: 3.0.5
@@ -289,7 +286,6 @@ overrides:
   expo-constants: 58.0.15
   expo-sharing>@expo/config-plugins: 58.0.12
   expo-sharing>@expo/config-types: 58.0.3
-  '@pierre/trees>@pierre/theming': 1.0.2
   micromark-extension-gfm-table: 2.1.1
   '@tailwindcss/node': 4.3.3
   '@tailwindcss/oxide': 4.3.3
@@ -484,12 +480,6 @@ importers:
       '@legendapp/list':
         specifier: 3.7.3
         version: 3.7.3(patch_hash=85979836ae620bdc6b40e29e3da04afd0a1a3a925ef00bdb3788e9b6fa2153f4)(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
-      '@pierre/diffs':
-        specifier: 1.7.0-beta.4
-        version: 1.7.0-beta.4(patch_hash=7edcdd484a99c7ec0b2667499c4cb21d113ec9bea1f8570c0b0a030d33bbf1cd)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@pierre/highlights':
-        specifier: 'catalog:'
-        version: 0.5.0
       '@react-native-menu/menu':
         specifier: 2.0.0
         version: 2.0.0(patch_hash=6872ba71b9847c5a0210b1b896923dadc3860faedfe28d9f062bcedfe786ef1d)(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
@@ -508,9 +498,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@t3tools/mobile-highlights-native':
-        specifier: file:./modules/t3-highlights
-        version: file:apps/mobile/modules/t3-highlights(react-native-nitro-modules@0.37.2(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0))
       '@t3tools/mobile-review-diff-native':
         specifier: file:./modules/t3-review-diff
         version: file:apps/mobile/modules/t3-review-diff
@@ -664,9 +651,6 @@ importers:
       react-native-keyboard-controller:
         specifier: 1.23.0
         version: 1.23.0(patch_hash=1c7c80317ef050e08d4aabe034a0813d03b497dff2dc8b37fb5f4a6e3b20fddb)(3ba24c675da40640708746e9087ede39)
-      react-native-nitro-modules:
-        specifier: 0.37.2
-        version: 0.37.2(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       react-native-pdf-jsi:
         specifier: 6.1.0
         version: 6.1.0(patch_hash=d29e6b69813548de641a09db705dd94823d3f96832821ae9c3f6a196dd15cb68)(expo@58.0.23)(react-native-nitro-modules@0.37.2(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
@@ -701,9 +685,6 @@ importers:
       '@effect/vitest':
         specifier: 4.1.5
         version: 4.1.5(patch_hash=dd0bf2b1ae0f63aff0d620ebc67b82d19759b3fa69a608ef85e2a5b40b4d46c5)(@astrojs/compiler-rs@0.5.1)(@types/node@24.12.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(typescript@6.0.3))(bufferutil@4.1.0)(effect@4.1.5)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(playwright@1.64.1)(terser@5.48.0)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
-      '@pierre/trees':
-        specifier: 1.0.0-beta.6
-        version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -725,9 +706,6 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.1.0(@noble/hashes@1.8.0)
-      nitrogen:
-        specifier: 0.37.2
-        version: 0.37.2
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -894,9 +872,6 @@ importers:
       '@pierre/diffs':
         specifier: 1.7.0-beta.4
         version: 1.7.0-beta.4(patch_hash=7edcdd484a99c7ec0b2667499c4cb21d113ec9bea1f8570c0b0a030d33bbf1cd)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@pierre/trees':
-        specifier: 1.0.0-beta.6
-        version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
       '@t3tools/client-runtime':
         specifier: workspace:*
         version: link:../../packages/client-runtime
@@ -1139,9 +1114,6 @@ importers:
 
   packages/client-runtime:
     dependencies:
-      '@pierre/diffs':
-        specifier: 1.7.0-beta.4
-        version: 1.7.0-beta.4(patch_hash=7edcdd484a99c7ec0b2667499c4cb21d113ec9bea1f8570c0b0a030d33bbf1cd)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -5558,9 +5530,6 @@ packages:
       react-dom:
         optional: true
 
-  '@pierre/highlights@0.5.0':
-    resolution: {integrity: sha512-G8gscrHrik3YjKd+tPTcmivJ/W0zRrtg4adVxnfX7+415+0Qplo6qUWuEX5R0UkA1fMhmE2sOSuLBMNGDtLhIw==}
-
   '@pierre/highlights@0.5.1':
     resolution: {integrity: sha512-c2WF6sgwgKdxXU6FpWDLWUYHRca/cJy+3QJkWAqYqEAFxqlPf8eSH0ehHcFFjKBmT+9KBl9H7q6z7HMRU7+m6g==}
 
@@ -5590,12 +5559,6 @@ packages:
         optional: true
       shiki:
         optional: true
-
-  '@pierre/trees@1.0.0-beta.6':
-    resolution: {integrity: sha512-zxeuSFM9TveM7b5XofweJALCtm/tGYV9HZzdbf7Uf+kBxIlUyz24/EHaGRjB0dsmmfDQl2ETz7AWwJ15lhSnpw==}
-    peerDependencies:
-      react: ^18.3.1 || ^19.0.0
-      react-dom: ^18.3.1 || ^19.0.0
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -6045,11 +6008,6 @@ packages:
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
     engines: {node: '>=10'}
 
-  '@t3tools/mobile-highlights-native@file:apps/mobile/modules/t3-highlights':
-    resolution: {directory: apps/mobile/modules/t3-highlights, type: directory}
-    peerDependencies:
-      react-native-nitro-modules: '*'
-
   '@t3tools/mobile-review-diff-native@file:apps/mobile/modules/t3-review-diff':
     resolution: {directory: apps/mobile/modules/t3-review-diff, type: directory}
 
@@ -6204,9 +6162,6 @@ packages:
     resolution: {integrity: sha512-0W8yQ6SgmPKgVaLHVGkj5gr2uzMS9mAVHMCJKZCFdhvQxeQlUbrvN/8ooyYD7S5qmLsLNEHt0ecMMVgsoWUu9A==}
     cpu: [x64]
     os: [win32]
-
-  '@ts-morph/common@0.29.0':
-    resolution: {integrity: sha512-35oUmphHbJvQ/+UTwFNme/t2p3FoKiGJ5auTjjpNTop2dyREspirjMy82PLSC1pnDJ8ah1GU98hwpVt64YXQsg==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -7184,9 +7139,6 @@ packages:
     resolution: {integrity: sha512-RKzY5Edavc8B2Ka6tjJecKFC4nm0p7lADY72xzICmiJSf4TkaxWXt0fHsib2P2G4FkFyXfSDi9oDtIBuCZvY2g==}
     engines: {node: '>=20'}
     hasBin: true
-
-  code-block-writer@13.0.3:
-    resolution: {integrity: sha512-Oofo0pq3IKnsFtuHqSF7TqBfr71aeyZDVJ0HpmqB7FBM2qEigL0iPONSCZSO9pE9dZTAxANe5XHG9Uy0YMv8cg==}
 
   color-convert@1.9.3:
     resolution: {integrity: sha512-QfAUtd+vFdAtFQcC8CCyYt1fYWxSqAiK2cSD6zDB8N3cpsEBAvRxp9zOGg6G/SHHJYAT88/az/IuDGALsNVbGg==}
@@ -9490,10 +9442,6 @@ packages:
   nitro-core@0.37.2:
     resolution: {integrity: sha512-dhagikz9VXXzfidRH/vPNJfYWPmTBArDOo9wE/wEqeERU9C8uRWz9YccOyNUOvADccPAZq319yzhDMoJ9excSQ==}
 
-  nitrogen@0.37.2:
-    resolution: {integrity: sha512-dqQIrtU9EmFgUa+FLnUeITQRjQGsq3K1rH+fvgRflA64Xmy04oJGXl6arerzsKIocg8nZoWZiq7z803iw+4gNg==}
-    hasBin: true
-
   nlcst-to-string@4.0.0:
     resolution: {integrity: sha512-YKLBCcUYKAg0FNlOBT6aI91qFmSiFKiluk655WzPF+DDMA02qIyy8uiRqI8QXtcFpEvll12LpL5MXqEmAZ+dcA==}
 
@@ -9945,14 +9893,6 @@ packages:
     resolution: {integrity: sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A==}
     engines: {node: '>=14.0.0'}
     hasBin: true
-
-  preact-render-to-string@6.6.5:
-    resolution: {integrity: sha512-O6MHzYNIKYaiSX3bOw0gGZfEbOmlIDtDfWwN1JJdc/T3ihzRT6tGGSEWE088dWrEDGa1u7101q+6fzQnO9XCPA==}
-    peerDependencies:
-      preact: '>=10 || >= 11.0.0-0'
-
-  preact@11.0.0-beta.0:
-    resolution: {integrity: sha512-IcODoASASYwJ9kxz7+MJeiJhvLriwSb4y4mHIyxdgaRZp6kPUud7xytrk/6GZw8U3y6EFJaRb5wi9SrEK+8+lg==}
 
   prettier@3.8.3:
     resolution: {integrity: sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw==}
@@ -10821,9 +10761,6 @@ packages:
 
   ts-algebra@2.0.0:
     resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
-
-  ts-morph@28.0.0:
-    resolution: {integrity: sha512-Wp3tnZ2bzwxyTZMtgWVzXDfm7lB1Drz+y9DmmYH/L702PQhPyVrp3pkou3yIz4qjS14GY9kcpmLiOOMvl8oG1g==}
 
   tsconfig-paths@4.2.0:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
@@ -14483,8 +14420,6 @@ snapshots:
     transitivePeerDependencies:
       - '@shikijs/themes'
 
-  '@pierre/highlights@0.5.0': {}
-
   '@pierre/highlights@0.5.1': {}
 
   '@pierre/patches@0.0.1': {}
@@ -14498,18 +14433,6 @@ snapshots:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       shiki: 4.2.0
-
-  '@pierre/trees@1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)':
-    dependencies:
-      '@pierre/theming': 1.0.2(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
-      preact: 11.0.0-beta.0
-      preact-render-to-string: 6.6.5(preact@11.0.0-beta.0)
-      react: 19.3.0
-      react-dom: 19.3.0(react@19.3.0)
-    transitivePeerDependencies:
-      - '@pierre/theme'
-      - '@shikijs/themes'
-      - shiki
 
   '@pinojs/redact@0.4.0': {}
 
@@ -14911,10 +14834,6 @@ snapshots:
     dependencies:
       defer-to-connect: 2.0.1
 
-  '@t3tools/mobile-highlights-native@file:apps/mobile/modules/t3-highlights(react-native-nitro-modules@0.37.2(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0))':
-    dependencies:
-      react-native-nitro-modules: 0.37.2(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
-
   '@t3tools/mobile-review-diff-native@file:apps/mobile/modules/t3-review-diff': {}
 
   '@t3tools/mobile-source-text@file:apps/mobile/modules/t3-source-text(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)':
@@ -15031,12 +14950,6 @@ snapshots:
 
   '@transcribe-cpp/win32-x64-cpu-vulkan@0.4.1':
     optional: true
-
-  '@ts-morph/common@0.29.0':
-    dependencies:
-      minimatch: 10.2.6
-      path-browserify: 1.0.1
-      tinyglobby: 0.2.17
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
@@ -16207,8 +16120,6 @@ snapshots:
   cluster-key-slot@1.1.2: {}
 
   cn@0.3.2: {}
-
-  code-block-writer@13.0.3: {}
 
   color-convert@1.9.3:
     dependencies:
@@ -18923,14 +18834,6 @@ snapshots:
 
   nitro-core@0.37.2: {}
 
-  nitrogen@0.37.2:
-    dependencies:
-      chalk: 5.6.2
-      nitro-core: 0.37.2
-      ts-morph: 28.0.0
-      yargs: 18.1.0
-      zod: 4.6.7
-
   nlcst-to-string@4.0.0:
     dependencies:
       '@types/nlcst': 2.0.3
@@ -19568,12 +19471,6 @@ snapshots:
   postject@1.0.0-alpha.6:
     dependencies:
       commander: 9.5.0
-
-  preact-render-to-string@6.6.5(preact@11.0.0-beta.0):
-    dependencies:
-      preact: 11.0.0-beta.0
-
-  preact@11.0.0-beta.0: {}
 
   prettier@3.8.3: {}
 
@@ -20614,11 +20511,6 @@ snapshots:
       utf8-byte-length: 1.0.5
 
   ts-algebra@2.0.0: {}
-
-  ts-morph@28.0.0:
-    dependencies:
-      '@ts-morph/common': 0.29.0
-      code-block-writer: 13.0.3
 
   tsconfig-paths@4.2.0:
     dependencies:

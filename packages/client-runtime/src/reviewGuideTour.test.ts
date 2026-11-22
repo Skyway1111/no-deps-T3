@@ -1,4 +1,4 @@
-import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
+import { parsePatchFiles } from "@t3tools/shared/diff/patch";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -1,18 +1,11 @@
-import { codeToTokens } from "@pierre/highlights";
-import { pierreDark, pierreLight } from "@pierre/highlights/themes";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { codeToTokens, contrastOnLightCode } from "@t3tools/shared/highlight";
+import { describe, expect, it } from "vite-plus/test";
 
 import { resolveHighlightLanguage } from "./highlightLanguage";
 import { highlightCode, highlightCommand, tokenizeCode, type HighlightedLines } from "./highlights";
 
-vi.mock("react-native-nitro-modules", async () => {
-  const { createWasmHighlightsModule } = await import("./highlights.testing");
-  const highlights = createWasmHighlightsModule();
-  return { NitroModules: { hasHybridObject: () => true, createHybridObject: () => highlights } };
-});
-
 describe("highlightCode", () => {
-  it("produces @pierre/highlights' own tokens and colors", () => {
+  it("matches the shared themed tokens, with readable light colors", () => {
     const code = [
       "/** 🎉 docs\r",
       " */",
@@ -23,8 +16,8 @@ describe("highlightCode", () => {
     ].join("\n");
 
     for (const [scheme, theme] of [
-      ["light", pierreLight],
-      ["dark", pierreDark],
+      ["light", "t3-light"],
+      ["dark", "pierre-dark"],
     ] as const) {
       const expected = codeToTokens(code, { lang: "tsx", theme }).tokens.map((line) =>
         line.map((token) => ({
@@ -34,6 +27,9 @@ describe("highlightCode", () => {
         })),
       );
       expect(highlightCode(code, "tsx", scheme)).toEqual(expected);
+    }
+    for (const token of highlightCode(code, "tsx", "light").flat()) {
+      expect(contrastOnLightCode(token.color!)).toBeGreaterThanOrEqual(4.5);
     }
   });
 

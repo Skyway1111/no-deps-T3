@@ -1,4 +1,4 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import type { PullRequestReviewGuideExcerpt, PullRequestReviewGuideStop } from "@t3tools/contracts";
 import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
