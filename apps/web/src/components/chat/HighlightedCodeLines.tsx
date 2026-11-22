@@ -1,11 +1,19 @@
-import { elToHtml, elToReact, type ElContent, type ElElement, type ElNode } from "@t3tools/shared/markdownHast";
+import {
+  elToHtml,
+  elToReact,
+  type ElContent,
+  type ElElement,
+  type ElNode,
+} from "@t3tools/shared/markdownHast";
 import { cloneElement, isValidElement, memo, type DOMAttributes, type ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+
+import type { HastElement, HastText } from "@t3tools/shared/highlight";
 
 import type { highlightCodeToHast } from "../../lib/incrementalHighlighting";
 
 type HighlightedRoot = ReturnType<typeof highlightCodeToHast>;
-type HighlightedNode = HighlightedRoot["children"][number];
+type HighlightedNode = HastElement | HastText;
 const runtime = { Fragment, jsx, jsxs };
 
 function elementShell(node: Extract<HighlightedNode, { type: "element" }>) {

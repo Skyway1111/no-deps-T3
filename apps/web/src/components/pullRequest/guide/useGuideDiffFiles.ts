@@ -1,5 +1,5 @@
 import { useMessages } from "@t3tools/shared/i18n/react";
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
 import { RegistryContext } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";

@@ -1,13 +1,13 @@
-import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
-import { parseDiffFromFile } from "@pierre/diffs";
-import type { FileDiffMetadata } from "@pierre/diffs/types";
+import {
+  parseDiffFromFile,
+  parsePatchFiles,
+  type FileDiffMetadata,
+} from "@t3tools/shared/diff/patch";
 import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../i18n/messages";
-// Registers the readable light theme that DIFF_THEME_NAMES.light names.
-import "./readableSyntaxTheme";
 
-export { DIFF_THEME_NAMES, type DiffThemeName, resolveDiffThemeName } from "./diffTheme";
+export { type DiffThemeName, resolveDiffThemeName } from "./diffTheme";
 
 const FNV_OFFSET_BASIS_32 = 0x811c9dc5;
 const FNV_PRIME_32 = 0x01000193;

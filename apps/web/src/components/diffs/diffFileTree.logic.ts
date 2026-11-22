@@ -1,4 +1,4 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@t3tools/shared/diff/patch";
 
 import { resolveFileDiffPath } from "~/lib/diffRendering";
 import type { FileTreeSortComparator, GitStatus } from "~/ui-core/fileTreeModel";

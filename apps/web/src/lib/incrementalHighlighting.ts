@@ -1,14 +1,15 @@
 import {
   renderTokenLines,
-  type DiffsHighlighter,
-  type DiffsThemeNames,
+  type Highlighter,
+  type StreamTokenizer,
   type ThemedToken,
+  type ThemeInput,
   type TokensResult,
-} from "@pierre/diffs";
+} from "@t3tools/shared/highlight";
 
 function highlightedDocument(
   result: TokensResult,
-  lines = renderTokenLines(result.tokens, {}),
+  lines = renderTokenLines(result.tokens),
 ): { type: "root"; children: ReturnType<typeof renderTokenLines> } {
   return {
     type: "root" as const,
@@ -46,22 +47,22 @@ function highlightedDocument(
 }
 
 export function highlightCodeToHast(
-  highlighter: DiffsHighlighter,
+  highlighter: Highlighter,
   code: string,
   language: string,
-  theme: DiffsThemeNames,
+  theme: ThemeInput,
 ) {
   return highlightedDocument(highlighter.codeToTokens(code, { lang: language, theme }));
 }
 
 export function createIncrementalHighlightedDocument(
-  highlighter: DiffsHighlighter,
+  highlighter: Highlighter,
   language: string,
-  theme: DiffsThemeNames,
+  theme: ThemeInput,
 ) {
   const options = { lang: language, theme };
   let shell: TokensResult | undefined;
-  let tokenizer: ReturnType<DiffsHighlighter["createStreamTokenizer"]> | undefined;
+  let tokenizer: StreamTokenizer | undefined;
   let previous = "";
   const completedLines: ReturnType<typeof renderTokenLines> = [];
 
@@ -84,23 +85,18 @@ export function createIncrementalHighlightedDocument(
       shell ??= highlighter.codeToTokens("", options);
       tokenizer ??= highlighter.createStreamTokenizer(options);
       const update = tokenizer.enqueue(code.slice(previous.length));
-      if (update instanceof Promise) {
-        dispose();
-        void update.catch(() => {});
-        return highlightCodeToHast(highlighter, code, language, theme);
-      }
       previous = code;
       let line: ThemedToken[] = [];
       for (const token of update.stable) {
         if (token.content === "\n") {
-          completedLines.push(...renderTokenLines([line], {}));
+          completedLines.push(...renderTokenLines([line]));
           line = [];
         } else line.push(token);
       }
       // Completed line nodes retain their identity while the final line changes.
       return highlightedDocument(shell, [
         ...completedLines,
-        ...renderTokenLines([update.unstable], {}),
+        ...renderTokenLines([update.unstable]),
       ]);
     },
     { dispose },

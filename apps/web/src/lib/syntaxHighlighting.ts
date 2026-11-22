@@ -1,44 +1,14 @@
-import "@t3tools/client-runtime/assembly-highlighting";
-import {
-  getSharedHighlighter,
-  setCustomExtension,
-  type DiffsHighlighter,
-  type HighlighterTypes,
-  type SupportedLanguages,
-} from "@pierre/diffs";
+import { getSharedHighlighter, type Highlighter } from "@t3tools/shared/highlight";
 
-import { DIFF_THEME_NAMES } from "./diffRendering";
+import { DIFF_THEME_NAMES } from "./diffTheme";
 
-// Highlights has no lexer for these dialects, so they use their base language's.
-setCustomExtension("luau", "lua");
-setCustomExtension("xsl", "xml");
-setCustomExtension("xslt", "xml");
+/** Passed by viewers that still take a highlighter type; the shared highlighter is the only one. */
+export const PREFERRED_HIGHLIGHTER = "highlights";
 
-/**
- * Highlights' hand-written WASM lexers tokenize large files 10-40x faster than
- * Shiki and never backtrack like Shiki's JS regex engine. Only one highlighter
- * type can be active per thread, so every creation site must pass this value.
- */
-export const PREFERRED_HIGHLIGHTER: HighlighterTypes = "highlights";
+let highlighterPromise: Promise<Highlighter> | undefined;
 
-const highlighterPromiseCache = new Map<string, Promise<DiffsHighlighter>>();
-
-export function getSyntaxHighlighterPromise(language: string): Promise<DiffsHighlighter> {
-  const cached = highlighterPromiseCache.get(language);
-  if (cached) return cached;
-
-  const promise = getSharedHighlighter({
-    // Both palettes, so switching appearance never needs a new highlighter.
-    themes: Object.values(DIFF_THEME_NAMES),
-    langs: [language as SupportedLanguages],
-    preferredHighlighter: PREFERRED_HIGHLIGHTER,
-  }).catch((error) => {
-    if (language === "text") {
-      highlighterPromiseCache.delete(language);
-      throw error;
-    }
-    return getSyntaxHighlighterPromise("text");
-  });
-  highlighterPromiseCache.set(language, promise);
-  return promise;
+/** Every grammar is bundled, so one stable promise serves every language (`use()` needs that). */
+export function getSyntaxHighlighterPromise(_language?: string): Promise<Highlighter> {
+  // Both palettes, so switching appearance never needs a new highlighter.
+  return (highlighterPromise ??= getSharedHighlighter({ themes: Object.values(DIFF_THEME_NAMES) }));
 }

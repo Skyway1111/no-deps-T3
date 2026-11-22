@@ -1,4 +1,8 @@
-import type { FileDiffMetadata, SelectedLineRange, SelectionSide } from "@pierre/diffs";
+import type {
+  FileDiffMetadata,
+  SelectedLineRange,
+  SelectionSide,
+} from "@t3tools/shared/diff/patch";
 import { PullRequestContextMetadata, type PullRequestReviewPosition } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
