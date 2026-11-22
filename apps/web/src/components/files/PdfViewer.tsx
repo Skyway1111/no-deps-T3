@@ -37,13 +37,20 @@ import "./pdfViewer.css";
 
 const MAX_PAGES = 2000;
 const MAX_FIND_TEXT = 4 * 1024 * 1024;
+// Find reads each page's text once per document; later queries search the cached strings.
+const findTexts = new WeakMap<PdfDocument, (string | undefined)[]>();
+const pageTexts = (pdf: PdfDocument) => {
+  let texts = findTexts.get(pdf);
+  if (!texts) findTexts.set(pdf, (texts = []));
+  return texts;
+};
 
 const MAX_POSITIONS = 50;
 type PdfPosition = PdfViewState & { width: number; ratios: readonly number[] };
 // Thread switches unmount the preview; retain only the most recent documents.
 const positions = new Map<string, PdfPosition>();
 
-type PdfLink = ReturnType<PdfDocument["links"]>[number];
+type PdfLink = Awaited<ReturnType<PdfDocument["links"]>>[number];
 
 export type PdfViewState = {
   page: number;
@@ -87,20 +94,26 @@ function PdfPage(props: {
       );
       // Resizing a canvas blanks it, so the page paints off screen and replaces the old one whole.
       const buffer = document.createElement("canvas");
-      buffer.width = Math.ceil(width * ratio);
-      buffer.height = Math.ceil(width * (page.height / page.width) * ratio);
-      const context = buffer.getContext("2d", { alpha: false });
-      if (!context) throw new Error(m(msg("This PDF page could not render.")));
-      context.scale(scale * ratio, scale * ratio);
-      setLinks(pdf.links(index));
-      const items = await pdf.paint(index, context, controller.signal);
-      if (controller.signal.aborted || !canvas.current) return;
-      canvas.current.width = buffer.width;
-      canvas.current.height = buffer.height;
-      canvas.current.getContext("2d", { alpha: false })?.drawImage(buffer, 0, 0);
-      buffer.width = 0;
-      painted.current = pdf;
-      setSpans(items);
+      try {
+        buffer.width = Math.ceil(width * ratio);
+        buffer.height = Math.ceil(width * (page.height / page.width) * ratio);
+        const context = buffer.getContext("2d", { alpha: false });
+        if (!context) throw new Error(m(msg("This PDF page could not render.")));
+        context.scale(scale * ratio, scale * ratio);
+        const [items, pageLinks] = await Promise.all([
+          pdf.paint(index, context, controller.signal),
+          pdf.links(index),
+        ]);
+        if (controller.signal.aborted || !canvas.current) return;
+        canvas.current.width = buffer.width;
+        canvas.current.height = buffer.height;
+        canvas.current.getContext("2d", { alpha: false })?.drawImage(buffer, 0, 0);
+        painted.current = pdf;
+        setLinks(pageLinks);
+        setSpans(items);
+      } finally {
+        buffer.width = buffer.height = 0;
+      }
     })().catch((cause: unknown) => {
       if (!controller.signal.aborted)
         onError(thrownErrorMessage(cause, m) ?? m(msg("This PDF page could not render.")));
@@ -110,6 +123,13 @@ function PdfPage(props: {
       clearTimeout(timer);
     };
   }, [pdf, page, index, width, onSize, onError]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Release the page's canvas backing store when it scrolls out and unmounts.
+  useEffect(() => {
+    const target = canvas.current;
+    return () => {
+      if (target) target.width = target.height = 0;
+    };
+  }, []);
   const runs = spans.flatMap((span) => (span.hasEOL ? [span.str, "\n"] : [span.str]));
   const hits = pdfFindMatchRuns(runs, props.query);
   const runIndex: number[] = [];
@@ -243,6 +263,7 @@ export default function PdfViewer(props: {
       .then(async (bytes) => {
         controller.signal.throwIfAborted();
         const document = await openPdf(bytes);
+        if (document.numPages > MAX_PAGES || controller.signal.aborted) document.destroy();
         if (document.numPages > MAX_PAGES)
           throw new Error(
             m(msg("Preview limited to 2,000 pages. Save this PDF to read it in full.")),
@@ -367,10 +388,10 @@ export default function PdfViewer(props: {
       void (async () => {
         const found: number[] = [];
         let size = 0;
+        const texts = pageTexts(pdf);
         for (let index = 0; index < pdf.numPages; index++) {
-          const items = await pdf.text(index);
+          const text = (texts[index] ??= pdfPageText(await pdf.text(index)));
           if (cancelled) return;
-          const text = pdfPageText(items);
           size += text.length;
           if (size > MAX_FIND_TEXT)
             throw new Error(

@@ -8,7 +8,11 @@ export class Name {
   }
   static of(value: string) {
     let name = Name.cache.get(value);
-    if (!name) Name.cache.set(value, (name = new Name(value)));
+    if (!name) {
+      // Interning only saves allocations and cache misses; a hostile file must not grow it without bound.
+      if (Name.cache.size >= 8192) Name.cache.clear();
+      Name.cache.set(value, (name = new Name(value)));
+    }
     return name;
   }
 }
@@ -396,11 +400,36 @@ type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 let faces = 0;
 
+/** Keys that point back up or across the document; a page's own objects never need them. */
+const BACK_LINKS = new Set([
+  "Parent",
+  "P",
+  "Prev",
+  "Next",
+  "First",
+  "Last",
+  "Dest",
+  "A",
+  "PA",
+  "Popup",
+  "IRT",
+  "B",
+  "Thread",
+  "StructParent",
+  "StructParents",
+]);
+
 export class PdfDocument {
-  readonly bytes: Uint8Array;
+  bytes: Uint8Array;
   private readonly offsets = new Map<number, number>();
   private readonly compressed = new Map<number, { stream: number; index: number }>();
   private readonly objectStreams = new Map<number, Map<number, PdfValue>>();
+  private readonly loading = new Map<number, Promise<void>>();
+  /** Object streams a synchronous lookup needed before they were decoded; `settle` loads them. */
+  private readonly pending = new Set<number>();
+  /** Objects whose whole reach is decoded, so later page preloads stop there. */
+  private readonly walked = new Set<number>();
+  private streamTotal: number | undefined;
   private readonly cache = new Map<number, PdfValue>();
   private readonly fonts = new Map<PdfDict, Promise<Font>>();
   private readonly spaces = new Map<object, Promise<ColorSpace>>();
@@ -427,36 +456,87 @@ export class PdfDocument {
     }
     if (!doc.trailer.get("Root")) doc.reconstruct();
     if (doc.trailer.get("Encrypt")) throw new Error("This PDF is encrypted.");
-    for (const { stream } of doc.compressed.values()) await doc.loadObjectStream(stream);
-    if (!isDict(doc.get(doc.trailer.get("Root")))) {
-      doc.reconstruct();
-      for (const { stream } of doc.compressed.values()) await doc.loadObjectStream(stream);
-    }
-    doc.pages = doc.collectPages();
+    if (!(await doc.settle(() => isDict(doc.get(doc.trailer.get("Root")))))) doc.reconstruct();
+    doc.pages = await doc.settle(() => doc.collectPages());
     if (!doc.pages.length) throw new Error("This PDF has no pages.");
-    const config = doc.dict(
-      doc.dict(doc.dict(doc.trailer.get("Root"))?.get("OCProperties"))?.get("D"),
-    );
-    const groups = (key: string) => doc.array(config?.get(key)).filter(isDict);
-    if (nameOf(config?.get("BaseState")) === "OFF") {
-      const on = new Set(groups("ON"));
-      for (const group of doc
-        .array(doc.dict(doc.dict(doc.trailer.get("Root"))?.get("OCProperties"))?.get("OCGs"))
-        .filter(isDict))
-        if (!on.has(group)) doc.hidden.add(group);
-    } else for (const group of groups("OFF")) doc.hidden.add(group);
+    doc.hidden = await doc.settle(() => {
+      const hidden = new Set<PdfDict>();
+      const properties = doc.dict(doc.dict(doc.trailer.get("Root"))?.get("OCProperties"));
+      const config = doc.dict(properties?.get("D"));
+      const groups = (key: string) => doc.array(config?.get(key)).filter(isDict);
+      if (nameOf(config?.get("BaseState")) === "OFF") {
+        const on = new Set(groups("ON"));
+        for (const group of doc.array(properties?.get("OCGs")).filter(isDict))
+          if (!on.has(group)) hidden.add(group);
+      } else for (const group of groups("OFF")) hidden.add(group);
+      return hidden;
+    });
     return doc;
+  }
+
+  /**
+   * Runs `read` until it needs no undecoded object stream. Lookups are synchronous, so a miss records its stream,
+   * which is decoded here before `read` runs again; files load only the streams their pages use.
+   */
+  private async settle<T>(read: () => T): Promise<T> {
+    for (let round = 0; ; round++) {
+      const result = read();
+      if (!this.pending.size || round >= 32) {
+        this.pending.clear();
+        return result;
+      }
+      const streams = [...this.pending];
+      this.pending.clear();
+      await Promise.all(streams.map((id) => this.loadObjectStream(id)));
+    }
+  }
+
+  /** Decodes the object streams behind everything `root` reaches, short of links back to parents and other pages. */
+  private async preload(root: PdfValue) {
+    this.streamTotal ??= new Set(Array.from(this.compressed.values(), (e) => e.stream)).size;
+    if (this.objectStreams.size >= this.streamTotal) return;
+    let seen = new Set<number>();
+    await this.settle(() => {
+      seen = new Set();
+      const stack: (PdfValue | undefined)[] = [root];
+      for (let visits = 0; stack.length && visits < 200_000; visits++) {
+        let value = stack.pop();
+        if (value instanceof Ref) {
+          if (seen.has(value.num) || this.walked.has(value.num)) continue;
+          seen.add(value.num);
+          value = this.object(value.num);
+        }
+        if (Array.isArray(value)) stack.push(...value);
+        else if (isDict(value) || isStream(value))
+          for (const [key, entry] of isDict(value) ? value : value.dict)
+            if (!BACK_LINKS.has(key)) stack.push(entry);
+      }
+    });
+    for (const id of seen) this.walked.add(id);
   }
 
   get numPages() {
     return this.pages.length;
   }
 
-  /** Removes the document's embedded fonts from the page. */
+  /** Removes the document's embedded fonts from the page and drops its bytes and parsed objects. */
   destroy() {
     for (const face of this.faces) fontSet()?.delete(face);
     this.faces.length = 0;
     this.fonts.clear();
+    this.spaces.clear();
+    this.functions.clear();
+    this.cache.clear();
+    this.objectStreams.clear();
+    this.loading.clear();
+    this.walked.clear();
+    this.everyStream = undefined;
+    this.offsets.clear();
+    this.compressed.clear();
+    this.hidden.clear();
+    this.trailer = new Map();
+    this.pages = [];
+    this.bytes = new Uint8Array();
   }
 
   /** Document information, for titles and search. */
@@ -614,28 +694,41 @@ export class PdfDocument {
       value = this.parseAt(offset);
     } else {
       const entry = this.compressed.get(id);
-      if (entry) value = this.objectStreams.get(entry.stream)?.get(id);
+      const stream = entry && this.objectStreams.get(entry.stream);
+      if (entry && !stream) {
+        // Not cached: once `settle` decodes the stream, the lookup succeeds.
+        this.pending.add(entry.stream);
+        return undefined;
+      }
+      value = stream?.get(id);
     }
     this.cache.set(id, value ?? null);
     return value;
   }
 
-  private async loadObjectStream(id: number) {
-    if (this.objectStreams.has(id)) return;
-    this.objectStreams.set(id, new Map());
-    const stream = this.object(id);
-    if (!isStream(stream)) return;
-    const data = await this.decode(stream);
-    const first = num(stream.dict.get("First"));
-    const count = num(stream.dict.get("N"));
-    const header = new Lexer(data);
-    const entries: [number, number][] = [];
-    for (let i = 0; i < count; i++)
-      entries.push([num(header.read(false)), num(header.read(false))]);
-    const map = this.objectStreams.get(id)!;
-    for (const [objectId, offset] of entries)
-      map.set(objectId, new Lexer(data, first + offset).read() ?? null);
-    for (const [objectId] of entries) this.cache.delete(objectId);
+  private loadObjectStream(id: number) {
+    let loading = this.loading.get(id);
+    if (!loading) {
+      loading = (async () => {
+        const stream = this.object(id);
+        const map = new Map<number, PdfValue>();
+        if (isStream(stream)) {
+          const data = await this.decode(stream).catch(() => new Uint8Array());
+          const first = num(stream.dict.get("First"));
+          const count = num(stream.dict.get("N"));
+          const header = new Lexer(data);
+          for (let i = 0; i < count; i++) {
+            const objectId = num(header.read(false));
+            const offset = num(header.read(false));
+            map.set(objectId, new Lexer(data, first + offset).read() ?? null);
+          }
+        }
+        this.objectStreams.set(id, map);
+        for (const objectId of map.keys()) this.cache.delete(objectId);
+      })();
+      this.loading.set(id, loading);
+    }
+    return loading;
   }
 
   /** Resolves references, up to a bounded chain. */
@@ -801,7 +894,12 @@ export class PdfDocument {
     }
   }
 
-  links(index: number): PdfLink[] {
+  /** A page's link areas, as fractions of the page, with their web or in-document targets. */
+  links(index: number): Promise<PdfLink[]> {
+    return this.settle(() => this.pageLinks(index));
+  }
+
+  private pageLinks(index: number): PdfLink[] {
     const page = this.pages[index]!;
     const out: PdfLink[] = [];
     const vp = this.viewport(page);
@@ -866,8 +964,15 @@ export class PdfDocument {
     return search(this.dict(this.dict(root?.get("Names"))?.get("Dests")), 0);
   }
 
+  private everyStream: Promise<unknown> | undefined;
   /** Text runs in viewport points with hasEOL breaks, for search, copy and the text layer. */
-  text(index: number) {
+  async text(index: number) {
+    // Search reads every page, so it decodes every object stream at once rather than page by page.
+    await (this.everyStream ??= Promise.all(
+      Array.from(new Set(Array.from(this.compressed.values(), (e) => e.stream)), (id) =>
+        this.loadObjectStream(id),
+      ),
+    ));
     return this.render(index);
   }
 
@@ -878,6 +983,7 @@ export class PdfDocument {
 
   private async render(index: number, context?: Ctx, signal?: AbortSignal): Promise<PdfTextItem[]> {
     const page = this.pages[index]!;
+    await this.preload(page.dict);
     const items: PdfTextItem[] = [];
     const text = (item: PdfTextItem) => {
       // Pieces of one line merge into a run, with a space where the gap is a word break.
@@ -3042,10 +3148,20 @@ class Painter {
     };
   }
 
+  /** Soft masks and text clips reuse their layer for every draw; it is released when the page is done. */
+  private readonly retained: OffscreenCanvas[] = [];
+  private retainedLayer(ctx: Ctx) {
+    const target = layer(ctx);
+    this.retained.push(target.canvas);
+    return target;
+  }
+
   close() {
     for (const group of this.images.values())
       for (const image of group.values()) void image.then((bitmap) => bitmap?.close());
     this.images.clear();
+    for (const canvas of this.retained) canvas.width = canvas.height = 0;
+    this.retained.length = 0;
   }
 
   private async withTarget<T>(ctx: Ctx, device: Matrix, fn: () => Promise<T>) {
@@ -3198,7 +3314,7 @@ class Painter {
       prepared ??= (async () => {
         const group = doc.get(dict.get("G"));
         if (!isStream(group)) return null;
-        const target = layer(ctx);
+        const target = this.retainedLayer(ctx);
         const luminosity = nameOf(dict.get("S")) !== "Alpha";
         if (luminosity) {
           const space = await doc.colorSpace(
@@ -3512,12 +3628,19 @@ class Painter {
       }
     }
     if (!triangles.length) return;
-    const xs = triangles.flatMap((t) => t.map((v) => v.x));
-    const ys = triangles.flatMap((t) => t.map((v) => v.y));
-    const left = Math.max(0, Math.floor(Math.min(...xs)));
-    const top = Math.max(0, Math.floor(Math.min(...ys)));
-    const w = Math.min(ctx.canvas.width, Math.ceil(Math.max(...xs))) - left;
-    const h = Math.min(ctx.canvas.height, Math.ceil(Math.max(...ys))) - top;
+    // A scalar scan: spreading every vertex into Math.min overflows the stack on large meshes.
+    let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const triangle of triangles)
+      for (const { x, y } of triangle) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    const left = Math.max(0, Math.floor(minX));
+    const top = Math.max(0, Math.floor(minY));
+    const w = Math.min(ctx.canvas.width, Math.ceil(maxX)) - left;
+    const h = Math.min(ctx.canvas.height, Math.ceil(maxY)) - top;
     if (w <= 0 || h <= 0) return;
     const image = new ImageData(w, h);
     const rgb = (comps: number[]) => space.rgb(fn ? fn(comps) : comps);
@@ -3965,7 +4088,7 @@ class Painter {
                 ...state.masks,
                 async (target) => {
                   if (!canvas) {
-                    canvas = layer(target);
+                    canvas = this.retainedLayer(target);
                     for (const paint of glyphs) paint(canvas);
                   }
                   target.save();
@@ -4133,12 +4256,17 @@ class Painter {
       if (!bitmap || (!isStream(smask) && !isStream(explicit) && !mask)) return bitmap;
       rgba = pixels(bitmap, width, height);
       bitmap.close();
-      if (mask)
-        for (let i = 0; i < rgba.length; i += 4)
-          rgba.set(
-            [fill[0]!, fill[1]!, fill[2]!, rgba[i]! < 128 !== (decodeArray[0] === 1) ? 255 : 0],
-            i,
-          );
+      if (mask) {
+        const [r, g, b] = [fill[0]!, fill[1]!, fill[2]!];
+        const inverted = decodeArray[0] === 1;
+        for (let i = 0; i < rgba.length; i += 4) {
+          const alpha = rgba[i]! < 128 !== inverted ? 255 : 0;
+          rgba[i] = r;
+          rgba[i + 1] = g;
+          rgba[i + 2] = b;
+          rgba[i + 3] = alpha;
+        }
+      }
     } else if (last === "JBIG2Decode" || last === "CCITTFaxDecode") return null;
     else {
       const data = await doc.decode(stream);
@@ -4166,9 +4294,14 @@ class Painter {
       rgba = new Uint8ClampedArray(width * height * 4);
       if (mask) {
         const paint = ranges[0]![0] === 1 ? 1 : 0;
+        const [r, g, b] = [fill[0]!, fill[1]!, fill[2]!];
         for (let y = 0, o = 0; y < height; y++)
-          for (let x = 0; x < width; x++, o += 4)
-            rgba.set([fill[0]!, fill[1]!, fill[2]!, sample(y, x) === paint ? 255 : 0], o);
+          for (let x = 0; x < width; x++, o += 4) {
+            rgba[o] = r;
+            rgba[o + 1] = g;
+            rgba[o + 2] = b;
+            rgba[o + 3] = sample(y, x) === paint ? 255 : 0;
+          }
       } else {
         const plain = ranges.every(([lo, hi]) => lo === 0 && hi === 1) && levels === 255;
         // One-component spaces and 8-bit color go through lookup tables; others through a per-color cache.
@@ -4312,5 +4445,7 @@ class Painter {
 function pixels(bitmap: ImageBitmap, width: number, height: number) {
   const context = new OffscreenCanvas(width, height).getContext("2d")!;
   context.drawImage(bitmap, 0, 0, width, height);
-  return context.getImageData(0, 0, width, height).data;
+  const data = context.getImageData(0, 0, width, height).data;
+  context.canvas.width = 0;
+  return data;
 }
