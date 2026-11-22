@@ -1,5 +1,5 @@
 import { resolveTimelineMinimapPreview, type TimelineMinimapItem } from "./timelineMinimapItems";
-import { useRef, useState, type MouseEvent } from "react";
+import { memo, useRef, useState, type MouseEvent } from "react";
 import { T, useGT } from "@t3tools/shared/i18n/react";
 import { ChevronDownIcon, ChevronUpIcon } from "~/ui-core/icons";
 import { Button } from "../ui/button";
@@ -190,42 +190,19 @@ export function TimelineMinimap({
             onMouseDown={(event) => event.preventDefault()}
             type="button"
           >
-            {items.map((item, index) => {
-              const top = `${resolveTimelineMinimapTopPercent(index, items.length)}%`;
-              const activeDistance =
-                resolvedActiveIndex === null ? null : Math.abs(index - resolvedActiveIndex);
-              return (
-                // Compositor-friendly on purpose: in-view state and the hover
-                // fisheye animate constantly (every scroll tick and streaming
-                // update flips a band of strips), so the strip animates only
-                // transform and opacity.
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "pointer-events-none absolute left-0 h-0.5 w-6 origin-left -translate-y-1/2 rounded-full transition-transform duration-150 after:absolute after:inset-0 after:rounded-full after:bg-foreground/55 after:opacity-0 after:transition-opacity after:duration-150 data-[in-view=true]:after:opacity-100",
-                    activeDistance === 0 ? "bg-muted-foreground/60" : "bg-muted-foreground/25",
-                    activeDistance === 0
-                      ? "scale-x-100"
-                      : activeDistance === 1
-                        ? "scale-x-[0.667]"
-                        : activeDistance === 2
-                          ? "scale-x-[0.417]"
-                          : "scale-x-[0.333]",
-                  )}
-                  data-in-view="false"
-                  data-minimap-strip
-                  key={item.id}
-                  ref={(node) => {
-                    if (node) {
-                      stripMap.set(item.id, node);
-                    } else {
-                      stripMap.delete(item.id);
-                    }
-                  }}
-                  style={{ top }}
-                />
-              );
-            })}
+            {items.map((item, index) => (
+              <MinimapStrip
+                key={item.id}
+                id={item.id}
+                top={resolveTimelineMinimapTopPercent(index, items.length)}
+                distance={
+                  resolvedActiveIndex === null
+                    ? 3
+                    : Math.min(3, Math.abs(index - resolvedActiveIndex))
+                }
+                stripMap={stripMap}
+              />
+            ))}
             {activeItem ? (
               // Display-only: it overlaps the message column, and the strip keeps tracking beneath it.
               <span
@@ -265,6 +242,51 @@ export function TimelineMinimap({
     </div>
   );
 }
+
+// Memoized per strip: scrolling moves the current turn and hovering moves the fisheye,
+// and neither should reconcile every strip of a long thread.
+const MinimapStrip = memo(function MinimapStrip({
+  id,
+  top,
+  distance,
+  stripMap,
+}: {
+  id: string;
+  top: number;
+  distance: number;
+  stripMap: Map<string, HTMLSpanElement>;
+}) {
+  return (
+    // Compositor-friendly on purpose: in-view state and the hover
+    // fisheye animate constantly (every scroll tick and streaming
+    // update flips a band of strips), so the strip animates only
+    // transform and opacity.
+    <span
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute left-0 h-0.5 w-6 origin-left -translate-y-1/2 rounded-full transition-transform duration-150 after:absolute after:inset-0 after:rounded-full after:bg-foreground/55 after:opacity-0 after:transition-opacity after:duration-150 data-[in-view=true]:after:opacity-100",
+        distance === 0 ? "bg-muted-foreground/60" : "bg-muted-foreground/25",
+        distance === 0
+          ? "scale-x-100"
+          : distance === 1
+            ? "scale-x-[0.667]"
+            : distance === 2
+              ? "scale-x-[0.417]"
+              : "scale-x-[0.333]",
+      )}
+      data-in-view="false"
+      data-minimap-strip
+      ref={(node) => {
+        if (!node) return;
+        stripMap.set(id, node);
+        return () => {
+          if (stripMap.get(id) === node) stripMap.delete(id);
+        };
+      }}
+      style={{ top: `${top}%` }}
+    />
+  );
+});
 
 function TimelineMinimapNavigationButton({
   direction,

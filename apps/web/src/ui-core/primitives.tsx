@@ -892,6 +892,22 @@ export function useTransitionStatus(
   }, [status, element, onDone]);
   return { mounted, status };
 }
+/** Calls `onChange` when `el`'s children (and `el` itself) resize, following children as they change. */
+function observeChildren(el: HTMLElement, self: boolean, onChange: () => void) {
+  const targets = () => (self ? [el, ...el.children] : [...el.children]);
+  let stop = observeResize(targets(), onChange);
+  const mutations = new MutationObserver(() => {
+    stop();
+    stop = observeResize(targets(), onChange);
+    onChange();
+  });
+  mutations.observe(el, { childList: true });
+  return () => {
+    stop();
+    mutations.disconnect();
+  };
+}
+
 export const transitionAttrs = (status: TransitionStatus) =>
   status === "starting"
     ? { "data-starting-style": "" }
@@ -915,11 +931,16 @@ function CollapsiblePanel({
   });
   const { mounted, status } = useTransitionStatus(open, ref);
   const [height, setHeight] = useState<number | undefined>(undefined);
+  // Measures when the content resizes rather than on every render, which forced a layout each time.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the panel's content height for the height transition.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && mounted) setHeight(el.scrollHeight);
-  });
+    if (!el || !mounted) return;
+    const measure = () => setHeight(el.scrollHeight);
+    measure();
+    return observeChildren(el, false, measure);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- opening or closing remeasures the content the transition runs to or from.
+  }, [mounted, open]);
   if (!mounted && !keepMounted && !hiddenUntilFound) return null;
   const state = { open, disabled, transitionStatus: status };
   const varStyle = {
@@ -1039,9 +1060,17 @@ type NumberFieldRootProps = Omit<
   required?: boolean | undefined;
   name?: string | undefined;
 };
+// A NumberFormat is costly to build; fields format on every keystroke and render.
+const numberFormats = new Map<string, Intl.NumberFormat>();
+function numberFormat(locale: string | undefined, options?: Intl.NumberFormatOptions) {
+  const key = `${locale ?? ""}\0${options ? JSON.stringify(options) : ""}`;
+  let format = numberFormats.get(key);
+  if (!format) numberFormats.set(key, (format = new Intl.NumberFormat(locale, options)));
+  return format;
+}
 /** Parses text in `locale`'s number format (group and decimal separators). */
 const parseNumber = (text: string, locale: string | undefined) => {
-  const parts = new Intl.NumberFormat(locale).formatToParts(11111.1);
+  const parts = numberFormat(locale).formatToParts(11111.1);
   const group = parts.find((p) => p.type === "group")?.value ?? ",";
   const decimal = parts.find((p) => p.type === "decimal")?.value ?? ".";
   const cleaned = text
@@ -1073,7 +1102,7 @@ function NumberFieldRoot({
   const [value, setValue] = useControlled(valueProp, defaultValue);
   // The input's text while the user edits it; otherwise the formatted value shows.
   const [draft, setDraft] = useState<string | null>(null);
-  const formatted = value === null ? "" : new Intl.NumberFormat(locale, format).format(value);
+  const formatted = value === null ? "" : numberFormat(locale, format).format(value);
   const clamp = (n: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
   const change = (next: number | null, details: ChangeEventDetails) => {
     if (Object.is(next, value)) return;
@@ -1233,101 +1262,111 @@ export declare namespace NumberField {
   }
 }
 
-const ScrollAreaCtx = createContext<{
+interface ScrollAreaApi {
   viewport: { current: HTMLDivElement | null };
-  metrics: ScrollMetrics;
+  /** Mounted thumbs and their last sizes; sizes and offsets are written to the DOM directly. */
+  thumbs: { y: HTMLElement | null; x: HTMLElement | null; ySize: number; xSize: number };
+  overflow: { x: boolean; y: boolean };
   hovering: boolean;
   scrolling: boolean;
-  setMetrics: () => void;
+  update: () => void;
+  setThumb: (vertical: boolean, thumb: HTMLElement | null) => void;
   markScrolling: () => void;
-} | null>(null);
-interface ScrollMetrics {
-  hasOverflowX: boolean;
-  hasOverflowY: boolean;
-  thumbY: { size: number; offset: number };
-  thumbX: { size: number; offset: number };
 }
-const EMPTY_METRICS: ScrollMetrics = {
-  hasOverflowX: false,
-  hasOverflowY: false,
-  thumbY: { size: 0, offset: 0 },
-  thumbX: { size: 0, offset: 0 },
-};
-const HIDE_NATIVE_SCROLLBARS =
-  "[data-scroll-area-viewport]{scrollbar-width:none}[data-scroll-area-viewport]::-webkit-scrollbar{display:none}";
+const ScrollAreaCtx = createContext<ScrollAreaApi | null>(null);
+const NO_OVERFLOW = { x: false, y: false };
 
+// One stylesheet per document instead of a <style> in every scroll area.
+const styledDocuments = new WeakSet<Document>();
+function ensureScrollAreaStyle(doc: Document) {
+  if (styledDocuments.has(doc)) return;
+  styledDocuments.add(doc);
+  const style = doc.createElement("style");
+  style.dataset.t3ScrollAreaStyle = "";
+  style.textContent =
+    "[data-scroll-area-viewport]{scrollbar-width:none}[data-scroll-area-viewport]::-webkit-scrollbar{display:none}";
+  doc.head.append(style);
+}
+
+function placeThumb(thumb: HTMLElement | null, vertical: boolean, size: number, offset: number) {
+  if (!thumb) return;
+  thumb.style[vertical ? "height" : "width"] = `${size}px`;
+  thumb.style.transform = vertical ? `translateY(${offset}px)` : `translateX(${offset}px)`;
+}
+
+/** Scrolling re-renders only when overflow, hover or the scrolling flag flips. */
 function ScrollAreaRoot({ children, ...props }: PartProps<"div", object>) {
-  const viewport = useRef<HTMLDivElement | null>(null);
-  const [metrics, setMetricsState] = useState(EMPTY_METRICS);
+  const [overflow, setOverflow] = useState(NO_OVERFLOW);
   const [hovering, setHovering] = useState(false);
   const [scrolling, setScrolling] = useState(false);
-  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const setMetrics = () => {
-    const el = viewport.current;
-    if (!el) return;
-    const { scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth } = el;
-    const ySize =
-      scrollHeight > clientHeight ? Math.max(20, (clientHeight / scrollHeight) * clientHeight) : 0;
-    const xSize =
-      scrollWidth > clientWidth ? Math.max(20, (clientWidth / scrollWidth) * clientWidth) : 0;
-    const next: ScrollMetrics = {
-      hasOverflowY: scrollHeight > clientHeight + 1,
-      hasOverflowX: scrollWidth > clientWidth + 1,
-      thumbY: {
-        size: ySize,
-        offset:
-          scrollHeight > clientHeight
-            ? (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - ySize)
-            : 0,
-      },
-      thumbX: {
-        size: xSize,
-        offset:
-          scrollWidth > clientWidth
-            ? (Math.abs(scrollLeft) / (scrollWidth - clientWidth)) * (clientWidth - xSize)
-            : 0,
-      },
+  const [controller] = useState(() => {
+    const viewport: ScrollAreaApi["viewport"] = { current: null };
+    const thumbs: ScrollAreaApi["thumbs"] = { y: null, x: null, ySize: 0, xSize: 0 };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let active = false;
+    const update = () => {
+      const el = viewport.current;
+      if (!el) return;
+      const { scrollTop, scrollHeight, clientHeight, scrollWidth, clientWidth } = el;
+      const scrollLeft = Math.abs(el.scrollLeft);
+      const ySize =
+        scrollHeight > clientHeight
+          ? Math.max(20, (clientHeight / scrollHeight) * clientHeight)
+          : 0;
+      const xSize =
+        scrollWidth > clientWidth ? Math.max(20, (clientWidth / scrollWidth) * clientWidth) : 0;
+      thumbs.ySize = ySize;
+      thumbs.xSize = xSize;
+      placeThumb(
+        thumbs.y,
+        true,
+        ySize,
+        ySize ? (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - ySize) : 0,
+      );
+      placeThumb(
+        thumbs.x,
+        false,
+        xSize,
+        xSize ? (scrollLeft / (scrollWidth - clientWidth)) * (clientWidth - xSize) : 0,
+      );
+      // Overflow edges drive the fade masks.
+      el.style.setProperty("--scroll-area-overflow-y-start", `${scrollTop}px`);
+      el.style.setProperty(
+        "--scroll-area-overflow-y-end",
+        `${Math.max(0, scrollHeight - clientHeight - scrollTop)}px`,
+      );
+      el.style.setProperty("--scroll-area-overflow-x-start", `${scrollLeft}px`);
+      el.style.setProperty(
+        "--scroll-area-overflow-x-end",
+        `${Math.max(0, scrollWidth - clientWidth - scrollLeft)}px`,
+      );
+      const x = scrollWidth > clientWidth + 1;
+      const y = scrollHeight > clientHeight + 1;
+      setOverflow((prev) => (prev.x === x && prev.y === y ? prev : { x, y }));
     };
-    // Overflow edges drive the fade masks; set directly so scrolling never re-renders children.
-    el.style.setProperty("--scroll-area-overflow-y-start", `${scrollTop}px`);
-    el.style.setProperty(
-      "--scroll-area-overflow-y-end",
-      `${Math.max(0, scrollHeight - clientHeight - scrollTop)}px`,
-    );
-    el.style.setProperty("--scroll-area-overflow-x-start", `${Math.abs(scrollLeft)}px`);
-    el.style.setProperty(
-      "--scroll-area-overflow-x-end",
-      `${Math.max(0, scrollWidth - clientWidth - Math.abs(scrollLeft))}px`,
-    );
-    setMetricsState((prev) =>
-      prev.hasOverflowX === next.hasOverflowX &&
-      prev.hasOverflowY === next.hasOverflowY &&
-      prev.thumbY.size === next.thumbY.size &&
-      prev.thumbY.offset === next.thumbY.offset &&
-      prev.thumbX.size === next.thumbX.size &&
-      prev.thumbX.offset === next.thumbX.offset
-        ? prev
-        : next,
-    );
-  };
-  const markScrolling = () => {
-    setScrolling(true);
-    if (scrollTimer.current) clearTimeout(scrollTimer.current);
-    scrollTimer.current = setTimeout(() => setScrolling(false), 500);
-  };
+    const markScrolling = () => {
+      if (!active) {
+        active = true;
+        setScrolling(true);
+      }
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        active = false;
+        setScrolling(false);
+      }, 500);
+    };
+    const setThumb = (vertical: boolean, thumb: HTMLElement | null) => {
+      thumbs[vertical ? "y" : "x"] = thumb;
+      if (thumb) update();
+    };
+    return { viewport, thumbs, update, setThumb, markScrolling };
+  });
+  const api: ScrollAreaApi = { ...controller, overflow, hovering, scrolling };
   return (
-    <ScrollAreaCtx value={{ viewport, metrics, hovering, scrolling, setMetrics, markScrolling }}>
+    <ScrollAreaCtx value={api}>
       {renderPart(
         "div",
-        {
-          ...props,
-          children: (
-            <>
-              <style>{HIDE_NATIVE_SCROLLBARS}</style>
-              {children}
-            </>
-          ),
-        },
+        { ...props, children },
         {},
         {
           onPointerEnter: () => setHovering(true),
@@ -1344,24 +1383,15 @@ function useScrollArea() {
   return ctx;
 }
 function ScrollAreaViewport(props: PartProps<"div", object>) {
-  const { viewport, metrics, setMetrics, markScrolling } = useScrollArea();
+  const { viewport, overflow, update, markScrolling } = useScrollArea();
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks content and viewport size for the custom scrollbars.
   useLayoutEffect(() => {
     const el = viewport.current;
     if (!el) return;
-    setMetrics();
-    let stop = observeResize([el, ...el.children], () => setMetrics());
-    const mutations = new MutationObserver(() => {
-      stop();
-      stop = observeResize([el, ...el.children], () => setMetrics());
-      setMetrics();
-    });
-    mutations.observe(el, { childList: true });
-    return () => {
-      stop();
-      mutations.disconnect();
-    };
-  }, [viewport, setMetrics]);
+    ensureScrollAreaStyle(el.ownerDocument);
+    update();
+    return observeChildren(el, true, update);
+  }, [viewport, update]);
   return renderPart(
     "div",
     props,
@@ -1369,11 +1399,11 @@ function ScrollAreaViewport(props: PartProps<"div", object>) {
     {
       "data-scroll-area-viewport": "",
       // Focusable like Base UI's viewport: in the tab order only while it scrolls.
-      tabIndex: metrics.hasOverflowX || metrics.hasOverflowY ? 0 : -1,
-      ...(metrics.hasOverflowX ? { "data-has-overflow-x": "" } : {}),
-      ...(metrics.hasOverflowY ? { "data-has-overflow-y": "" } : {}),
+      tabIndex: overflow.x || overflow.y ? 0 : -1,
+      ...(overflow.x ? { "data-has-overflow-x": "" } : {}),
+      ...(overflow.y ? { "data-has-overflow-y": "" } : {}),
       onScroll: () => {
-        setMetrics();
+        update();
         markScrolling();
       },
     },
@@ -1389,8 +1419,8 @@ function ScrollAreaScrollbar({
   orientation?: Orientation;
   keepMounted?: boolean | undefined;
 }) {
-  const { metrics, hovering, scrolling, viewport } = useScrollArea();
-  const visible = orientation === "vertical" ? metrics.hasOverflowY : metrics.hasOverflowX;
+  const { overflow, hovering, scrolling, viewport } = useScrollArea();
+  const visible = orientation === "vertical" ? overflow.y : overflow.x;
   if (!visible && !keepMounted) return null;
   const state = { orientation };
   const vertical = orientation === "vertical";
@@ -1453,27 +1483,24 @@ function dragThumb(
   el.ownerDocument.addEventListener("pointerup", up);
 }
 function ScrollAreaThumb(props: PartProps<"div", object>) {
-  const { metrics, viewport } = useScrollArea();
+  const { thumbs, viewport, setThumb } = useScrollArea();
   const orientation = use(ScrollbarCtx);
   const vertical = orientation === "vertical";
-  const thumb = vertical ? metrics.thumbY : metrics.thumbX;
   return renderPart(
     "div",
     props,
     {},
     {
       "data-orientation": orientation,
-      style: vertical
-        ? { height: thumb.size, transform: `translateY(${thumb.offset}px)` }
-        : { width: thumb.size, transform: `translateX(${thumb.offset}px)` },
       onPointerDown: (event: SyntheticEvent<HTMLDivElement, PointerEvent>) =>
-        dragThumb(viewport, vertical, thumb.size, event),
+        dragThumb(viewport, vertical, vertical ? thumbs.ySize : thumbs.xSize, event),
     },
+    (el: HTMLElement | null) => setThumb(vertical, el),
   );
 }
 function ScrollAreaCorner(props: PartProps<"div", object>) {
-  const { metrics } = useScrollArea();
-  if (!metrics.hasOverflowX || !metrics.hasOverflowY) return null;
+  const { overflow } = useScrollArea();
+  if (!overflow.x || !overflow.y) return null;
   return renderPart(
     "div",
     props,

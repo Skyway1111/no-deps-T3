@@ -11,7 +11,7 @@ import { useChatCanvas } from "./ChatCanvasContext";
 import { WorkLogBlock } from "./WorkLog";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import type { WorktreeSetupSnapshot } from "@t3tools/contracts";
-import { deriveTimelineMinimapItems } from "./timelineMinimapItems";
+import { deriveTimelineMinimapItems, type TimelineMinimapItem } from "./timelineMinimapItems";
 import {
   type AssistantCitation,
   type EnvironmentId,
@@ -84,8 +84,8 @@ import {
   resolveTimelineIsAtEnd,
   resolveTimelineMinimapHasPersistentGutter,
   resolveTimelineMinimapCurrentIndex,
-  isTimelineMinimapTurnVisible,
-  resolveTimelineMinimapVisibleRange,
+  resolveTimelineMinimapInViewItems,
+  resolveTimelineMinimapVisibleRanges,
   resolveTimelineMinimapHitStripWidth,
   TIMELINE_MINIMAP_TARGET_OFFSET,
   timelineTurnFoldRunIdsByEntryId,
@@ -929,42 +929,32 @@ const ConversationTimeline = memo(function ConversationTimeline({
       return;
     }
 
-    const firstBufferedIndex = state.startBuffered;
-    const firstBufferedRow: HTMLElement | undefined =
-      firstBufferedIndex == null ? undefined : state.elementAtIndex(firstBufferedIndex);
-    const firstBufferedTop =
-      firstBufferedIndex == null ? undefined : state.positionAtIndex(firstBufferedIndex);
-    const viewport = listRef.current?.getScrollableNode() ?? undefined;
-    // Cached row positions exclude the header and pending scroll adjustments.
-    const scroll =
-      firstBufferedRow && viewport && firstBufferedTop !== undefined
-        ? firstBufferedTop +
-          viewport.getBoundingClientRect().top -
-          firstBufferedRow.getBoundingClientRect().top
-        : state.scroll;
-    const visibleRange = resolveTimelineMinimapVisibleRange({ ...state, scroll });
-    for (const [index, item] of minimapItems.entries()) {
-      const strip = minimapStripMap.get(item.id);
-      const inView = isTimelineMinimapTurnVisible(
-        item.rowIndex,
-        minimapItems[index + 1]?.rowIndex,
-        visibleRange.start,
-        visibleRange.end,
-      );
-      const next = inView ? "true" : "false";
-      // Avoid dirtying style state on every scroll tick for unchanged strips.
-      if (strip && strip.dataset.inView !== next) {
-        strip.dataset.inView = next;
-      }
-    }
+    // Row positions start below the header; the list knows both without a layout read.
     // Ignore rows ending within the offset minimap navigation leaves above its target, or
     // Next turn keeps retargeting the same row. 1px absorbs device-pixel scroll rounding.
-    const currentInset = TIMELINE_MINIMAP_TARGET_OFFSET + 1;
-    const currentRange = resolveTimelineMinimapVisibleRange({
-      ...state,
-      scroll: scroll + currentInset,
-      scrollLength: state.scrollLength - currentInset,
-    });
+    const { visible: visibleRange, current: currentRange } = resolveTimelineMinimapVisibleRanges(
+      { ...state, scroll: state.scroll - state.startOffset },
+      TIMELINE_MINIMAP_TARGET_OFFSET + 1,
+    );
+    // Visible turns are contiguous, so only strips between the old and new bounds can change.
+    const inView = resolveTimelineMinimapInViewItems(
+      minimapRowIndices,
+      visibleRange.start,
+      visibleRange.end,
+    );
+    const previous = minimapInViewRef.current;
+    const from = Math.min(inView.first, previous.items === minimapItems ? previous.first : 0);
+    const to = Math.max(
+      inView.last,
+      previous.items === minimapItems ? previous.last : minimapItems.length - 1,
+    );
+    for (let index = Math.max(0, from); index <= to && index < minimapItems.length; index++) {
+      const strip = minimapStripMap.get(minimapItems[index]!.id);
+      const next = index >= inView.first && index <= inView.last ? "true" : "false";
+      // Avoid dirtying style state on every scroll tick for unchanged strips.
+      if (strip && strip.dataset.inView !== next) strip.dataset.inView = next;
+    }
+    minimapInViewRef.current = { items: minimapItems, ...inView };
     const nextCurrentIndex = resolveTimelineMinimapCurrentIndex({
       visibleStart: currentRange.start,
       visibleEnd: currentRange.end,
@@ -974,11 +964,13 @@ const ConversationTimeline = memo(function ConversationTimeline({
       current === nextCurrentIndex ? current : nextCurrentIndex,
     );
     // The exact bottom, not the follow re-arm zone: Next can still scroll inside that zone.
-    setMinimapAtEnd(
-      viewport !== undefined &&
-        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 1,
-    );
+    setMinimapAtEnd(state.contentLength - state.scroll - state.scrollLength <= 1);
   });
+  const minimapInViewRef = useRef<{
+    items: ReadonlyArray<TimelineMinimapItem> | null;
+    first: number;
+    last: number;
+  }>({ items: null, first: 0, last: -1 });
 
   const minimapRefreshFrameRef = useRef<number | null>(null);
   const scheduleMinimapRefresh = useStableCallback(() => {
@@ -1009,13 +1001,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
     const position = state.data.length ? resolveWorkGroupScrollAnchor(state) : undefined;
     if (position && isAtEnd !== undefined) {
       const index = state.indexByKey(position.rowId);
-      const row = index === undefined ? undefined : state.elementAtIndex(index);
-      const element = listRef.current?.getScrollableNode();
-      if (row && element) {
+      if (index !== undefined) {
         const measured = {
           ...position,
-          offsetWithinRow: element.getBoundingClientRect().top - row.getBoundingClientRect().top,
-          scrollOffset: element.scrollTop,
+          // The row's offset from the viewport top, header included, from the list's own layout.
+          offsetWithinRow: state.scroll - state.startOffset - state.positionAtIndex(index),
+          scrollOffset: state.scroll,
           atEnd: isAtEnd,
           disclosures: {
             runs: paintedExpandedRunIds,
@@ -1076,7 +1067,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   // setting, never with streamed content; measuring per content frame would
   // force a layout on every chunk.
   const measuredLaneWidthRef = useRef<number | null>(null);
-  const observeLaneWidth = (lane: HTMLDivElement | null) => {
+  // Stable, so a row's re-render never re-subscribes its lane observer.
+  const observeLaneWidth = useStableCallback((lane: HTMLDivElement | null) => {
     if (!lane) return;
     return observeResize(lane, (entries) => {
       const width = entries.at(-1)?.contentRect.width;
@@ -1085,7 +1077,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       const viewportElement = lane.closest<HTMLElement>("[data-assistant-citation-viewport]");
       if (viewportElement) measureTimelineGutter(viewportElement);
     });
-  };
+  });
   const attachTimelineViewportElement = (viewportElement: HTMLDivElement | null) => {
     setTimelineViewportElement(viewportElement);
     if (!viewportElement) return;
@@ -1344,7 +1336,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
     contentInsetEndAdjustment,
   });
 
-  // VirtualList moves rows one commit late; per-row providers prevent thread context leaks.
   const onAudioPlaybackChange = (rowId: string, event: SyntheticEvent) => {
     const audio = event.target;
     if (!(audio instanceof HTMLAudioElement)) return;
@@ -1365,27 +1356,26 @@ const ConversationTimeline = memo(function ConversationTimeline({
       return next;
     });
   });
+  // Closes over nothing that changes per update, so the list re-renders only rows whose item
+  // changed; rows read thread state from the one TimelineRowCtx around the list.
   const renderItem = ({ item }: { item: MessagesTimelineRow }) => (
-    <TimelineRowCtx value={sharedState}>
+    <div
+      className="messages-timeline-row-frame"
+      onPlayCapture={(event) => onAudioPlaybackChange(item.id, event)}
+      onPauseCapture={(event) => onAudioPlaybackChange(item.id, event)}
+      onEndedCapture={(event) => onAudioPlaybackChange(item.id, event)}
+    >
       <div
-        className="messages-timeline-row-frame"
-        onPlayCapture={(event) => onAudioPlaybackChange(item.id, event)}
-        onPauseCapture={(event) => onAudioPlaybackChange(item.id, event)}
-        onEndedCapture={(event) => onAudioPlaybackChange(item.id, event)}
+        ref={observeLaneWidth}
+        className="chat-content-lane overflow-x-clip"
+        data-timeline-root="true"
       >
-        <div
-          ref={observeLaneWidth}
-          className="chat-content-lane overflow-x-clip"
-          data-timeline-root="true"
-        >
-          <AudioPreviewUnmountContext value={onAudioUnmount}>
-            <TimelineRowContent row={item} />
-          </AudioPreviewUnmountContext>
-        </div>
+        <AudioPreviewUnmountContext value={onAudioUnmount}>
+          <TimelineRowContent row={item} />
+        </AudioPreviewUnmountContext>
       </div>
-    </TimelineRowCtx>
+    </div>
   );
-  const listExtraData = { identity: listIdentityKey, rowCount: rows.length, sharedState };
   const timelineListFooter = (
     <TimelineListFooter
       composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}
@@ -1393,17 +1383,15 @@ const ConversationTimeline = memo(function ConversationTimeline({
     >
       {footer}
       {unmatchedPendingApprovals.length > 0 ? (
-        <TimelineRowCtx value={sharedState}>
-          <div className="messages-timeline-row-frame">
-            <div className="chat-content-lane overflow-x-clip" data-timeline-root="true">
-              <WorkLogBlock>
-                {unmatchedPendingApprovals.map((approval) => (
-                  <TimelinePendingApprovalRow key={approval.requestId} approval={approval} />
-                ))}
-              </WorkLogBlock>
-            </div>
+        <div className="messages-timeline-row-frame">
+          <div className="chat-content-lane overflow-x-clip" data-timeline-root="true">
+            <WorkLogBlock>
+              {unmatchedPendingApprovals.map((approval) => (
+                <TimelinePendingApprovalRow key={approval.requestId} approval={approval} />
+              ))}
+            </WorkLogBlock>
           </div>
-        </TimelineRowCtx>
+        </div>
       ) : null}
     </TimelineListFooter>
   );
@@ -1454,55 +1442,59 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 onCite={onCiteAssistantText}
               />
             ) : null}
-            <VirtualList<MessagesTimelineRow>
-              ref={setTimelineList}
-              data={rows}
-              extraData={listExtraData}
-              keyExtractor={keyExtractor}
-              getItemType={getItemType}
-              renderItem={renderItem}
-              estimatedItemSize={90}
-              initialScrollAtEnd={
-                !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
-              }
-              // Legend needs a data refresh to mount new pins without a scroll event.
-              dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
-              {...(alwaysRender ? { alwaysRender } : {})}
-              onLoad={handleListLoad}
-              {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-              contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
-              maintainScrollAtEnd={
-                citationPositioning ||
-                (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
-                anchoredEndSpace ||
-                !liveFollowEnabled ||
-                fullscreenAppRowId !== null
-                  ? false
-                  : isWorking && !syncing && !prefersReducedMotion && settlingListIdentity === null
-                    ? TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH
-                    : TIMELINE_MAINTAIN_SCROLL_AT_END
-              }
-              maintainVisibleContentPosition={
-                findActive ||
-                citationPositioning ||
-                (restoringThreadPosition && rememberedPosition?.atEnd === false)
-                  ? false
-                  : maintainVisibleContentPosition
-              }
-              maintainScrollAtEndThreshold={1}
-              onScroll={handleScroll}
-              onItemSizeChanged={scheduleMinimapRefresh}
-              onMetricsChange={scheduleMinimapRefresh}
-              // Keyboard scrolling only moves the focused element; F6 and clicks land here.
-              tabIndex={-1}
-              data-workspace-focus-default
-              className={cn(
-                "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-                topFadeEnabled && "topbar-scroll-fade",
-              )}
-              ListHeaderComponent={listHeader}
-              ListFooterComponent={timelineListFooter}
-            />
+            <TimelineRowCtx value={sharedState}>
+              <VirtualList<MessagesTimelineRow>
+                ref={setTimelineList}
+                data={rows}
+                keyExtractor={keyExtractor}
+                getItemType={getItemType}
+                renderItem={renderItem}
+                estimatedItemSize={90}
+                initialScrollAtEnd={
+                  !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
+                }
+                // Legend needs a data refresh to mount new pins without a scroll event.
+                dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
+                {...(alwaysRender ? { alwaysRender } : {})}
+                onLoad={handleListLoad}
+                {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
+                contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
+                maintainScrollAtEnd={
+                  citationPositioning ||
+                  (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
+                  anchoredEndSpace ||
+                  !liveFollowEnabled ||
+                  fullscreenAppRowId !== null
+                    ? false
+                    : isWorking &&
+                        !syncing &&
+                        !prefersReducedMotion &&
+                        settlingListIdentity === null
+                      ? TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH
+                      : TIMELINE_MAINTAIN_SCROLL_AT_END
+                }
+                maintainVisibleContentPosition={
+                  findActive ||
+                  citationPositioning ||
+                  (restoringThreadPosition && rememberedPosition?.atEnd === false)
+                    ? false
+                    : maintainVisibleContentPosition
+                }
+                maintainScrollAtEndThreshold={1}
+                onScroll={handleScroll}
+                onItemSizeChanged={scheduleMinimapRefresh}
+                onMetricsChange={scheduleMinimapRefresh}
+                // Keyboard scrolling only moves the focused element; F6 and clicks land here.
+                tabIndex={-1}
+                data-workspace-focus-default
+                className={cn(
+                  "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
+                  topFadeEnabled && "topbar-scroll-fade",
+                )}
+                ListHeaderComponent={listHeader}
+                ListFooterComponent={timelineListFooter}
+              />
+            </TimelineRowCtx>
             <TimelineMinimap
               items={minimapItems}
               hasPersistentGutter={minimapHasPersistentGutter}

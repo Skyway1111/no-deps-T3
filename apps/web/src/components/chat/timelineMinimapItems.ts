@@ -4,7 +4,7 @@ import {
   isAttachmentOnlyBootstrapPrompt,
   replaceComposerContextReferences,
 } from "@t3tools/shared/composerContextReferences";
-import type { Nodes } from "hast";
+import type { ElContent, ElRoot } from "@t3tools/shared/markdown";
 
 import { markdownTree } from "~/markdown/wordsHast";
 
@@ -17,6 +17,9 @@ export interface TimelineMinimapItem {
   readonly assistantText: string | null;
 }
 
+// Rows keep their identity across updates, so unchanged turns keep their item and its strip.
+const itemsByRow = new WeakMap<MessagesTimelineRow, TimelineMinimapItem>();
+
 export function deriveTimelineMinimapItems(
   rows: ReadonlyArray<MessagesTimelineRow>,
 ): TimelineMinimapItem[] {
@@ -26,13 +29,20 @@ export function deriveTimelineMinimapItems(
     if (row?.kind !== "message" || row.message.role !== "user") {
       continue;
     }
-
-    items.push({
+    const assistantText = resolveFinalAssistantTextForTurn(rows, index);
+    const cached = itemsByRow.get(row);
+    if (cached && cached.rowIndex === index && cached.assistantText === assistantText) {
+      items.push(cached);
+      continue;
+    }
+    const item = {
       id: row.id,
       rowIndex: index,
       userText: isAttachmentOnlyBootstrapPrompt(row.message.text) ? "" : row.message.text,
-      assistantText: resolveFinalAssistantTextForTurn(rows, index),
-    });
+      assistantText,
+    };
+    itemsByRow.set(row, item);
+    items.push(item);
   }
   return items;
 }
@@ -78,7 +88,7 @@ const INLINE_PARENTS = new Set([
   "sub",
 ]);
 
-function markdownNodeText(node: Nodes): string {
+function markdownNodeText(node: ElRoot | ElContent): string {
   if (node.type === "text") return node.value;
   if (node.type === "element" && node.tagName === "br") return " ";
   if (node.type === "element" && node.tagName === "img") return String(node.properties.alt ?? "");

@@ -489,6 +489,7 @@ class DndManager {
   private collisions: Collision[] = [];
   private collisionRect: ClientRect | null = null;
   private stopDrag: (() => void) | null = null;
+  private autoScroll: { kick: () => void; stop: () => void } | null = null;
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -543,6 +544,7 @@ class DndManager {
       onStart: (coordinates) => this.start(id, coordinates, native),
       onMove: (coordinates) => {
         this.pointer = coordinates;
+        this.autoScroll?.kick();
         this.update();
         if (native instanceof KeyboardEvent) this.revealKeyboardTarget();
       },
@@ -575,13 +577,12 @@ class DndManager {
     const onScroll = () => this.update();
     doc.addEventListener("scroll", onScroll, { capture: true, passive: true });
     const autoScroll = this.props.autoScroll ?? true;
-    const timer =
-      autoScroll === false
-        ? undefined
-        : this.startAutoScroll(autoScroll === true ? {} : autoScroll);
+    this.autoScroll =
+      autoScroll === false ? null : this.startAutoScroll(autoScroll === true ? {} : autoScroll);
     this.stopDrag = () => {
       doc.removeEventListener("scroll", onScroll, { capture: true });
-      clearInterval(timer);
+      this.autoScroll?.stop();
+      this.autoScroll = null;
     };
     this.props.onDragStart?.({ active, activatorEvent });
     this.update(coordinates);
@@ -697,12 +698,21 @@ class DndManager {
     }
   }
 
+  /**
+   * Scrolls ancestors while the pointer is near their edges: frames run only then, and each moves
+   * `acceleration` px per `interval` ms of elapsed time. A pointer move restarts a stopped loop.
+   */
   private startAutoScroll({
     threshold = { x: 0.2, y: 0.2 },
     acceleration = 10,
     interval = 5,
   }: AutoScrollOptions) {
-    return setInterval(() => {
+    let frame = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      const steps = last ? Math.min(now - last, 50) / interval : 1;
+      last = now;
+      frame = 0;
       const pointer = this.pointer;
       if (!pointer || !this.sensor?.autoScrollEnabled) return;
       for (const el of this.ancestors) {
@@ -742,11 +752,19 @@ class DndManager {
             )
           : 0;
         if (dx || dy) {
-          el.scrollBy(dx, dy);
+          el.scrollBy(dx * steps, dy * steps);
+          frame = requestAnimationFrame(tick);
           return;
         }
       }
-    }, interval);
+    };
+    const kick = () => {
+      if (frame) return;
+      last = 0;
+      frame = requestAnimationFrame(tick);
+    };
+    kick();
+    return { kick, stop: () => cancelAnimationFrame(frame) };
   }
 
   private end(cancelled: boolean) {
@@ -844,14 +862,17 @@ function useRegisterDraggable(
   data: Data | undefined,
 ) {
   const dataRef = useRef<Data | undefined>(data);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers this node with the drag engine.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the drag engine reads the latest data through the ref.
   useLayoutEffect(() => {
     dataRef.current = data;
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers this node with the drag engine.
+  useLayoutEffect(() => {
     manager.draggables.set(id, { node, data: dataRef });
     return () => {
       if (manager.draggables.get(id)?.node === node) manager.draggables.delete(id);
     };
-  });
+  }, [manager, id, node]);
   return dataRef;
 }
 
@@ -889,11 +910,13 @@ export function useDraggable({
 
 interface SortableCtx {
   items: UniqueIdentifier[];
+  indexOf: (id: UniqueIdentifier) => number;
   strategy: SortingStrategy;
   sortedRects: (rects: Map<UniqueIdentifier, ClientRect>) => ClientRect[];
 }
 const SortableContextCtx = createContext<SortableCtx>({
   items: [],
+  indexOf: () => -1,
   strategy: verticalListSortingStrategy,
   sortedRects: () => [],
 });
@@ -918,6 +941,18 @@ function sortedRects(rects: Map<UniqueIdentifier, ClientRect>, ids: UniqueIdenti
   return sorted;
 }
 
+// Every row looks up its own, the active and the over index on each drag move.
+const indexMaps = new WeakMap<UniqueIdentifier[], Map<UniqueIdentifier, number>>();
+function indexIn(ids: UniqueIdentifier[], id: UniqueIdentifier) {
+  let map = indexMaps.get(ids);
+  if (!map) {
+    map = new Map();
+    for (const [i, item] of ids.entries()) if (!map.has(item)) map.set(item, i);
+    indexMaps.set(ids, map);
+  }
+  return map.get(id) ?? -1;
+}
+
 export function SortableContext({
   items,
   strategy = verticalListSortingStrategy,
@@ -936,11 +971,12 @@ export function SortableContext({
   const stableIds = stable.key === key ? stable.ids : ids;
   const value: SortableCtx = {
     items: stableIds,
+    indexOf: (id) => indexIn(stableIds, id),
     strategy,
     sortedRects: (rects) => sortedRects(rects, stableIds),
   };
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- items reordered mid-drag move their droppable rects.
-  useLayoutEffect(() => manager.remeasure());
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync, react/exhaustive-effect-dependencies -- items reordered mid-drag move their droppable rects.
+  useLayoutEffect(() => manager.remeasure(), [manager, stableIds]);
   return <SortableContextCtx.Provider value={value}>{children}</SortableContextCtx.Provider>;
 }
 
@@ -961,7 +997,7 @@ export function useSortable({
   disabled?: boolean | { draggable?: boolean; droppable?: boolean };
 }) {
   const manager = useDnd();
-  const { items, strategy, sortedRects } = useContext(SortableContextCtx);
+  const { indexOf, strategy, sortedRects } = useContext(SortableContextCtx);
   const draggableDisabled = typeof disabled === "boolean" ? disabled : disabled.draggable === true;
   const droppableDisabled = typeof disabled === "boolean" ? disabled : disabled.droppable === true;
   const [node, setNodeRef] = useNodeRef();
@@ -983,13 +1019,13 @@ export function useSortable({
     };
   }, [manager, id, droppableDisabled, dataRef, node, rect]);
 
-  const index = items.indexOf(id);
+  const index = indexOf(id);
   const slice = useDragSlice<SortableSlice>(
     manager,
     (s) => {
       const isDragging = s.active?.id === id;
-      const activeIndex = s.active ? items.indexOf(s.active.id) : -1;
-      const overIndex = s.over ? items.indexOf(s.over.id) : -1;
+      const activeIndex = s.active ? indexOf(s.active.id) : -1;
+      const overIndex = s.over ? indexOf(s.over.id) : -1;
       const displace = activeIndex >= 0 && overIndex >= 0 && index >= 0;
       return {
         isDragging,

@@ -15,7 +15,7 @@ type MarkdownComponentMap = Readonly<Record<string, unknown>>;
 
 export interface MarkdownIslandOptions {
   readonly components: MarkdownComponentMap;
-  /** Elements that need their React component; everything else renders as static HTML. */
+  /** Elements that need their React component; the same options must always answer the same. */
   readonly isIsland: (node: ElElement) => boolean;
   /** What a static element's component would have added, or the node itself when nothing. */
   readonly staticElement: (node: ElElement) => ElElement;
@@ -100,6 +100,9 @@ function renderContent(
  * without one become static HTML, which the browser builds without React reconciling each node.
  */
 export function renderHastWithIslands(tree: ElRoot, options: MarkdownIslandOptions): ReactNode {
+  // Options are pure for their identity, so the same tree and options need no walk.
+  const cached = renderedTrees.get(tree);
+  if (cached?.options === options) return cached.node;
   // The same elements again let React skip the block; islands still follow their context.
   let signature = options.variant;
   const plan: Plan = { islands: new Set(), ancestors: new Set() };
@@ -122,18 +125,23 @@ export function renderHastWithIslands(tree: ElRoot, options: MarkdownIslandOptio
     return below;
   };
   visit(tree);
-  const cached = renderedTrees.get(tree);
   if (cached?.signature === signature && cached.components === options.components) {
+    renderedTrees.set(tree, { ...cached, options });
     return cached.node;
   }
   const node = tree.children.map((child, index) => renderContent(child, index, options, plan));
-  renderedTrees.set(tree, { signature, components: options.components, node });
+  renderedTrees.set(tree, { signature, components: options.components, options, node });
   return node;
 }
 
 const renderedTrees = new WeakMap<
   ElRoot,
-  { signature: string; components: MarkdownComponentMap; node: ReactNode }
+  {
+    signature: string;
+    components: MarkdownComponentMap;
+    options: MarkdownIslandOptions;
+    node: ReactNode;
+  }
 >();
 
 export function withProperties(node: ElElement, properties: ElProperties): ElElement {

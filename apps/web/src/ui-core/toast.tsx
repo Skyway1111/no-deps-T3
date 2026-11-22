@@ -338,11 +338,12 @@ function ToastRoot({
       });
       return () => cancelAnimationFrame(frame);
     }
+    // Natural height changes with the toast's content, not with swipes or stacking.
     const previous = node.style.height;
     node.style.height = "auto";
     manager.setHeight(toast.id, node.offsetHeight);
     node.style.height = previous;
-  });
+  }, [manager, toast]);
   const index = manager.toasts.filter((t) => t.transitionStatus !== "ending").indexOf(toast);
   const directions = Array.isArray(swipeDirection) ? swipeDirection : [swipeDirection];
   const onPointerDown = useEvent((event: SyntheticEvent<HTMLElement, PointerEvent>) => {
@@ -495,11 +496,17 @@ function ToastPositioner({
         ),
       );
     update();
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
     return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
     };
   }, [anchor, sideOffset, toast.positionerProps]);
   return renderPart(

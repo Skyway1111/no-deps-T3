@@ -32,20 +32,45 @@ import {
   type PartProps,
 } from "./primitives";
 
+type FilterOptions = Intl.CollatorOptions & { locale?: string | undefined };
+type Filter = {
+  [M in "contains" | "startsWith" | "endsWith"]: <T>(
+    item: T,
+    query: string,
+    toString?: (item: T) => string,
+  ) => boolean;
+};
+// Roots and pickers ask for a filter every render; a collator is costly to build.
+const filters = new Map<string, Filter>();
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
+
 /** Base UI's `useFilter`: locale-aware, case- and accent-insensitive matching. */
-function createFilter(options: Intl.CollatorOptions & { locale?: string | undefined } = {}) {
-  const collator = new Intl.Collator(options.locale, {
-    usage: "search",
-    sensitivity: "base",
-    ...options,
-  });
+function createFilter(options: FilterOptions = {}): Filter {
+  const key = JSON.stringify(options);
+  const cached = filters.get(key);
+  if (cached) return cached;
+  const resolved = { usage: "search", sensitivity: "base", ...options } as const;
+  const collator = new Intl.Collator(options.locale, resolved);
+  // Base-strength collation of printable ASCII is case folding alone, so string search agrees.
+  const asciiFast =
+    resolved.sensitivity === "base" && !resolved.ignorePunctuation && !resolved.numeric;
   const normalize = (text: string) => text.normalize("NFD");
   const test =
     (mode: "contains" | "startsWith" | "endsWith") =>
     <T,>(item: T, query: string, toString?: (item: T) => string): boolean => {
-      const text = normalize(toString ? toString(item) : String(item));
+      const raw = toString ? toString(item) : String(item);
+      if (!query) return true;
+      if (asciiFast && PRINTABLE_ASCII.test(raw) && PRINTABLE_ASCII.test(query)) {
+        const text = raw.toLowerCase();
+        const needle = query.toLowerCase();
+        return mode === "contains"
+          ? text.includes(needle)
+          : mode === "startsWith"
+            ? text.startsWith(needle)
+            : text.endsWith(needle);
+      }
+      const text = normalize(raw);
       const needle = normalize(query);
-      if (!needle) return true;
       const n = needle.length;
       if (mode === "startsWith") return collator.compare(text.slice(0, n), needle) === 0;
       if (mode === "endsWith") return collator.compare(text.slice(-n), needle) === 0;
@@ -53,7 +78,13 @@ function createFilter(options: Intl.CollatorOptions & { locale?: string | undefi
         if (collator.compare(text.slice(i, i + n), needle) === 0) return true;
       return false;
     };
-  return { contains: test("contains"), startsWith: test("startsWith"), endsWith: test("endsWith") };
+  const filter = {
+    contains: test("contains"),
+    startsWith: test("startsWith"),
+    endsWith: test("endsWith"),
+  };
+  filters.set(key, filter);
+  return filter;
 }
 
 type HighlightReason = "keyboard" | "pointer" | "none";
@@ -71,6 +102,8 @@ interface ListApi {
   isSelected: (value: unknown) => boolean;
   label: (value: unknown) => string;
   equal: (a: unknown, b: unknown) => boolean;
+  /** Index of `value` among the filtered items, or -1. */
+  filteredIndex: (value: unknown) => number;
   listId: string;
   optionId: (index: number) => string;
   list: { current: HTMLElement | null };
@@ -134,6 +167,17 @@ type ListRootProps<V = any> = Omit<RootProps, "children"> & {
   locale?: string | undefined;
   children?: ReactNode;
 };
+
+const indexes = new WeakMap<readonly unknown[], Map<unknown, number>>();
+function indexByItem(items: readonly unknown[]) {
+  let map = indexes.get(items);
+  if (!map) {
+    map = new Map();
+    for (const [index, item] of items.entries()) if (!map.has(item)) map.set(item, index);
+    indexes.set(items, map);
+  }
+  return map;
+}
 
 const defaultLabel = (item: unknown): string =>
   item && typeof item === "object" && "label" in item
@@ -216,6 +260,12 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
         : items.filter((item) => (filter ?? contains)(item, filterQuery, label));
     return limit === undefined ? shown : shown.slice(0, limit);
   })();
+  // Without a custom equality, items match by identity, so one map answers every lookup.
+  const filteredIndexes = isItemEqualToValue ? null : indexByItem(filtered);
+  const filteredIndex = (item: unknown) =>
+    filteredIndexes && item !== null && item !== undefined
+      ? (filteredIndexes.get(item) ?? -1)
+      : filtered.findIndex((candidate) => equal(candidate, item));
   const [highlighted, setHighlighted] = useState<{ value: unknown; index: number } | null>(null);
   const list = useRef<HTMLElement | null>(null);
   const [elements] = useState(() => new Map<unknown, HTMLElement>());
@@ -239,7 +289,7 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
   const selectedIndex =
     filterQuery === "" && (popup.open || inline) ? filtered.findIndex(isSelected) : -1;
   const effectiveHighlight =
-    highlighted && filtered.some((item) => equal(item, highlighted.value))
+    highlighted && filteredIndex(highlighted.value) >= 0
       ? highlighted
       : selectedIndex >= 0
         ? { value: filtered[selectedIndex], index: selectedIndex }
@@ -260,9 +310,11 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
   // DOM order of rendered options, or the filtered items when an external virtualizer renders them.
   const navigable = (): Array<{ value: unknown; index: number }> => {
     if (virtualized || !list.current) return filtered.map((v, index) => ({ value: v, index }));
+    const valueOf = new Map<HTMLElement, unknown>();
+    for (const [value, node] of elements) valueOf.set(node, value);
     return [
       ...list.current.querySelectorAll<HTMLElement>('[role="option"]:not([data-disabled])'),
-    ].map((el, index) => ({ value: [...elements].find(([, node]) => node === el)?.[0], index }));
+    ].map((el, index) => ({ value: valueOf.get(el), index }));
   };
   const move = (delta: number | "first" | "last", event: KeyboardEvent) => {
     const all = navigable();
@@ -356,6 +408,7 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
     isSelected,
     label,
     equal,
+    filteredIndex,
     listId,
     optionId,
     list,
@@ -504,7 +557,7 @@ function ListCollection({ children }: { children: (item: any, index: number) => 
   const source = groupItems ?? list.filtered;
   const visible =
     groupItems && !list.virtualized
-      ? source.filter((item) => list.filtered.some((f) => list.equal(f, item)))
+      ? source.filter((item) => list.filteredIndex(item) >= 0)
       : source;
   return (
     <>
@@ -535,8 +588,7 @@ function ListItem({
 }: ItemProps) {
   const list = useList();
   const contextIndex = use(ItemIndexCtx);
-  const index =
-    indexProp ?? contextIndex ?? list.filtered.findIndex((item) => list.equal(item, value));
+  const index = indexProp ?? contextIndex ?? list.filteredIndex(value);
   const highlighted = Boolean(list.highlighted && list.equal(list.highlighted.value, value));
   const selected = list.isSelected(value);
   const state = { selected, highlighted, disabled };

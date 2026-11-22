@@ -1,6 +1,6 @@
 import { elToReact } from "@t3tools/shared/markdownHast";
 import { T, useGT, Var } from "@t3tools/shared/i18n/react";
-import { use, useMemo, useState, type ReactNode } from "react";
+import { use, useState, type ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
 import { serializeCodeBlockToMarkdown } from "../../markdown-clipboard";
@@ -17,7 +17,8 @@ function loadEngine() {
 }
 
 let measureContext: CanvasRenderingContext2D | null | undefined;
-const DIAGRAM_FONT = "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
+const DIAGRAM_FONT =
+  "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
 function measureText(text: string, size: number, bold: boolean) {
   measureContext ??= document.createElement("canvas").getContext("2d");
   if (!measureContext) return text.length * size * 0.55;
@@ -73,14 +74,21 @@ export function MermaidDiagram({
   const [, setAttempt] = useState(0);
   const engine = use(loadEngine());
   const trimmedSource = source.trim();
-  const rendered = useMemo((): { svg: ReactNode } | { error: string } | null => {
+  const rendered = ((): { svg: ReactNode } | { error: string } | null => {
     if (!engine) return null;
     try {
-      return { svg: elToReact<ReactNode>(engine.renderMermaidTree(trimmedSource, { measureText }).svg, runtime) };
+      return {
+        svg: elToReact<ReactNode>(
+          engine.renderMermaidTree(trimmedSource, { measureText }).svg,
+          runtime,
+        ),
+      };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : gt("The diagram could not be rendered.") };
+      return {
+        error: error instanceof Error ? error.message : gt("The diagram could not be rendered."),
+      };
     }
-  }, [engine, trimmedSource, gt]);
+  })();
 
   if (!rendered) {
     return (

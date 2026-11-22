@@ -66,7 +66,8 @@ export function rehypeTextDirection() {
 function blockTextDirections(tree: HastNode) {
   for (const block of tree.children ?? []) {
     if (block.type !== "element" || block.tagName === "pre") continue;
-    const dir = scriptOf(block) === "rtl" ? textDirection(proseText(block)) : scriptOf(block);
+    const script = scriptOf(block);
+    const dir = script === "rtl" ? textDirection(proseText(block)) : script;
     if (dir) block.properties = { ...block.properties, dir };
   }
 }

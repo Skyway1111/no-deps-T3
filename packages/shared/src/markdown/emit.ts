@@ -28,8 +28,6 @@ import type {
   ParseOptions,
 } from "./types.ts";
 
-// --- Direct IR -> Element Tree compiler ---
-
 const UNSAFE_URL_CHARS = /[\\[\]`{}|^"<> ]/g;
 const normalizeUri = (value: string) =>
   value.replace(UNSAFE_URL_CHARS, (ch) => encodeURIComponent(ch));
@@ -263,8 +261,8 @@ function emitInlineNodes(
   checkImageLines: boolean,
 ): ElContent[] {
   const hasImage = checkImageLines && ctx.opts.breakAroundImageLines && nodes.some(isImageMdNode);
-  const ownsLine = (idx: number) =>
-    hasImage &&
+  const ownsLine = (idx: number): boolean =>
+    hasImage === true &&
     isImageMdNode(nodes[idx]) &&
     endsWithLineBreak(nodes[idx - 1]) &&
     startsWithLineBreak(nodes[idx + 1]);
@@ -958,8 +956,6 @@ export function renderMarkdownToElements(
   return mdToElements(md, { ...emitOptions, source: markdown });
 }
 
-// --- Direct Element Tree -> HTML string serializer (replaces hast-util-to-html & property-information) ---
-
 const PROP_TO_HTML_ATTR: Readonly<Record<string, string>> = {
   className: "class",
   class: "class",
@@ -1084,8 +1080,6 @@ export function renderMarkdownToHtml(
   );
 }
 
-// --- Direct Element Tree -> React element renderer (replaces hast-util-to-jsx-runtime & html-url-attributes) ---
-
 export const URL_ATTRIBUTES: Readonly<Record<string, ReadonlyArray<string> | null>> = {
   action: ["form"],
   cite: ["blockquote", "del", "ins", "q"],
@@ -1195,10 +1189,11 @@ export function elToReactProps(node: ElElement, inSvg = false): Record<string, u
   return props;
 }
 
+// Method signatures, so React's narrower `jsx(type: ElementType, ...)` is assignable.
 export interface ReactRuntimeLike {
   readonly Fragment: unknown;
-  readonly jsx: (type: unknown, props: Record<string, unknown>, key?: string | number) => unknown;
-  readonly jsxs: (type: unknown, props: Record<string, unknown>, key?: string | number) => unknown;
+  jsx(type: unknown, props: Record<string, unknown>, key?: string | number): unknown;
+  jsxs(type: unknown, props: Record<string, unknown>, key?: string | number): unknown;
 }
 
 export function elToReact<T = unknown>(
@@ -1243,8 +1238,6 @@ export function elToReact<T = unknown>(
 
   return render(node, undefined, false) as T;
 }
-
-// --- Extractors (zero-dependency replacements for unified/words helpers) ---
 
 export function decodeMarkdownLinkEscapes(href: string): string {
   const decoded = href.includes("&") ? decodeHtmlEntities(href, { strict: true }) : href;

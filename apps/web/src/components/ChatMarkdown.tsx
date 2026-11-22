@@ -487,8 +487,8 @@ const markdownServerConfigFieldsAtom = Atom.family((environmentId: EnvironmentId
 );
 
 interface BlockFileLinkSources {
-  readonly hrefs: ReadonlyArray<string>;
-  readonly spans: ReadonlyArray<string>;
+  readonly hrefs: ReadonlyMap<string, MarkdownFileLinkMeta>;
+  readonly spans: ReadonlyMap<string, MarkdownFileLinkMeta>;
 }
 
 function blockFileLinkSources(
@@ -496,21 +496,40 @@ function blockFileLinkSources(
   cwd: string | undefined,
   imageBaseDir: string | undefined,
 ): BlockFileLinkSources {
-  const hrefs = extractMarkdownLinkHrefs(renderCodexInlineDirectivesAsMarkdown(text))
-    .filter((href) => !parseComposerContextHref(href))
-    .map(decodeMarkdownLinkEscapes)
-    .map(normalizeMarkdownLinkHrefKey)
-    .filter((href) => resolveMarkdownFileLinkMeta(href, cwd, imageBaseDir ?? cwd));
-  const spans = extractInlineCodeSpans(text).filter((span) =>
-    resolveInlineCodeFileLinkMeta(span, cwd, imageBaseDir ?? cwd),
-  );
+  const hrefs = new Map<string, MarkdownFileLinkMeta>();
+  for (const raw of extractMarkdownLinkHrefs(renderCodexInlineDirectivesAsMarkdown(text))) {
+    if (parseComposerContextHref(raw)) continue;
+    const href = normalizeMarkdownLinkHrefKey(decodeMarkdownLinkEscapes(raw));
+    if (hrefs.has(href)) continue;
+    const meta = resolveMarkdownFileLinkMeta(href, cwd, imageBaseDir ?? cwd);
+    if (meta) hrefs.set(href, meta);
+  }
+  const spans = new Map<string, MarkdownFileLinkMeta>();
+  for (const span of extractInlineCodeSpans(text)) {
+    if (spans.has(span)) continue;
+    const meta = resolveInlineCodeFileLinkMeta(span, cwd, imageBaseDir ?? cwd);
+    if (meta) spans.set(span, meta);
+  }
   return { hrefs, spans };
 }
 
 // Links and code spans never cross blocks: a streamed reply rescans only its open last block.
+// Least recently used blocks leave first, so a long session never drops the whole cache at once.
 const MAX_CACHED_BLOCK_CHARS = 2_000_000;
 const finishedBlockFileLinkSources = new Map<string, BlockFileLinkSources>();
 let cachedBlockChars = 0;
+// The resolved links behind each key, so resolving the key does not resolve them again.
+const resolvedFileLinks = new Map<string, BlockFileLinkSources>();
+
+function rememberFinishedBlock(key: string, sources: BlockFileLinkSources) {
+  finishedBlockFileLinkSources.set(key, sources);
+  cachedBlockChars += key.length;
+  for (const oldest of finishedBlockFileLinkSources.keys()) {
+    if (cachedBlockChars <= MAX_CACHED_BLOCK_CHARS) break;
+    finishedBlockFileLinkSources.delete(oldest);
+    cachedBlockChars -= oldest.length;
+  }
+}
 
 function fileLinkSourcesKey(
   text: string,
@@ -518,33 +537,37 @@ function fileLinkSourcesKey(
   imageBaseDir: string | undefined,
   streamingBlocks: ReadonlyArray<string> | null,
 ): string {
+  let found: BlockFileLinkSources;
   if (!streamingBlocks) {
-    const { hrefs, spans } = blockFileLinkSources(text, cwd, imageBaseDir);
-    return JSON.stringify([[...new Set(hrefs)], [...new Set(spans)]]);
-  }
-  const config = `${cwd ?? ""}\u0000${imageBaseDir ?? ""}\u0000`;
-  const hrefs = new Set<string>();
-  const spans = new Set<string>();
-  const last = streamingBlocks.length - 1;
-  for (const [index, block] of streamingBlocks.entries()) {
-    // The last block still grows; caching each of its prefixes would only fill the cache.
-    const key = config + block;
-    let sources = index === last ? undefined : finishedBlockFileLinkSources.get(key);
-    if (!sources) {
-      sources = blockFileLinkSources(block, cwd, imageBaseDir);
-      if (index !== last) {
-        if (cachedBlockChars + key.length > MAX_CACHED_BLOCK_CHARS) {
-          finishedBlockFileLinkSources.clear();
-          cachedBlockChars = 0;
-        }
+    found = blockFileLinkSources(text, cwd, imageBaseDir);
+  } else {
+    const config = `${cwd ?? ""}\u0000${imageBaseDir ?? ""}\u0000`;
+    const hrefs = new Map<string, MarkdownFileLinkMeta>();
+    const spans = new Map<string, MarkdownFileLinkMeta>();
+    const last = streamingBlocks.length - 1;
+    for (const [index, block] of streamingBlocks.entries()) {
+      // The last block still grows; caching each of its prefixes would only fill the cache.
+      const key = config + block;
+      let sources = index === last ? undefined : finishedBlockFileLinkSources.get(key);
+      if (sources) {
+        finishedBlockFileLinkSources.delete(key);
         finishedBlockFileLinkSources.set(key, sources);
-        cachedBlockChars += key.length;
+      } else {
+        sources = blockFileLinkSources(block, cwd, imageBaseDir);
+        if (index !== last) rememberFinishedBlock(key, sources);
       }
+      for (const [href, meta] of sources.hrefs) if (!hrefs.has(href)) hrefs.set(href, meta);
+      for (const [span, meta] of sources.spans) if (!spans.has(span)) spans.set(span, meta);
     }
-    for (const href of sources.hrefs) hrefs.add(href);
-    for (const span of sources.spans) spans.add(span);
+    found = { hrefs, spans };
   }
-  return JSON.stringify([[...hrefs], [...spans]]);
+  const key = JSON.stringify([[...found.hrefs.keys()], [...found.spans.keys()], cwd, imageBaseDir]);
+  if (!resolvedFileLinks.has(key)) {
+    if (resolvedFileLinks.size >= 256)
+      resolvedFileLinks.delete(resolvedFileLinks.keys().next().value!);
+    resolvedFileLinks.set(key, found);
+  }
+  return key;
 }
 
 function resolveFileLinkSources(
@@ -552,17 +575,23 @@ function resolveFileLinkSources(
   cwd: string | undefined,
   imageBaseDir: string | undefined,
 ) {
-  const [hrefs, spans] = JSON.parse(key) as [string[], string[]];
-  const markdownFileLinkMetaByHref = new Map<string, MarkdownFileLinkMeta>();
-  for (const href of hrefs) {
-    const meta = resolveMarkdownFileLinkMeta(href, cwd, imageBaseDir ?? cwd);
-    if (meta) markdownFileLinkMetaByHref.set(href, meta);
+  let found = resolvedFileLinks.get(key);
+  if (!found) {
+    const [hrefList, spanList] = JSON.parse(key) as [string[], string[]];
+    const hrefs = new Map<string, MarkdownFileLinkMeta>();
+    for (const href of hrefList) {
+      const meta = resolveMarkdownFileLinkMeta(href, cwd, imageBaseDir ?? cwd);
+      if (meta) hrefs.set(href, meta);
+    }
+    const spans = new Map<string, MarkdownFileLinkMeta>();
+    for (const span of spanList) {
+      const meta = resolveInlineCodeFileLinkMeta(span, cwd, imageBaseDir ?? cwd);
+      if (meta) spans.set(span, meta);
+    }
+    found = { hrefs, spans };
   }
-  const inlineCodeFileLinkMetaByText = new Map<string, MarkdownFileLinkMeta>();
-  for (const span of spans) {
-    const meta = resolveInlineCodeFileLinkMeta(span, cwd, imageBaseDir ?? cwd);
-    if (meta) inlineCodeFileLinkMetaByText.set(span, meta);
-  }
+  const markdownFileLinkMetaByHref = new Map(found.hrefs);
+  const inlineCodeFileLinkMetaByText = new Map(found.spans);
   const fileLinkParentSuffixByPath = buildFileLinkParentSuffixByPath([
     ...[...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath),
     ...[...inlineCodeFileLinkMetaByText.values()].map((meta) => meta.filePath),

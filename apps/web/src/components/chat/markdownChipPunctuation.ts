@@ -12,18 +12,22 @@ const LEADING_PUNCTUATION = /^[.,:;!?…)\]}"'’”]+/;
 export function rehypeChipPunctuation() {
   const visit = (node: HastNode): void => {
     if (node.tagName === "pre" || !node.children) return;
-    const children: HastNode[] = [];
-    for (const child of node.children) {
+    // Copy on the first grouping only; most nodes keep their children array.
+    let children: HastNode[] | null = null;
+    const source = node.children;
+    for (let index = 0; index < source.length; index++) {
+      const child = source[index]!;
       visit(child);
-      const previous = children.at(-1);
+      const previous = children ? children.at(-1) : source[index - 1];
       const punctuation =
         child.type === "text" && (previous?.tagName === "a" || previous?.tagName === "code")
           ? LEADING_PUNCTUATION.exec(child.value ?? "")?.[0]
           : undefined;
       if (!previous || !punctuation) {
-        children.push(child);
+        children?.push(child);
         continue;
       }
+      children ??= source.slice(0, index);
       children[children.length - 1] = {
         type: "element",
         tagName: "span",
@@ -35,7 +39,7 @@ export function rehypeChipPunctuation() {
       const rest = (child.value ?? "").slice(punctuation.length);
       if (rest) children.push({ ...child, value: rest });
     }
-    node.children = children;
+    if (children) node.children = children;
   };
   return visit;
 }

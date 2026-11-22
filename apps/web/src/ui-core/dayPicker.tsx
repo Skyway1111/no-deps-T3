@@ -114,8 +114,7 @@ export function DayPicker({
   };
 
   const weeks = monthGrid(month, weekStartsOn);
-  const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: "short" });
-  const dayFormat = new Intl.DateTimeFormat(locale, { dateStyle: "full" });
+  const { weekday: weekdayFormat, day: dayFormat } = formatsFor(locale);
   const caption = month.toLocaleDateString(locale, { month: "long", year: "numeric" });
   const focusTarget = focused.getMonth() === month.getMonth() ? focused : month;
 
@@ -206,4 +205,19 @@ export function DayPicker({
       </div>
     </div>
   );
+}
+
+// Formatters are costly to build and the calendar re-renders on every focus move.
+const formats = new Map<string, { weekday: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>();
+function formatsFor(locale: string | undefined) {
+  const key = locale ?? "";
+  let cached = formats.get(key);
+  if (!cached) {
+    cached = {
+      weekday: new Intl.DateTimeFormat(locale, { weekday: "short" }),
+      day: new Intl.DateTimeFormat(locale, { dateStyle: "full" }),
+    };
+    formats.set(key, cached);
+  }
+  return cached;
 }

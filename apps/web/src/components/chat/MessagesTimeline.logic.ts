@@ -399,35 +399,43 @@ export function resolveTimelineMinimapIndexFromPointer(input: {
   return Math.max(0, Math.min(input.itemCount - 1, Math.round(progress * (input.itemCount - 1))));
 }
 
-/** Recheck the rendered buffer: VirtualList's unbuffered range can lag during scrolling. */
-export function resolveTimelineMinimapVisibleRange(state: {
-  readonly startBuffered: number | null | undefined;
-  readonly endBuffered: number | null | undefined;
-  readonly scroll: number;
-  readonly scrollLength: number;
-  readonly positionAtIndex: (index: number) => number | undefined;
-  readonly sizeAtIndex: (index: number) => number | undefined;
-}) {
-  let start: number | null = null;
-  let end: number | null = null;
+/**
+ * Recheck the rendered buffer: VirtualList's unbuffered range can lag during scrolling.
+ * `current` is the same check with `inset` trimmed off the top of the viewport.
+ */
+export function resolveTimelineMinimapVisibleRanges(
+  state: {
+    readonly startBuffered: number | null | undefined;
+    readonly endBuffered: number | null | undefined;
+    readonly scroll: number;
+    readonly scrollLength: number;
+    readonly positionAtIndex: (index: number) => number | undefined;
+    readonly sizeAtIndex: (index: number) => number | undefined;
+  },
+  inset: number,
+) {
+  const visible: { start: number | null; end: number | null } = { start: null, end: null };
+  const current: { start: number | null; end: number | null } = { start: null, end: null };
   if (state.startBuffered == null || state.endBuffered == null || state.startBuffered < 0) {
-    return { start, end };
+    return { visible, current };
   }
   const bottom = state.scroll + state.scrollLength;
+  const currentTop = state.scroll + inset;
   for (let index = state.startBuffered; index <= state.endBuffered; index += 1) {
     const top = state.positionAtIndex(index);
+    if (top == null || !Number.isFinite(top) || top >= bottom) continue;
     const height = state.sizeAtIndex(index);
-    if (
-      top != null &&
-      Number.isFinite(top) &&
-      top < bottom &&
-      top + Math.max(1, height != null && Number.isFinite(height) ? height : 1) > state.scroll
-    ) {
-      start ??= index;
-      end = index;
+    const end = top + Math.max(1, height != null && Number.isFinite(height) ? height : 1);
+    if (end > state.scroll) {
+      visible.start ??= index;
+      visible.end = index;
+    }
+    if (end > currentTop) {
+      current.start ??= index;
+      current.end = index;
     }
   }
-  return { start, end };
+  return { visible, current };
 }
 
 /** A turn spans its user message up to the next one, so a long reply keeps its strip lit. */
@@ -443,6 +451,38 @@ export function isTimelineMinimapTurnVisible(
     turnStartRowIndex <= visibleEnd &&
     (nextTurnStartRowIndex === undefined || nextTurnStartRowIndex > visibleStart)
   );
+}
+
+/** The contiguous run of turns `isTimelineMinimapTurnVisible` lights; `last < first` when none. */
+export function resolveTimelineMinimapInViewItems(
+  rowIndices: ReadonlyArray<number>,
+  visibleStart: number | null | undefined,
+  visibleEnd: number | null | undefined,
+): { first: number; last: number } {
+  if (visibleStart == null || visibleEnd == null) return { first: 0, last: -1 };
+  // Last turn starting at or before the visible end.
+  let low = 0;
+  let high = rowIndices.length - 1;
+  let last = -1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (rowIndices[middle]! <= visibleEnd) {
+      last = middle;
+      low = middle + 1;
+    } else high = middle - 1;
+  }
+  // First turn whose successor starts after the visible start.
+  low = 0;
+  high = rowIndices.length - 1;
+  let first = rowIndices.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (middle === rowIndices.length - 1 || rowIndices[middle + 1]! > visibleStart) {
+      first = middle;
+      high = middle - 1;
+    } else low = middle + 1;
+  }
+  return { first, last };
 }
 
 export function resolveTimelineMinimapCurrentIndex(input: {
@@ -503,9 +543,20 @@ export function resolveTimelineMinimapNavigationInteractive(collapsedWidth: numb
   return collapsedWidth >= TIMELINE_MINIMAP_NAVIGATION_REACH;
 }
 
+// Every derivation re-times each settled turn from the same few timestamps.
+const parsedTimes = new Map<string, number>();
+function parseTime(iso: string): number {
+  let time = parsedTimes.get(iso);
+  if (time === undefined) {
+    if (parsedTimes.size >= 8192) parsedTimes.clear();
+    parsedTimes.set(iso, (time = Date.parse(iso)));
+  }
+  return time;
+}
+
 function computeElapsedMs(startIso: string, endIso: string): number | null {
-  const start = Date.parse(startIso);
-  const end = Date.parse(endIso);
+  const start = parseTime(startIso);
+  const end = parseTime(endIso);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   return Math.max(0, end - start);
 }
@@ -513,8 +564,8 @@ function computeElapsedMs(startIso: string, endIso: string): number | null {
 function maxIsoTimestamp(a: string | null, b: string | null): string | null {
   if (a === null) return b;
   if (b === null) return a;
-  const aMs = Date.parse(a);
-  const bMs = Date.parse(b);
+  const aMs = parseTime(a);
+  const bMs = parseTime(b);
   if (!Number.isFinite(aMs)) return b;
   if (!Number.isFinite(bMs)) return a;
   return bMs > aMs ? b : a;
@@ -777,7 +828,36 @@ interface TurnFold {
   hiddenEntryIds: ReadonlySet<string>;
   /** Every entry in the segment, including the cards a fold never hides. */
   entryIds: ReadonlySet<string>;
-  label: string;
+  labelKind: TurnFoldLabelKind;
+  elapsedMs: number | null;
+}
+
+type TurnFoldLabelKind = "stopped" | "worked" | "continued";
+// msg() encodes its options and formatDuration formats through msg(), so a few hundred settled
+// turns would re-encode every label on each streamed update; labels repeat, so memoize them.
+const turnFoldLabels = new WeakMap<MessageResolver, Map<string, string>>();
+function turnFoldLabel(fold: TurnFold, resolve: MessageResolver): string {
+  let labels = turnFoldLabels.get(resolve);
+  if (!labels) turnFoldLabels.set(resolve, (labels = new Map()));
+  const key = `${fold.labelKind}:${fold.elapsedMs}`;
+  let label = labels.get(key);
+  if (label !== undefined) return label;
+  const duration = fold.elapsedMs !== null ? formatDuration(fold.elapsedMs, resolve) : null;
+  label =
+    fold.labelKind === "stopped"
+      ? duration
+        ? resolve(msg("You stopped after {duration}", { duration }))
+        : resolve(msg("You stopped this response"))
+      : fold.labelKind === "worked"
+        ? duration
+          ? resolve(msg("Worked for {duration}", { duration }))
+          : resolve(msg("Worked"))
+        : duration
+          ? resolve(msg("Continued for {duration}", { duration }))
+          : resolve(msg("Continued"));
+  if (labels.size >= 4096) labels.clear();
+  labels.set(key, label);
+  return label;
 }
 
 interface SupersededAttemptFold {
@@ -1078,7 +1158,6 @@ function deriveTurnFolds(input: {
   runlessWorkActive: boolean;
   liveSubagentEntryIds: ReadonlySet<string>;
   retainedAssistantReplyEntryIds: ReadonlySet<string>;
-  resolve: MessageResolver;
 }): ReadonlyMap<string, TurnFold> {
   const interruptedRunIds = new Set<RunId>();
   const promptIndexByRunId = new Map<RunId, number>();
@@ -1259,21 +1338,14 @@ function deriveTurnFolds(input: {
             maxIsoTimestamp(group.terminalEntry?.message.updatedAt ?? null, lastEntryEnd) ??
               lastEntryEnd,
           );
-    const { resolve } = input;
-    const duration = elapsedMs !== null ? formatDuration(elapsedMs, resolve) : null;
-    const label = isLatestInterruptedTurn
-      ? duration
-        ? resolve(msg("You stopped after {duration}", { duration }))
-        : resolve(msg("You stopped this response"))
-      : duration
-        ? resolve(msg("Worked for {duration}", { duration }))
-        : resolve(msg("Worked"));
-
     // The top row keeps the whole turn's time, steers included. Work after a
     // steer folds under its own row below that steer, keyed apart from the run
     // so each segment opens on its own.
-    const segmentHiddenIds = (entries: ReadonlyArray<TimelineEntry>) =>
-      new Set(entries.flatMap((entry) => (hiddenEntryIds.has(entry.id) ? [entry.id] : [])));
+    const segmentHiddenIds = (entries: ReadonlyArray<TimelineEntry>) => {
+      const ids = new Set<string>();
+      for (const entry of entries) if (hiddenEntryIds.has(entry.id)) ids.add(entry.id);
+      return ids;
+    };
     const firstSegment = group.entries.slice(0, group.steerSegments[0]?.startIndex);
     foldsByAnchorEntryId.set(group.anchorEntryId, {
       runId,
@@ -1281,7 +1353,8 @@ function deriveTurnFolds(input: {
       createdAt: group.startBoundary ?? firstEntry.createdAt,
       hiddenEntryIds: segmentHiddenIds(firstSegment),
       entryIds: new Set(firstSegment.map((entry) => entry.id)),
-      label,
+      labelKind: isLatestInterruptedTurn ? "stopped" : "worked",
+      elapsedMs,
     });
     for (const [index, { startIndex, steer }] of group.steerSegments.entries()) {
       const entries = group.entries.slice(startIndex, group.steerSegments[index + 1]?.startIndex);
@@ -1300,12 +1373,8 @@ function deriveTurnFolds(input: {
         createdAt: steer.createdAt,
         hiddenEntryIds: segmentHiddenIds(entries),
         entryIds: new Set(entries.map((entry) => entry.id)),
-        label:
-          segmentMs !== null
-            ? resolve(
-                msg("Continued for {duration}", { duration: formatDuration(segmentMs, resolve) }),
-              )
-            : resolve(msg("Continued")),
+        labelKind: "continued",
+        elapsedMs: segmentMs,
       });
     }
   }
@@ -1574,36 +1643,64 @@ function timelineRowEntries(
   return withoutSubagentDelegationRows(settleSupersededReasoning(shown));
 }
 
-function deriveTimelineTurnFolds(
-  input: Pick<
-    MessagesTimelineRowsInput,
-    | "timelineEntries"
-    | "latestRun"
-    | "isWorking"
-    | "runlessWorkActive"
-    | "runningRunId"
-    | "toolCallVisibility"
-    | "revealedMessageId"
-  >,
-) {
-  if (input.toolCallVisibility === "zen") return new Map<string, TurnFold>();
-  const timelineEntries = timelineRowEntries(input);
-  const unsettledRunId = deriveUnsettledRunId(input.latestRun ?? null, input.runningRunId ?? null);
-  const failedRunIds = failedTimelineRunIds(timelineEntries, input.latestRun ?? null);
-  const activeVisualResponseRunIds = deriveActiveVisualResponseRunIds({
-    timelineEntries,
-    unsettledRunId,
-    isWorking: input.isWorking,
-  });
-  return deriveTurnFolds({
-    timelineEntries,
-    terminalAssistantMessageIds: deriveTerminalAssistantMessageIds(timelineEntries),
-    latestRun: input.latestRun ?? null,
-    unfoldedRunIds: new Set([...activeVisualResponseRunIds, ...failedRunIds]),
-    runlessWorkActive: input.isWorking && input.runlessWorkActive === true,
-    liveSubagentEntryIds: liveSubagentCardEntryIds(timelineEntries),
-    retainedAssistantReplyEntryIds: retainedAssistantReplyEntryIds(timelineEntries),
-    resolve: m,
+type TurnFoldsInput = Pick<
+  MessagesTimelineRowsInput,
+  | "timelineEntries"
+  | "latestRun"
+  | "isWorking"
+  | "runlessWorkActive"
+  | "runningRunId"
+  | "toolCallVisibility"
+  | "revealedMessageId"
+>;
+const NO_TURN_FOLDS: ReadonlyMap<string, TurnFold> = new Map();
+// Find and the rows derive the same folds in one render; one slot shares them.
+let lastTurnFolds: { input: TurnFoldsInput; folds: ReadonlyMap<string, TurnFold> } | null = null;
+function memoTurnFolds(
+  input: TurnFoldsInput,
+  derive: () => ReadonlyMap<string, TurnFold>,
+): ReadonlyMap<string, TurnFold> {
+  if (input.toolCallVisibility === "zen") return NO_TURN_FOLDS;
+  const last = lastTurnFolds?.input;
+  if (
+    last &&
+    last.timelineEntries === input.timelineEntries &&
+    last.isWorking === input.isWorking &&
+    last.runlessWorkActive === input.runlessWorkActive &&
+    last.runningRunId === input.runningRunId &&
+    last.toolCallVisibility === input.toolCallVisibility &&
+    last.revealedMessageId === input.revealedMessageId &&
+    shallow(last.latestRun ?? null, input.latestRun ?? null)
+  ) {
+    return lastTurnFolds!.folds;
+  }
+  const folds = derive();
+  lastTurnFolds = { input, folds };
+  return folds;
+}
+
+function deriveTimelineTurnFolds(input: TurnFoldsInput) {
+  return memoTurnFolds(input, () => {
+    const timelineEntries = timelineRowEntries(input);
+    const unsettledRunId = deriveUnsettledRunId(
+      input.latestRun ?? null,
+      input.runningRunId ?? null,
+    );
+    const failedRunIds = failedTimelineRunIds(timelineEntries, input.latestRun ?? null);
+    const activeVisualResponseRunIds = deriveActiveVisualResponseRunIds({
+      timelineEntries,
+      unsettledRunId,
+      isWorking: input.isWorking,
+    });
+    return deriveTurnFolds({
+      timelineEntries,
+      terminalAssistantMessageIds: deriveTerminalAssistantMessageIds(timelineEntries),
+      latestRun: input.latestRun ?? null,
+      unfoldedRunIds: new Set([...activeVisualResponseRunIds, ...failedRunIds]),
+      runlessWorkActive: input.isWorking && input.runlessWorkActive === true,
+      liveSubagentEntryIds: liveSubagentCardEntryIds(timelineEntries),
+      retainedAssistantReplyEntryIds: retainedAssistantReplyEntryIds(timelineEntries),
+    });
   });
 }
 
@@ -1681,19 +1778,17 @@ export function deriveMessagesTimelineRows(
     isWorking: input.isWorking,
   });
   const runlessWorkActive = input.isWorking && input.runlessWorkActive === true;
-  const foldsByAnchorEntryId =
-    input.toolCallVisibility === "zen"
-      ? new Map<string, TurnFold>()
-      : deriveTurnFolds({
-          timelineEntries: timelineEntries,
-          terminalAssistantMessageIds,
-          latestRun: input.latestRun ?? null,
-          unfoldedRunIds: new Set([...activeVisualResponseRunIds, ...failedRunIds]),
-          runlessWorkActive,
-          liveSubagentEntryIds,
-          retainedAssistantReplyEntryIds: retainedAssistantReplyIds,
-          resolve,
-        });
+  const foldsByAnchorEntryId = memoTurnFolds(input, () =>
+    deriveTurnFolds({
+      timelineEntries: timelineEntries,
+      terminalAssistantMessageIds,
+      latestRun: input.latestRun ?? null,
+      unfoldedRunIds: new Set([...activeVisualResponseRunIds, ...failedRunIds]),
+      runlessWorkActive,
+      liveSubagentEntryIds,
+      retainedAssistantReplyEntryIds: retainedAssistantReplyIds,
+    }),
+  );
   const timelineEntryById = new Map(timelineEntries.map((entry) => [entry.id, entry]));
   const collapsedEntryIds = new Set<string>();
   const collapsedFoldMemberIds = new Set<string>();
@@ -1955,21 +2050,20 @@ export function deriveMessagesTimelineRows(
 
     const turnFold = foldsByAnchorEntryId.get(timelineEntry.id);
     if (turnFold) {
-      const deferredWorkItemIds = [...turnFold.entryIds].flatMap((entryId) => {
+      const deferredWorkItemIds: string[] = [];
+      for (const entryId of turnFold.entryIds) {
         const entry = timelineEntryById.get(entryId);
-        return entry?.kind === "work" &&
-          entry.entry.projectedItem?.item.deferredWork &&
-          !supersededWorkItemIds.has(String(entry.entry.projectedItem.sourceItemId))
-          ? [String(entry.entry.projectedItem.sourceItemId)]
-          : [];
-      });
+        if (entry?.kind !== "work" || !entry.entry.projectedItem?.item.deferredWork) continue;
+        const sourceItemId = String(entry.entry.projectedItem.sourceItemId);
+        if (!supersededWorkItemIds.has(sourceItemId)) deferredWorkItemIds.push(sourceItemId);
+      }
       nextRows.push({
         kind: "turn-fold",
         id: `turn-fold:${turnFold.runId}`,
         ...(deferredWorkItemIds.length > 0 ? { deferredWorkItemIds } : {}),
         createdAt: turnFold.createdAt,
         runId: turnFold.runId,
-        label: turnFold.label,
+        label: turnFoldLabel(turnFold, resolve),
         expanded: input.expandedRunIds?.has(turnFold.runId) ?? false,
       });
     }
@@ -2535,12 +2629,17 @@ export function timelineTurnFoldRunIdsByEntryId(
     | "revealedMessageId"
   >,
 ): ReadonlyMap<string, RunId> {
-  const byEntryId = new Map<string, RunId>();
-  for (const fold of deriveTimelineTurnFolds(input).values()) {
+  const folds = deriveTimelineTurnFolds(input);
+  let byEntryId = foldRunIdsByEntryId.get(folds);
+  if (byEntryId) return byEntryId;
+  byEntryId = new Map<string, RunId>();
+  for (const fold of folds.values()) {
     for (const entryId of fold.hiddenEntryIds) byEntryId.set(entryId, fold.runId);
   }
+  foldRunIdsByEntryId.set(folds, byEntryId);
   return byEntryId;
 }
+const foldRunIdsByEntryId = new WeakMap<ReadonlyMap<string, TurnFold>, Map<string, RunId>>();
 
 function sameCheckpointSummaries(
   previous: MessagesTimelineRowsInput["turnDiffSummaries"],
@@ -2765,6 +2864,7 @@ export function computeStableMessagesTimelineRows(
 }
 
 function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean {
+  if (a === b) return true;
   if (a.kind !== b.kind || a.id !== b.id) return false;
 
   switch (a.kind) {
@@ -2857,7 +2957,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return (
         a.projectedItem === (b as typeof a).projectedItem &&
         a.resourceSummary === (b as typeof a).resourceSummary &&
-        Equal.equals(a.subagents, (b as typeof a).subagents)
+        sameOrEqual(a.subagents, (b as typeof a).subagents)
       );
 
     case "work": {
@@ -2865,7 +2965,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return (
         a.isExpandedToolGroup === bw.isExpandedToolGroup &&
         a.displayLabel === bw.displayLabel &&
-        Equal.equals(a.groupedEntries, bw.groupedEntries)
+        sameOrEqual(a.groupedEntries, bw.groupedEntries)
       );
     }
 
@@ -2876,8 +2976,8 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.groupId === bw.groupId &&
         a.expanded === bw.expanded &&
         a.active === bw.active &&
-        Equal.equals(a.entry, bw.entry) &&
-        Equal.equals(a.groupedEntries, bw.groupedEntries)
+        sameOrEqual(a.entry, bw.entry) &&
+        sameOrEqual(a.groupedEntries, bw.groupedEntries)
       );
     }
 
@@ -2892,7 +2992,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.summary === bw.summary &&
         a.summaryKind === bw.summaryKind &&
         a.toolSurface === bw.toolSurface &&
-        Equal.equals(a.toolIcon, bw.toolIcon) &&
+        sameOrEqual(a.toolIcon, bw.toolIcon) &&
         a.hasFailure === bw.hasFailure
       );
     }
@@ -2914,6 +3014,17 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       );
     }
   }
+}
+
+/** Rows reuse unchanged entry arrays, so identity settles most comparisons before a deep walk. */
+function sameOrEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i] && !Equal.equals(a[i], b[i])) return false;
+    return true;
+  }
+  return Equal.equals(a, b);
 }
 
 export function handoffRunsSignature(runs: ReadonlyArray<HandoffTimelineRun>): string {

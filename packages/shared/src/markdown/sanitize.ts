@@ -480,8 +480,6 @@ export function sanitizeElTree(root: ElRoot): ElRoot {
   };
 }
 
-// --- Raw HTML parsing & T3 post-processing ---
-
 const TAG_REGEX =
   /<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*(\/?)>|<!--(?:-?>|[\s\S]*?(?:-->|$))|<![^>]*>|<\?[\s\S]*?\?>/g;
 const ATTR_REGEX = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
@@ -553,7 +551,6 @@ export function createRawHtmlBuilder(root: ElRoot): RawHtmlBuilder {
   let rawTextTag: string | undefined;
 
   const pushNode = (node: ElContent) => {
-    const parent = stack.at(-1)!;
     if (node.type === "element" && CLOSES_PARAGRAPH_TAGS.has(node.tagName)) {
       const pIdx = findOpenParagraph(stack);
       if (pIdx > 0) stack.length = pIdx;
@@ -686,8 +683,6 @@ function normalizeRawTables(node: ElRoot | ElElement): void {
   ];
 }
 
-// --- Image source meta & local editor links (replaces markdownHast rehype passes) ---
-
 const STANDALONE_IMAGE_BLOCKS = new Set([
   "p",
   "div",
@@ -771,7 +766,17 @@ export function preserveImageSourceMetaOnTree(root: ElRoot): void {
   markStandaloneImages(root);
 }
 
+const URL_SCHEME = /^[\x00-\x20]*([a-zA-Z][a-zA-Z0-9+.-]*):/;
 function normalizeLocalEditorHref(href: string): string {
+  // Only local editor schemes can change; skip parsing every other link. URL drops tabs and
+  // newlines anywhere, so hrefs holding them take the full parse.
+  const scheme = URL_SCHEME.exec(href)?.[1];
+  if (
+    !/[\t\n\r]/.test(href) &&
+    (scheme === undefined || !LOCAL_FILE_LINK_SCHEMES.includes(scheme.toLowerCase()))
+  ) {
+    return href;
+  }
   try {
     const url = new URL(href);
     return isLocalEditorFileUrl(url) ? url.href : href;

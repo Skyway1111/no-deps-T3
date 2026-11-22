@@ -258,20 +258,9 @@ function ExpandedWorkGroupEntries({
     updateScrollFades();
   };
 
+  // The restored row is measured by now (alwaysRender), so its position is exact.
   const handleLoad = () => {
-    const list = listRef.current;
-    const element = list?.getScrollableNode();
-    if (initialScrollIndex && list && element) {
-      // Bootstrap can report the restored target before the DOM has applied it.
-      // Reconcile once at load, before releasing the measured anchor row.
-      const offset = Math.max(
-        0,
-        Math.min(list.getState().scroll, element.scrollHeight - element.clientHeight),
-      );
-      if (Math.abs(element.scrollTop - offset) > 1) {
-        void list.scrollToOffset({ offset, animated: false });
-      }
-    }
+    if (initialScrollIndex) void listRef.current?.scrollToIndex(initialScrollIndex);
     setRestoringPosition(false);
   };
 
@@ -315,8 +304,6 @@ function ExpandedWorkGroupEntries({
           renderItem={renderEntry}
           estimatedItemSize={compactWorkEntryHeight}
           drawDistance={240}
-          recycleItems
-          {...(initialScrollIndex ? { initialScrollIndex } : {})}
           maintainScrollAtEnd={
             appendState.follow ? { animated: false, on: { dataChange: true } } : false
           }

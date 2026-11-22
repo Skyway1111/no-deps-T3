@@ -310,18 +310,25 @@ export function parseSearch(searchStr: string): AnySearch {
   return result;
 }
 
+// Strings JSON could parse (numbers, booleans, null, quoted, objects) are quoted so they
+// round-trip as strings; most values cannot start JSON, so they skip the parse.
+const JSON_START = /^[\s]*[-\d"{[tfn]/;
+function looksLikeJson(value: string): boolean {
+  if (!JSON_START.test(value)) return false;
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function stringifySearch(search: AnySearch): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(search)) {
     if (value === undefined) continue;
     if (typeof value === "string") {
-      let ambiguous = true;
-      try {
-        JSON.parse(value);
-      } catch {
-        ambiguous = false;
-      }
-      params.append(key, ambiguous ? JSON.stringify(value) : value);
+      params.append(key, looksLikeJson(value) ? JSON.stringify(value) : value);
     } else {
       params.append(key, JSON.stringify(value));
     }
@@ -676,9 +683,32 @@ export class Router {
     });
   }
 
+  // Rebuilt only after a lazy route attaches; renders read it per match.
+  private routeMap: Map<string, AnyRoute> | null = null;
   get routesById() {
-    return new Map(this.nodes.flatMap((n) => (n.route ? [[n.id, n.route] as const] : [])));
+    return (this.routeMap ??= new Map(
+      this.nodes.flatMap((n) => (n.route ? [[n.id, n.route] as const] : [])),
+    ));
   }
+
+  /** Whether `buildLocation(options).href` can change as the current location changes. */
+  hrefFollowsLocation(options: NavigateOptions): boolean {
+    if (options.href) return false;
+    const { to, search, hash } = options;
+    if (!to?.startsWith("/") || to.includes("$")) return true;
+    if (search === true || typeof search === "function") return true;
+    if (hash === true || typeof hash === "function") return true;
+    // Search middlewares (such as retained params) read the current search.
+    let follows = this.middlewarePaths.get(to);
+    if (follows === undefined) {
+      follows = (this.matchNodes(to)?.chain ?? []).some(
+        (n) => !n.route || (n.route.options.search?.middlewares?.length ?? 0) > 0,
+      );
+      this.middlewarePaths.set(to, follows);
+    }
+    return follows;
+  }
+  private readonly middlewarePaths = new Map<string, boolean>();
 
   parseLocation(location: HistoryLocation): ParsedLocation {
     return {
@@ -861,6 +891,8 @@ export class Router {
 
   private attach(node: RouteNode, route: AnyRoute) {
     node.route = route;
+    this.routeMap = null;
+    this.middlewarePaths.clear();
     route.fullPath = node.fullPath;
     route.id = node.id;
   }
@@ -1143,6 +1175,9 @@ export function useBlocker({
 
 export type LinkProps = NavigateOptions & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">;
 
+const selectHref = (s: RouterState) => s.location.href;
+const selectNothing = () => null;
+
 export function Link({
   to,
   from,
@@ -1173,8 +1208,9 @@ export function Link({
     hashScrollIntoView,
     ignoreBlocker,
   } as NavigateOptions;
-  // Re-render on navigation so relative and param-filled hrefs stay current.
-  useRouterSelect((s) => s.location.href);
+  // Re-render on navigation only when the href can change with it (relative, param-filled,
+  // search-derived), so a sidebar of absolute links stays still across navigations.
+  useRouterSelect(router.hrefFollowsLocation(options) ? selectHref : selectNothing);
   const location = router.buildLocation(options);
   const preload = () => router.options.defaultPreload === "intent" && router.preloadRoute(options);
   return (

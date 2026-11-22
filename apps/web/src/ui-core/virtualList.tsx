@@ -15,16 +15,19 @@ import {
   type Ref,
 } from "react";
 
-/** Prefix sums over item sizes: O(log n) update, offset → index lookup, and prefix query. */
+/** Prefix sums over item sizes: O(log n) update, append, offset → index lookup, and prefix query. */
 class Fenwick {
-  private readonly tree: Float64Array;
-  private readonly values: Float64Array;
-  private readonly top: number;
+  private tree: Float64Array;
+  private values: Float64Array;
+  private n: number;
+  private top: number;
 
   constructor(values: ArrayLike<number>) {
     const n = values.length;
-    this.values = Float64Array.from(values);
-    this.tree = new Float64Array(n + 1);
+    this.n = n;
+    this.values = new Float64Array(Math.max(16, n));
+    this.values.set(values);
+    this.tree = new Float64Array(this.values.length + 1);
     for (let i = 1; i <= n; i++) {
       this.tree[i]! += this.values[i - 1]!;
       const parent = i + (i & -i);
@@ -33,25 +36,41 @@ class Fenwick {
     this.top = n === 0 ? 0 : 2 ** Math.floor(Math.log2(n));
   }
   get length() {
-    return this.values.length;
+    return this.n;
   }
   get(index: number) {
-    return this.values[index] ?? 0;
+    return index < this.n ? this.values[index]! : 0;
   }
   set(index: number, value: number) {
     const delta = value - this.values[index]!;
     if (delta === 0) return;
     this.values[index] = value;
-    for (let i = index + 1; i < this.tree.length; i += i & -i) this.tree[i]! += delta;
+    for (let i = index + 1; i <= this.n; i += i & -i) this.tree[i]! += delta;
+  }
+  /** Appends in O(log n); capacity grows geometrically. */
+  push(value: number) {
+    if (this.n === this.values.length) {
+      const values = new Float64Array(this.values.length * 2);
+      values.set(this.values);
+      const tree = new Float64Array(values.length + 1);
+      tree.set(this.tree);
+      this.values = values;
+      this.tree = tree;
+    }
+    const i = ++this.n;
+    this.values[i - 1] = value;
+    // A node covers (i - lowbit(i), i]: the new value plus the sums of its covered children.
+    this.tree[i] = value + this.prefix(i - 1) - this.prefix(i - (i & -i));
+    if (i >= this.top * 2) this.top = this.top === 0 ? 1 : this.top * 2;
   }
   /** Sum of sizes before `index`. */
   prefix(index: number) {
     let sum = 0;
-    for (let i = Math.min(index, this.values.length); i > 0; i -= i & -i) sum += this.tree[i]!;
+    for (let i = Math.min(index, this.n); i > 0; i -= i & -i) sum += this.tree[i]!;
     return sum;
   }
   get total() {
-    return this.prefix(this.values.length);
+    return this.prefix(this.n);
   }
   /** Index of the item covering `offset` (clamped to the list). */
   indexAt(offset: number) {
@@ -59,14 +78,17 @@ class Fenwick {
     let rest = offset;
     for (let step = this.top; step > 0; step >>= 1) {
       const next = pos + step;
-      if (next < this.tree.length && this.tree[next]! <= rest) {
+      if (next <= this.n && this.tree[next]! <= rest) {
         pos = next;
         rest -= this.tree[next]!;
       }
     }
-    return Math.max(0, Math.min(pos, this.values.length - 1));
+    return Math.max(0, Math.min(pos, this.n - 1));
   }
 }
+
+/** Measured sizes outlive their list so a revisited dataset restores without jumps; this bounds them. */
+const SIZE_CACHE_LIMIT = 12_000;
 
 export interface MaintainScrollAtEndOptions {
   animated?: boolean;
@@ -107,6 +129,8 @@ export interface VirtualListState {
   isAtStart: boolean;
   isAtEnd: boolean;
   isFollowingEnd: boolean;
+  /** Header and padding above the first item; item positions start here. */
+  startOffset: number;
   start: number;
   end: number;
   startBuffered: number;
@@ -151,7 +175,6 @@ export interface VirtualListProps<T> extends Omit<
   renderItem: (info: {
     item: T;
     index: number;
-    data: readonly T[];
     extraData: unknown;
     type: string | undefined;
   }) => ReactNode;
@@ -163,6 +186,7 @@ export interface VirtualListProps<T> extends Omit<
   dataKey?: string | number;
   estimatedItemSize?: number;
   drawDistance?: number;
+  /** LegendList compatibility; rows are never recycled. */
   recycleItems?: boolean;
   initialScrollAtEnd?: boolean;
   initialScrollOffset?: number;
@@ -220,8 +244,12 @@ class Engine<T> {
   props!: VirtualListProps<T>;
   scroller: HTMLDivElement | null = null;
   readonly elements = new Map<string, HTMLElement>();
+  /** Measured sizes by key, oldest first; current keys are refreshed when a dataset (re)opens. */
   readonly sizes = new Map<string, number>();
-  private readonly types = new Map<string, string | undefined>();
+  /** Item types of the current list, by index. */
+  private types: Array<string | undefined> = [];
+  /** Measured [sum, count] per type over the current list, for estimating unmeasured items. */
+  private typeTotals = new Map<string | undefined, [number, number]>();
   keys: string[] = [];
   private indexByKey = new Map<string, number>();
   fenwick = new Fenwick([]);
@@ -281,8 +309,14 @@ class Engine<T> {
   position(index: number) {
     return this.fenwick.prefix(index);
   }
+  typeAt(index: number) {
+    return this.types[index];
+  }
 
-  /** Re-indexes when the dataset changes; O(n) over the items, sizes persist by key. */
+  /**
+   * Re-indexes when the dataset changes. Rows changed in place (streaming) cost O(n) reference
+   * checks and no rebuild, appended rows O(k log n); anything else rebuilds in O(n).
+   */
   sync(props: VirtualListProps<T>, rerender: () => void) {
     this.props = props;
     this.rerender = rerender;
@@ -296,47 +330,97 @@ class Engine<T> {
       this.dataKey = props.dataKey;
     }
     if (props.data === this.data && props.dataVersion === this.dataVersion) return;
+    const previousData = this.data;
     const previousKeys = this.keys;
-    this.data = props.data;
+    const data = props.data;
+    this.data = data;
     this.dataVersion = props.dataVersion;
     const keyOf = props.keyExtractor ?? ((_: T, i: number) => String(i));
+    const shared = Math.min(data.length, previousKeys.length);
+    let same = 0;
+    while (
+      same < shared &&
+      (previousData?.[same] === data[same] || keyOf(data[same]!, same) === previousKeys[same])
+    ) {
+      same++;
+    }
+    if (same === previousKeys.length && previousKeys.length > 0) {
+      for (let i = 0; i < same; i++) {
+        if (previousData?.[i] !== data[i]) this.retype(i, props.getItemType?.(data[i]!, i));
+      }
+      for (let i = same; i < data.length; i++) this.append(keyOf(data[i]!, i), data[i]!, i);
+      this.appendOnly = data.length > same;
+    } else {
+      this.rebuild(data, keyOf, previousKeys);
+      this.appendOnly = false;
+    }
+    this.dataChanged = this.loaded;
+    this.computeWindow();
+  }
+
+  private rebuild(data: readonly T[], keyOf: (item: T, i: number) => string, previous: string[]) {
     const previousIndex = this.indexByKey;
-    this.keys = props.data.map((item, i) => keyOf(item, i));
+    this.keys = data.map((item, i) => keyOf(item, i));
     this.indexByKey = new Map(this.keys.map((key, i) => [key, i]));
     // A dataset sharing no rows with the last one is a fresh start, as for a new dataKey.
-    if (
-      previousKeys.length > 0 &&
-      this.keys.length > 0 &&
-      !this.keys.some((key) => previousIndex.has(key))
-    ) {
+    const fresh = previous.length === 0 || !this.keys.some((key) => previousIndex.has(key));
+    if (fresh && previous.length > 0 && this.keys.length > 0) {
       this.loaded = false;
       this.anchor = null;
       this.anchorHeld = false;
       this.following = false;
     }
-    const averages = new Map<string | undefined, [number, number]>();
-    const types = props.data.map((item, i) => {
-      const type = props.getItemType?.(item, i);
-      const size = this.sizes.get(this.keys[i]!);
+    this.typeTotals = new Map();
+    this.types = data.map((item, i) => {
+      const type = this.props.getItemType?.(item, i);
+      const key = this.keys[i]!;
+      const size = this.sizes.get(key);
       if (size !== undefined) {
-        const avg = averages.get(type) ?? [0, 0];
-        averages.set(type, [avg[0] + size, avg[1] + 1]);
+        this.addTotal(type, size, 1);
+        // A reopened dataset's sizes become the most recent, so they outlive other lists'.
+        if (fresh) {
+          this.sizes.delete(key);
+          this.sizes.set(key, size);
+        }
       }
-      this.types.set(this.keys[i]!, type);
       return type;
     });
-    const fallback = props.estimatedItemSize ?? 100;
     this.fenwick = new Fenwick(
-      this.keys.map((key, i) => {
-        const avg = averages.get(types[i]);
-        return this.sizes.get(key) ?? (avg ? avg[0] / avg[1] : fallback);
-      }),
+      this.keys.map((key, i) => this.sizes.get(key) ?? this.estimate(this.types[i])),
     );
-    this.appendOnly =
-      previousKeys.every((key, i) => this.keys[i] === key) &&
-      this.keys.length > previousKeys.length;
-    this.dataChanged = this.loaded;
-    this.computeWindow();
+  }
+
+  private append(key: string, item: T, index: number) {
+    const type = this.props.getItemType?.(item, index);
+    const size = this.sizes.get(key);
+    if (size !== undefined) this.addTotal(type, size, 1);
+    this.keys.push(key);
+    this.indexByKey.set(key, index);
+    this.types.push(type);
+    this.fenwick.push(size ?? this.estimate(type));
+  }
+
+  private retype(index: number, type: string | undefined) {
+    const previous = this.types[index];
+    if (previous === type) return;
+    this.types[index] = type;
+    const size = this.sizes.get(this.keys[index]!);
+    if (size === undefined) return;
+    this.addTotal(previous, -size, -1);
+    this.addTotal(type, size, 1);
+  }
+
+  private addTotal(type: string | undefined, size: number, count: number) {
+    const total = this.typeTotals.get(type);
+    if (total) {
+      total[0] += size;
+      total[1] += count;
+    } else this.typeTotals.set(type, [size, count]);
+  }
+
+  private estimate(type: string | undefined) {
+    const total = this.typeTotals.get(type);
+    return total && total[1] > 0 ? total[0] / total[1] : (this.props.estimatedItemSize ?? 100);
   }
 
   computeWindow() {
@@ -368,7 +452,13 @@ class Engine<T> {
     }
     const extraList = [...extras].filter((i) => i < start || i > end).sort((a, b) => a - b);
     const w = this.window;
-    if (w.start === start && w.end === end && w.extras.join() === extraList.join()) return false;
+    if (
+      w.start === start &&
+      w.end === end &&
+      w.extras.length === extraList.length &&
+      w.extras.every((i, k) => i === extraList[k])
+    )
+      return false;
     this.window = { start, end, extras: extraList };
     return true;
   }
@@ -426,8 +516,15 @@ class Engine<T> {
     const index = this.indexByKey.get(key);
     if (index === undefined) return false;
     const previous = this.fenwick.get(index);
-    if (Math.abs(previous - size) < 0.01 && this.sizes.has(key)) return false;
+    const measured = this.sizes.get(key);
+    if (Math.abs(previous - size) < 0.01 && measured !== undefined) return false;
+    if (measured === undefined) this.addTotal(this.types[index], size, 1);
+    else {
+      this.addTotal(this.types[index], size - measured, 0);
+      this.sizes.delete(key);
+    }
     this.sizes.set(key, size);
+    if (this.sizes.size - this.indexByKey.size > SIZE_CACHE_LIMIT) this.evictSizes();
     this.fenwick.set(index, size);
     this.props.onItemSizeChanged?.({
       size,
@@ -437,6 +534,17 @@ class Engine<T> {
       itemData: this.props.data[index]!,
     });
     return true;
+  }
+
+  /** Drops the oldest sizes outside the current list, down to three quarters of the limit. */
+  private evictSizes() {
+    let excess = this.sizes.size - this.indexByKey.size - (SIZE_CACHE_LIMIT * 3) / 4;
+    for (const key of this.sizes.keys()) {
+      if (excess <= 0) break;
+      if (this.indexByKey.has(key)) continue;
+      this.sizes.delete(key);
+      excess--;
+    }
   }
 
   /** Measures items React just mounted, so the commit's anchoring uses real sizes. */
@@ -646,7 +754,8 @@ class Engine<T> {
       const anchorSize = Math.min(this.fenwick.get(index), config.anchorMaxSize ?? Infinity);
       const below = anchorSize + this.fenwick.total - this.position(index + 1) + this.footerSize;
       size = Math.max(0, this.scrollLength - (config.anchorOffset ?? 0) - below);
-      const ready = this.keys.slice(index).every((key) => this.sizes.has(key));
+      let ready = true;
+      for (let i = index; ready && i < this.keys.length; i++) ready = this.sizes.has(this.keys[i]!);
       if (ready && this.anchorReadyKey !== this.keys[index]) {
         this.anchorReadyKey = this.keys[index];
         queueMicrotask(() =>
@@ -764,6 +873,7 @@ class Engine<T> {
         isAtStart: engine.scroll <= 1,
         isAtEnd: engine.contentLength <= engine.scrollLength || engine.distanceFromEnd <= 1,
         isFollowingEnd: engine.following,
+        startOffset: engine.startOffset,
         start: engine.keys.length
           ? engine.fenwick.indexAt(Math.max(0, engine.scroll - engine.startOffset))
           : -1,
@@ -830,7 +940,6 @@ interface RowProps<T> {
   itemKey: string;
   item: T;
   index: number;
-  data: readonly T[];
   type: string | undefined;
   extraData: unknown;
   renderItem: VirtualListProps<T>["renderItem"];
@@ -842,7 +951,6 @@ const Row = memo(function Row<T>({
   itemKey,
   item,
   index,
-  data,
   type,
   extraData,
   renderItem,
@@ -856,7 +964,7 @@ const Row = memo(function Row<T>({
       data-index={index}
       style={{ display: "flow-root" }}
     >
-      {renderItem({ item, index, data, extraData, type })}
+      {renderItem({ item, index, extraData, type })}
       {Separator && !last ? <Separator leadingItem={item} /> : null}
     </div>
   );
@@ -869,7 +977,7 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
     data,
     renderItem,
     keyExtractor: _k,
-    getItemType,
+    getItemType: _git,
     extraData,
     dataVersion: _dv,
     dataKey: _dk,
@@ -935,8 +1043,7 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
         itemKey={key}
         item={data[index]!}
         index={index}
-        data={data}
-        type={getItemType?.(data[index]!, index)}
+        type={engine.typeAt(index)}
         extraData={extraData}
         renderItem={renderItem}
         Separator={ItemSeparatorComponent}

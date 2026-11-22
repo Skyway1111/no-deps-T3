@@ -11,10 +11,7 @@ import type {
   MdFootnoteDefinition,
   MdHeading,
   MdHtml,
-  MdInlineCode,
   MdInlineMath,
-  MdLeadingWhitespace,
-  MdLink,
   MdList,
   MdListItem,
   MdMath,
@@ -29,8 +26,6 @@ import type {
   SourcePoint,
   SourcePosition,
 } from "./types.ts";
-
-// --- Character classification helpers (charCode-based, zero regex overhead) ---
 
 const isSpace = (c: number) => c === 32 || c === 9;
 const isEol = (c: number) => c === 10 || c === 13;
@@ -75,8 +70,6 @@ function isScriptPunctuation(ch: string): boolean {
 }
 
 const nextTabStop = (col: number) => (Math.floor(col / 4) + 1) * 4;
-
-// --- Line index for exact UTF-16 positions ---
 
 interface LineInfo {
   readonly start: number;
@@ -153,8 +146,6 @@ class LineIndex {
     }));
   }
 }
-
-// --- Indent helpers on a LineSlice ---
 
 interface IndentScan {
   readonly offset: number;
@@ -256,8 +247,6 @@ function trimSliceLeadingWs(
   };
 }
 
-// --- Block HTML patterns (CommonMark types 1-7) ---
-
 const HTML_BLOCK_TYPE1_OPEN = /^<(?:pre|script|style|textarea)(?:[\s>]|$)/i;
 const HTML_BLOCK_TYPE1_CLOSE = /<\/(?:pre|script|style|textarea)>/i;
 const HTML_BLOCK_TYPE6_TAGS = new Set(
@@ -282,8 +271,6 @@ function detectHtmlBlockType(text: string, canInterruptParagraph: boolean): numb
   return 0;
 }
 
-// --- Block regexes ---
-
 const THEMATIC_BREAK_RE = /^(?:(\*[ \t]*){3,}|(-[ \t]*){3,}|(_[ \t]*){3,})$/;
 const ATX_HEADING_RE = /^(#{1,6})(?:[ \t]+|$)(.*)$/;
 const SETEXT_RE = /^(=+|-+)[ \t]*$/;
@@ -294,8 +281,6 @@ const INSIGHT_OPEN_RE = /^( {0,3})(`?)★ Insight[ \t]+─{3,}\2[ \t]*$/u;
 const INSIGHT_CLOSE_RE = /^( {0,3})(`?)─{3,}\2[ \t]*$/u;
 const CODEX_LEAF_RE = /^::artifact-template(?:\[([^\]]*)\])?(?:\{([^}]*)\})?[ \t]*$/;
 const FOOTNOTE_DEF_RE = /^\[\^([^\]\s\r\n]+)\]:(?:[ \t]*(.*))?$/;
-
-// --- Shared context ---
 
 interface ParserContext {
   readonly src: string;
@@ -365,8 +350,6 @@ function parseDirectiveAttributes(raw: string | undefined): Record<string, strin
   }
   return attrs;
 }
-
-// --- Table delimiter & cell splitting ---
 
 function parseTableDelimiterRow(text: string): Array<"left" | "center" | "right" | null> | null {
   const trimmed = text.trim();
@@ -478,8 +461,6 @@ function trimCellRange(src: string, start: number, end: number): TableCellSlice 
   while (e > s && isSpace(src.charCodeAt(e - 1))) e--;
   return { start: s, end: e };
 }
-
-// --- Reference link definition parser ---
 
 function tryParseReferenceDefinition(
   ctx: ParserContext,
@@ -691,8 +672,6 @@ function tryParseReferenceDefinition(
   return { def, nextIndex: endLineIdx + 1 };
 }
 
-// --- Display math block scanners ---
-
 function countPrecedingBackslashes(s: string, index: number): number {
   let n = 0;
   for (let i = index - 1; i >= 0 && s.charCodeAt(i) === 92; i--) n++;
@@ -760,8 +739,6 @@ function tryParseDisplayMathBlock(
   }
   return null;
 }
-
-// --- Block parser ---
 
 function canInterruptParagraph(ctx: ParserContext, slices: LineSlice[], i: number): boolean {
   const sl = slices[i]!;
@@ -993,11 +970,7 @@ function parseBlocks(ctx: ParserContext, slices: LineSlice[], isTopLevel: boolea
         const cur = slices[j]!;
         const sc = scanIndent(ctx.src, cur);
         const trimmed = ctx.src.slice(sc.offset, cur.end);
-        if (
-          sc.indent <= 3 &&
-          trimmed.startsWith(fenceChar.repeat(fenceLen)) &&
-          new RegExp(`^\\${fenceChar}{${fenceLen},}[ \\t]*$`).test(trimmed)
-        ) {
+        if (sc.indent <= 3 && isClosingFence(trimmed, fenceChar, fenceLen)) {
           closed = true;
           endOffset = cur.end;
           j++;
@@ -1659,8 +1632,6 @@ function parseBlocks(ctx: ParserContext, slices: LineSlice[], isTopLevel: boolea
   return blocks;
 }
 
-// --- Inline scanners (charCode-based) ---
-
 function findCodeSpanEnd(src: string, start: number, limit: number): number {
   let ticks = 0;
   let pos = start;
@@ -1974,8 +1945,6 @@ function parseLinkDestinationInline(
   };
 }
 
-// --- Codex inline directive scanner ---
-
 const DIRECTIVE_INLINE_NAMES = ["codex-file-citation", "codex-followup"] as const;
 
 function directiveNameEndsChar(ch: string | undefined): boolean {
@@ -2072,8 +2041,6 @@ function tryParseInlineDirective(
 
   return { name: matchedName, labelStart, labelEnd, attributes, end: pos };
 }
-
-// --- Full CommonMark + GFM + Math + Directive inline parser ---
 
 interface Delimiter {
   readonly ch: string;
@@ -2280,7 +2247,7 @@ function parseInlineRange(
               i = end;
               continue;
             }
-            if (!src.slice(i + 2, rangeEnd).includes(isDisp ? "\\]" : "\\)")) {
+            if (!includesBefore(src, isDisp ? "\\]" : "\\)", i + 2, rangeEnd)) {
               if (isDisp) noCloseBracketMath = true;
               else noCloseParenMath = true;
             }
@@ -2341,7 +2308,7 @@ function parseInlineRange(
           i = end;
           continue;
         }
-        if (isDouble && !src.slice(i + 2, rangeEnd).includes("$$")) {
+        if (isDouble && !includesBefore(src, "$$", i + 2, rangeEnd)) {
           noCloseDoubleDollar = true;
         }
       }
@@ -2592,7 +2559,10 @@ function parseInlineRange(
         ch === 92 ||
         ch === 96 ||
         ch === 42 ||
-        ch === 95 ||
+        // An intraword `_` can neither open nor close emphasis, so it stays text; that keeps
+        // words such as an email's `first_last` together for autolinking.
+        (ch === 95 &&
+          !(isAsciiAlnum(src.charCodeAt(i - 1)) && isAsciiAlnum(src.charCodeAt(i + 1)))) ||
         ch === 126 ||
         ch === 91 ||
         ch === 93 ||
@@ -2608,7 +2578,7 @@ function parseInlineRange(
             ch === 72 /* H */ ||
             ch === 119 /* w */ ||
             ch === 87 /* W */ ||
-            ch === 64) /* @ */)
+            ch === 64)) /* @ */
       ) {
         // For email `@`, backtrack only if needed — instead, handle bare email right at word start!
         if (ch === 64) {
@@ -3037,7 +3007,7 @@ function processEmphasis(nodes: MdNode[], delims: Delimiter[], stackBottom: numb
     for (let k = opener.nodeIndex + 1; k < closer.nodeIndex; k++) {
       const n = nodes[k];
       if (n && (n.type !== "text" || n.value !== "")) innerNodes.push(n);
-      nodes[k] = { type: "text", value: "" };
+      nodes[k] = EMPTY_TEXT;
     }
 
     const wrapped: MdNode =
@@ -3082,6 +3052,32 @@ function processEmphasis(nodes: MdNode[], delims: Delimiter[], stackBottom: numb
   }
 }
 
+function isAsciiAlnum(c: number): boolean {
+  return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+}
+
+/** Fills slots emptied by emphasis; compactNodes drops it, so nothing ever writes to it. */
+const EMPTY_TEXT: MdNode = Object.freeze({ type: "text", value: "" }) as MdNode;
+
+/** A closing code fence: at least `length` of `char`, then only spaces or tabs. */
+function isClosingFence(line: string, char: string, length: number): boolean {
+  const code = char.charCodeAt(0);
+  let i = 0;
+  while (i < line.length && line.charCodeAt(i) === code) i++;
+  if (i < length) return false;
+  for (; i < line.length; i++) {
+    const c = line.charCodeAt(i);
+    if (c !== 32 && c !== 9) return false;
+  }
+  return true;
+}
+
+/** Whether `needle` occurs entirely within `src[from, to)`, without slicing. */
+function includesBefore(src: string, needle: string, from: number, to: number): boolean {
+  const at = src.indexOf(needle, from);
+  return at !== -1 && at + needle.length <= to;
+}
+
 function compactNodes(nodes: MdNode[]): MdNode[] {
   const out: MdNode[] = [];
   for (const n of nodes) {
@@ -3115,8 +3111,6 @@ export function plainTextOf(nodes: readonly MdNode[]): string {
   return out;
 }
 
-// --- Post-inline pass: GitHub alerts ---
-
 function applyGithubAlerts(nodes: MdNode[]): void {
   for (const node of nodes) {
     if ("children" in node && Array.isArray(node.children)) {
@@ -3145,8 +3139,6 @@ function applyGithubAlerts(nodes: MdNode[]): void {
     node.alert = match[1].toLowerCase();
   }
 }
-
-// --- Public entry point ---
 
 const DEFAULT_PARSE_OPTIONS: Required<ParseOptions> = {
   gfm: true,

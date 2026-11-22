@@ -949,6 +949,12 @@ function alignItem(
   };
 }
 
+function sameVars(a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const key of keys) if (a[key] !== b[key]) return false;
+  return true;
+}
 function PopupPositioner({
   kind,
   side: sideProp,
@@ -1048,7 +1054,7 @@ function PopupPositioner({
       prev.left === next.left &&
       prev.side === next.side &&
       prev.align === next.align &&
-      JSON.stringify(prev.vars) === JSON.stringify(next.vars)
+      sameVars(prev.vars, next.vars)
         ? prev
         : next,
     );
@@ -1100,7 +1106,7 @@ function PopupPositioner({
     const list = el.current?.querySelector<HTMLElement>("[data-list-root]");
     if (list) list.scrollTop = pending.scrollTop;
     pending.scrollTop = null;
-  });
+  }, [placement]);
   const state = {
     open: api.open,
     side: placement?.itemAligned ? "none" : (placement?.side ?? side),
@@ -1716,16 +1722,17 @@ export declare namespace Tooltip {
   }
 }
 
+const LIST_ROOT = '[role="menu"],[data-list-root]';
+/** The popup's own enabled, rendered items; a list nested inside it keeps its items. */
 function listItems(popup: HTMLElement | null, selector: string) {
-  return popup
-    ? [...popup.querySelectorAll<HTMLElement>(selector)].filter(
-        (el) =>
-          !el.hasAttribute("data-disabled") &&
-          el.closest('[role="menu"],[data-list-root]') ===
-            el.closest('[role="menu"],[data-list-root]') &&
-          el.getClientRects().length > 0,
-      )
-    : [];
+  if (!popup) return [];
+  const root = popup.matches(LIST_ROOT) ? popup : popup.querySelector(LIST_ROOT);
+  return [...popup.querySelectorAll<HTMLElement>(selector)].filter(
+    (el) =>
+      !el.hasAttribute("data-disabled") &&
+      el.closest(LIST_ROOT) === root &&
+      el.getClientRects().length > 0,
+  );
 }
 function useTypeahead() {
   const buffer = useRef({ text: "", at: 0 });

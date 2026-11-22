@@ -103,8 +103,6 @@ export function toSvg(node: ElContent): string {
   return `${out}>${node.children.map(toSvg).join("")}</${node.tagName}>`;
 }
 
-// ---------- Drawing primitives ----------
-
 // The root declares short aliases (`--_fg`) for the host's `--pele-*` tokens; `.pele` hosts set those per theme.
 const THEME = {
   bg: ["bg", "#ffffff"],
@@ -418,8 +416,6 @@ function customStyle(declarations: string) {
   return out;
 }
 
-// ---------- Layered layout ----------
-
 type Direction = "TB" | "BT" | "LR" | "RL";
 type Point = { x: number; y: number };
 type Placed = Point & { width: number; height: number };
@@ -592,15 +588,30 @@ function layered(
     );
   const position = new Map<string, number>();
   const index = () => layers.forEach((layer) => layer.forEach((id, i) => position.set(id, i)));
+  // Edges between adjacent layers cross when their ends are inverted: counted with a Fenwick tree in O(E log V).
   const crossings = () => {
     let count = 0;
     for (const layer of layers) {
-      const pairs = layer.flatMap((id) =>
-        (down.get(id) ?? []).map((n) => [position.get(id)!, position.get(n)!] as const),
-      );
-      for (let i = 0; i < pairs.length; i++)
-        for (let j = i + 1; j < pairs.length; j++)
-          if ((pairs[i]![0] - pairs[j]![0]) * (pairs[i]![1] - pairs[j]![1]) < 0) count++;
+      const pairs: [number, number][] = [];
+      let size = 0;
+      for (const id of layer)
+        for (const n of down.get(id) ?? []) {
+          const lower = position.get(n)!;
+          pairs.push([position.get(id)!, lower]);
+          size = Math.max(size, lower + 1);
+        }
+      if (pairs.length < 2) continue;
+      // Ties on the upper end never cross; sorting them by lower end keeps them out of the count.
+      pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const tree = new Int32Array(size + 1);
+      for (let k = 0; k < pairs.length; k++) {
+        const lower = pairs[k]![1];
+        // Earlier pairs whose lower end lies strictly beyond this one.
+        let atMost = 0;
+        for (let i = lower + 1; i > 0; i -= i & -i) atMost += tree[i]!;
+        count += k - atMost;
+        for (let i = lower + 1; i <= size; i += i & -i) tree[i]!++;
+      }
     }
     return count;
   };
@@ -756,8 +767,6 @@ function spline(points: Point[], horizontal: boolean) {
   }
   return d;
 }
-
-// ---------- Graph diagrams: shared scene ----------
 
 type GraphNode = {
   id: string;
@@ -958,9 +967,12 @@ function drawGraph(
     place("", 0, 0);
     return size;
   };
-  pass();
-  edges.forEach(route);
-  const root = pass();
+  let root = pass();
+  // Routing sets port hints that reorder boundary lanes; without ports a second pass is identical.
+  if (ports.size) {
+    edges.forEach(route);
+    root = pass();
+  }
   const routes = edges.map(route);
   const sides = new Map<string, End[]>();
   for (const route of routes)
@@ -1319,8 +1331,6 @@ function sizeFor(shape: string, label: Label) {
   return { width: Math.max(w, 48), height: h };
 }
 
-// ---------- flowchart ----------
-
 const SHAPES: [string, string, string][] = [
   ["(((", ")))", "doublecircle"],
   ["((", "))", "circle"],
@@ -1565,8 +1575,6 @@ function closerFor(after: string, shape: [string, string, string]) {
   );
 }
 
-// ---------- stateDiagram ----------
-
 function stateDiagram(lines: string[], ctx: Context) {
   let direction: Direction = "TB";
   const states = new Map<
@@ -1754,8 +1762,6 @@ function stateDiagram(lines: string[], ctx: Context) {
   );
 }
 
-// ---------- classDiagram ----------
-
 const CLASS_RELATION =
   /^(\S+?)\s*(?:"([^"]*)"\s*)?(<\|--|<\|\.\.|\*--|o--|<--|<\.\.|--\|>|\.\.\|>|--\*|--o|-->|\.\.>|--|\.\.)\s*(?:"([^"]*)"\s*)?(\S+?)(?:\s*:\s*(.*))?$/;
 function classDiagram(lines: string[], ctx: Context) {
@@ -1887,8 +1893,6 @@ function classDiagram(lines: string[], ctx: Context) {
   return drawGraph(ctx, nodes, relations, [], direction);
 }
 
-// ---------- erDiagram ----------
-
 const ER_RELATION =
   /^(\S+?)\s*([|}][|o]|[|o][|{])(--|\.\.)([|o][|{]|[|}][|o])\s*(\S+?)\s*:\s*(.+)$/;
 const ER_MARKERS: Record<string, string> = {
@@ -2011,8 +2015,6 @@ function erDiagram(lines: string[], ctx: Context) {
   });
   return drawGraph(ctx, nodes, relations, [], direction);
 }
-
-// ---------- sequenceDiagram ----------
 
 type SequenceEvent =
   | {
@@ -2370,8 +2372,6 @@ function sequence(lines: string[], ctx: Context) {
   };
 }
 
-// ---------- pie ----------
-
 function pie(lines: string[], ctx: Context) {
   let title = /^pie\b.*?\btitle\s+(.+)$/.exec(lines[0]!)?.[1] ?? "";
   const showData = /\bshowData\b/.test(lines[0]!);
@@ -2460,8 +2460,6 @@ function pie(lines: string[], ctx: Context) {
     height: Math.max(cy + radius, top + (slices.length * 22) / 2 + radius),
   };
 }
-
-// ---------- xychart-beta ----------
 
 function niceTicks(min: number, max: number, count = 5) {
   const span = max - min || Math.abs(max) || 1;
@@ -2652,8 +2650,6 @@ function xychart(lines: string[], ctx: Context) {
     );
   return { content, width: left + plotWidth + 8, height };
 }
-
-// ---------- gantt ----------
 
 const HOUR = 36e5;
 const DAY = 24 * HOUR;
