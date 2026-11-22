@@ -30,6 +30,8 @@ export interface Change {
 
 // Up to this many edits, Myers is cheaper than interning and matches jsdiff exactly.
 const MYERS_EDITS = 256;
+// Minimal diffs stay exact up to this many edits; Myers' O(D²) trace would reach GiBs past it.
+const MINIMAL_MYERS_EDITS = 2048;
 // Tokens repeated more often than this within a region are never anchors (git's cap).
 const MAX_CHAIN = 64;
 // Bounds an anchorless region's O(D²) Myers; past it the region is replaced whole.
@@ -54,12 +56,19 @@ function diffRuns(
   const deadline = Date.now() + timeout;
   // match[i] = j + 1 when a[i] pairs with b[j].
   const match = new Int32Array(a.length);
-  const cap = minimal ? maxEditLength : Math.min(maxEditLength, MYERS_EDITS);
-  if (!myers(a, 0, a.length, b, 0, b.length, match, cap, deadline)) {
+  // Myers' first snake takes the common prefix anyway; skipping it keeps its arrays small.
+  let lo = 0;
+  while (lo < a.length && lo < b.length && a[lo] === b[lo]) match[lo++] = lo;
+  const cap = Math.min(maxEditLength, minimal ? MINIMAL_MYERS_EDITS : MYERS_EDITS);
+  if (!myers(a, lo, a.length, b, lo, b.length, match, cap, deadline)) {
+    // Histogram trims the suffix first too, so doing it before interning changes nothing.
+    let aHi = a.length;
+    let bHi = b.length;
+    while (aHi > lo && bHi > lo && a[aHi - 1] === b[bHi - 1]) match[--aHi] = bHi--;
     if (
       cap === maxEditLength ||
-      Date.now() > deadline ||
-      !histogram(a, b, match, maxEditLength, deadline)
+      expired(deadline) ||
+      !histogram(a, lo, aHi, b, lo, bHi, match, maxEditLength, deadline)
     )
       return undefined;
   }
@@ -84,26 +93,38 @@ function diffRuns(
   return edits > maxEditLength ? undefined : runs;
 }
 
+const expired = (deadline: number) => deadline !== Infinity && Date.now() > deadline;
+
+/** Histogram diff of `a[aLo, aHi)` against `b[bLo, bHi)`; tokens outside are never read. */
 function histogram(
   a: readonly string[],
+  aLo0: number,
+  aHi0: number,
   b: readonly string[],
+  bLo0: number,
+  bHi0: number,
   match: Int32Array,
   maxEditLength: number,
   deadline: number,
 ): boolean {
   const ids = new Map<string, number>();
-  const intern = (tokens: readonly string[]) =>
-    Int32Array.from(tokens, (token) => {
+  const intern = (tokens: readonly string[], lo: number, hi: number) => {
+    // Indexed like the full lists so `match` needs no offsets; only [lo, hi) is filled.
+    const out = new Int32Array(hi);
+    for (let i = lo; i < hi; i++) {
+      const token = tokens[i]!;
       let id = ids.get(token);
       if (id === undefined) ids.set(token, (id = ids.size));
-      return id;
-    });
-  const ai = intern(a);
-  const bi = intern(b);
+      out[i] = id;
+    }
+    return out;
+  };
+  const ai = intern(a, aLo0, aHi0);
+  const bi = intern(b, bLo0, bHi0);
   const head = new Int32Array(ids.size).fill(-1);
   const count = new Int32Array(ids.size);
   const next = new Int32Array(ai.length);
-  const regions = [0, ai.length, 0, bi.length];
+  const regions = [aLo0, aHi0, bLo0, bHi0];
 
   while (regions.length > 0) {
     let bHi = regions.pop()!;
@@ -113,7 +134,7 @@ function histogram(
     while (aLo < aHi && bLo < bHi && ai[aLo] === bi[bLo]) match[aLo++] = ++bLo;
     while (aLo < aHi && bLo < bHi && ai[aHi - 1] === bi[bHi - 1]) match[--aHi] = bHi--;
     if (aLo === aHi || bLo === bHi) continue;
-    if (Date.now() > deadline) return false;
+    if (expired(deadline)) return false;
 
     for (let i = aHi - 1; i >= aLo; i--) {
       const t = ai[i]!;
@@ -166,7 +187,7 @@ function histogram(
       regions.push(aLo, bestA, bLo, bestB, bestA + bestLen, aHi, bestB + bestLen, bHi);
     } else if (common) {
       const cap = Math.min(maxEditLength, FALLBACK_EDITS);
-      if (!myers(ai, aLo, aHi, bi, bLo, bHi, match, cap, deadline) && Date.now() > deadline)
+      if (!myers(ai, aLo, aHi, bi, bLo, bHi, match, cap, deadline) && expired(deadline))
         return false;
     }
   }
@@ -192,7 +213,7 @@ function myers<T>(
   const off = max + 1;
   const trace: Int32Array[] = [];
   for (let d = 0; d <= max; d++) {
-    if (Date.now() > deadline) return false;
+    if (expired(deadline)) return false;
     for (let k = -d; k <= d; k += 2) {
       let x =
         k === -d || (k !== d && v[off + k - 1]! < v[off + k + 1]!)
