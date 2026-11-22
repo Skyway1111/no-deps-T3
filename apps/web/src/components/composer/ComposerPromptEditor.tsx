@@ -286,6 +286,7 @@ function ComposerPromptEditorInner(
   // oxlint-disable-next-line react/refs -- mirror latest editor state for imperative handle and DOM listeners
   stateRef.current = editorState;
   const domRef = useRef<HTMLDivElement | null>(null);
+  const mountedChildrenRef = useRef<ChildNode[]>([]);
   const historyRef = useRef(new ComposerHistory());
   const listenersRef = useRef<Set<(e: ComposerDocChangeEvent) => void>>(new Set());
   const destroyedRef = useRef(false);
@@ -465,7 +466,9 @@ function ComposerPromptEditorInner(
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keep contenteditable DOM selection and caret scroll aligned with editorState
   useLayoutEffect(() => {
     const root = domRef.current;
-    if (!root || composingRef.current) return;
+    if (!root) return;
+    mountedChildrenRef.current = Array.from(root.childNodes);
+    if (composingRef.current) return;
     if (document.activeElement === root) {
       syncingSelRef.current = true;
       applyFlatSelectionToDom(root, editorState.doc, editorState.selection);
@@ -808,6 +811,21 @@ function ComposerPromptEditorInner(
     commit(insertText(state, text, { richText, literalText }), { revealCaret: true });
   };
 
+  const runDelete = (direction: "backward" | "forward", unit: "char" | "word" | "line") => {
+    if (direction === "backward" && unit === "char" && selectionEmpty(stateRef.current.selection)) {
+      const undoRule = historyRef.current.consumeInputRuleUndo();
+      if (undoRule) {
+        commit({ ...undoRule, changeKind: "delete" }, { revealCaret: true });
+        return;
+      }
+    }
+    const res =
+      direction === "backward"
+        ? deleteBackward(stateRef.current, unit)
+        : deleteForward(stateRef.current, unit);
+    if (res) commit(res, { revealCaret: true });
+  };
+
   const handleBeforeInput = useEffectEvent((e: InputEvent) => {
     if (disabled) {
       e.preventDefault();
@@ -834,27 +852,18 @@ function ComposerPromptEditorInner(
     }
     if (type.startsWith("delete") && type.endsWith("Backward")) {
       e.preventDefault();
-      if (type === "deleteContentBackward" && selectionEmpty(stateRef.current.selection)) {
-        const undoRule = historyRef.current.consumeInputRuleUndo();
-        if (undoRule) {
-          commit({ ...undoRule, changeKind: "delete" }, { revealCaret: true });
-          return;
-        }
-      }
-      const res = deleteBackward(
-        stateRef.current,
+      runDelete(
+        "backward",
         type === "deleteWordBackward" ? "word" : type === "deleteContentBackward" ? "char" : "line",
       );
-      if (res) commit(res, { revealCaret: true });
       return;
     }
     if (type.startsWith("delete") && type.endsWith("Forward")) {
       e.preventDefault();
-      const res = deleteForward(
-        stateRef.current,
+      runDelete(
+        "forward",
         type === "deleteWordForward" ? "word" : type === "deleteContentForward" ? "char" : "line",
       );
-      if (res) commit(res, { revealCaret: true });
       return;
     }
     if (type === "historyUndo" || type === "historyRedo") {
@@ -890,6 +899,16 @@ function ComposerPromptEditorInner(
     const root = domRef.current;
     if (!root) return;
     const { doc, selection } = readDocFromDom(root, stateRef.current.doc);
+    // Restore React-owned direct children before bumping domRevision so Fragment unmount
+    // never throws NotFoundError in removeChild after a native edit detaches a block.
+    const owned = mountedChildrenRef.current;
+    const ownedSet = new Set<ChildNode>(owned);
+    for (const child of Array.from(root.childNodes)) {
+      if (!ownedSet.has(child)) child.remove();
+    }
+    for (const child of owned) {
+      if (child.parentNode !== root) root.appendChild(child);
+    }
     commit(
       { doc, selection, changeKind: "insert" },
       { isComposition, bumpDom: true, revealCaret: true },
@@ -1127,6 +1146,36 @@ function ComposerPromptEditorInner(
     if (handler?.(ev.key, ev)) {
       re.preventDefault();
       re.stopPropagation();
+      return;
+    }
+    if (
+      (ev.key === "Backspace" || ev.key === "Delete") &&
+      !re.defaultPrevented &&
+      !ev.isComposing &&
+      ev.keyCode !== 229 &&
+      !composingRef.current &&
+      (!domRef.current || document.activeElement === domRef.current) &&
+      !hasCommandForKeyDown(ev)
+    ) {
+      // WebKit skips beforeinput on Backspace at an empty block and deletes the <p> natively.
+      const unit: "char" | "word" | "line" | null =
+        !ev.altKey && !ev.metaKey && !ev.ctrlKey && (!ev.shiftKey || ev.key === "Backspace")
+          ? "char"
+          : mac
+            ? ev.altKey && !ev.metaKey && !ev.ctrlKey
+              ? "word"
+              : ev.metaKey && !ev.altKey && !ev.ctrlKey
+                ? "line"
+                : null
+            : ev.ctrlKey && !ev.altKey && !ev.metaKey
+              ? ev.shiftKey
+                ? "line"
+                : "word"
+              : null;
+      if (unit) {
+        re.preventDefault();
+        runDelete(ev.key === "Backspace" ? "backward" : "forward", unit);
+      }
     }
   };
 
