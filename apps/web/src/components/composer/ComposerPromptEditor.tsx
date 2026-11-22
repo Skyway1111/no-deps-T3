@@ -283,6 +283,7 @@ function ComposerPromptEditorInner(
   const [openCitation, setOpenCitation] = useState<OpenCitationComment | null>(null);
 
   const stateRef = useRef(editorState);
+  // oxlint-disable-next-line react/refs -- mirror latest editor state for imperative handle and DOM listeners
   stateRef.current = editorState;
   const domRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef(new ComposerHistory());
@@ -292,6 +293,7 @@ function ComposerPromptEditorInner(
   const syncingSelRef = useRef(false);
   const pendingRevealRef = useRef(false);
   const disabledRef = useRef(disabled);
+  // oxlint-disable-next-line react/refs -- mirror disabled prop for imperative controller reads
   disabledRef.current = disabled;
   const latestValueRef = useRef(value);
   const appliedControlledRef = useRef(false);
@@ -316,6 +318,7 @@ function ComposerPromptEditorInner(
     onUpdate: () => setHighlightTick((t) => t + 1),
   });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- dispose the imperative code-block highlighter on unmount
   useEffect(() => {
     destroyedRef.current = false;
     const hl = highlighterRef.current;
@@ -325,6 +328,7 @@ function ComposerPromptEditorInner(
     };
   }, []);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- push document updates to the imperative code-block highlighter
   useEffect(() => {
     if (richText) highlighterRef.current?.syncDoc(editorState.doc, true);
   }, [editorState.doc, richText]);
@@ -335,7 +339,7 @@ function ComposerPromptEditorInner(
 
   const notifyHost = (
     next: ComposerEditorState,
-    opts?: { silentSelection?: boolean; skipEmit?: boolean },
+    opts?: { silentSelection?: boolean; skipEmit?: boolean; fromHistory?: boolean },
   ) => {
     const map = serializeEditorDoc(next.doc);
     const contextIds = literalText ? [] : [...map.contextIds];
@@ -381,6 +385,7 @@ function ComposerPromptEditorInner(
       suppressTrigger,
       contextIds,
       prev.value !== nextValue,
+      opts?.fromHistory,
     );
   };
 
@@ -388,6 +393,7 @@ function ComposerPromptEditorInner(
     next: ComposerEditResult,
     opts?: {
       addToHistory?: boolean;
+      fromHistory?: boolean;
       clipboardEvent?: "paste" | "cut";
       compositionReplace?: boolean;
       isComposition?: boolean;
@@ -456,6 +462,7 @@ function ComposerPromptEditorInner(
     applyEdit: (next, opts) => commit(next, { ...opts, revealCaret: true }),
   };
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keep contenteditable DOM selection and caret scroll aligned with editorState
   useLayoutEffect(() => {
     const root = domRef.current;
     if (!root || composingRef.current) return;
@@ -472,6 +479,7 @@ function ComposerPromptEditorInner(
     } else {
       pendingRevealRef.current = false;
     }
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- domRevision forces DOM selection re-sync after imperative DOM rebuilds
   }, [editorState, domRevision]);
 
   const onSelectionChange = useEffectEvent(() => {
@@ -495,6 +503,7 @@ function ComposerPromptEditorInner(
   }, []);
 
   const resumeFocusRef = useRef(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- manage contenteditable DOM focus restoration across disabled transitions
   useEffect(() => {
     const dom = domRef.current;
     if (!dom) return;
@@ -571,6 +580,7 @@ function ComposerPromptEditorInner(
     if (updated) onCitationDraftSave(replacedValue, serializeEditorDoc(updated).value);
   });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reconcile controlled value/cursor props into the contenteditable document and DOM selection
   useLayoutEffect(() => {
     latestValueRef.current = value;
     const initial = !appliedControlledRef.current;
@@ -638,8 +648,10 @@ function ComposerPromptEditorInner(
     }
     if (citationReqRef.current?.value === value)
       openPendingCitation(nextState.doc, citationReqRef.current);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- only re-reconcile controlled editor state when controlled props change
   }, [cursor, isKnownModel, literalText, richText, skillLabelFor, value]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refresh inline skill/model chips in the editor model when catalog props change
   useEffect(() => {
     if (literalText) return;
     const reps = skillChipReplacements(
@@ -660,8 +672,10 @@ function ComposerPromptEditorInner(
       },
       { addToHistory: false, skipEmit: true },
     );
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- only re-scan chips when catalog or literal mode changes
   }, [literalText, modelKeys, skills]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restore contenteditable DOM focus and selection across inner editor remounts
   useLayoutEffect(() => {
     const root = domRef.current;
     if (!root) return;
@@ -764,7 +778,7 @@ function ComposerPromptEditorInner(
         };
       }
     }
-    commit(restored, { addToHistory: false, revealCaret: true });
+    commit(restored, { addToHistory: false, fromHistory: true, revealCaret: true });
   };
 
   const handleInsertOrSurround = (text: string) => {

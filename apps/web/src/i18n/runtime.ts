@@ -1,13 +1,15 @@
-import { resolveLocale } from "@t3tools/client-runtime/locales";
-import { setLocale, type Catalog } from "@t3tools/shared/i18n";
+import { setLocale, subscribeI18n as subscribeCoreI18n, type Catalog } from "@t3tools/shared/i18n";
 
 import { getClientSettings, subscribeClientSettings } from "../hooks/useSettings";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "./locales";
-
-export { subscribeI18n } from "@t3tools/shared/i18n";
+import { DEFAULT_LOCALE, resolveWebLocaleSelection } from "./locales";
 
 const catalogs = new Map<string, Promise<Catalog | undefined>>();
-let requestedLocale = DEFAULT_LOCALE;
+const formattingListeners = new Set<() => void>();
+let activeFormattingLocale: string | undefined;
+let requestedLocale: ReturnType<typeof resolveWebLocaleSelection> = {
+  catalogLocale: DEFAULT_LOCALE,
+  formattingLocale: undefined,
+};
 
 // English is the source text, so it never loads a chunk.
 function loadCatalog(locale: string): Promise<Catalog | undefined> {
@@ -29,27 +31,41 @@ function loadCatalog(locale: string): Promise<Catalog | undefined> {
 
 /** Resolves once the requested locale's translations are active; immediate for English. */
 export function whenLocaleReady(): Promise<void> {
-  const locale = requestedLocale;
+  const selection = requestedLocale;
+  const locale = selection.catalogLocale;
   return loadCatalog(locale).then((catalog) => {
-    if (requestedLocale !== locale) return;
+    if (requestedLocale !== selection) return;
     const active = catalog ? locale : DEFAULT_LOCALE;
+    const formattingChanged = activeFormattingLocale !== selection.formattingLocale;
+    activeFormattingLocale = selection.formattingLocale;
     setLocale(active, catalog);
     document.documentElement.lang = active;
+    if (formattingChanged) {
+      for (const listener of formattingListeners) listener();
+    }
   });
 }
 
 function applyLanguageSetting(): void {
   // Not desktopBridge.getSystemLocale(): that is the regional/time locale, not the UI language.
-  requestedLocale = resolveLocale(
-    getClientSettings().language,
-    navigator.languages,
-    SUPPORTED_LOCALES,
-    DEFAULT_LOCALE,
-  );
+  requestedLocale = resolveWebLocaleSelection(getClientSettings().language, navigator.languages);
   void whenLocaleReady();
 }
 
 export function startI18n(): void {
   subscribeClientSettings(applyLanguageSetting);
   applyLanguageSetting();
+}
+
+export function subscribeI18n(listener: () => void): () => void {
+  const unsubscribeCore = subscribeCoreI18n(listener);
+  formattingListeners.add(listener);
+  return () => {
+    unsubscribeCore();
+    formattingListeners.delete(listener);
+  };
+}
+
+export function getFormattingLocale(): string | undefined {
+  return activeFormattingLocale;
 }

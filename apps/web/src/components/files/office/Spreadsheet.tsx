@@ -154,9 +154,11 @@ export default function Spreadsheet(props: {
 }) {
   const { onError, src, onDetails } = props;
   const gt = useGT();
-  const [opened, setOpened] = useState<Opened>();
-  const [sheet, setSheet] = useState<{ index: number; data: SheetData }>();
-  const [error, setError] = useState("");
+  const [preview, setPreview] = useState<{
+    opened: Opened;
+    sheet: { index: number; data: SheetData };
+    error?: string;
+  }>();
   const picking = useRef<AbortController | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the workbook fetch, worker and its sheet requests for this file, closing it when the file changes or unmounts.
   useEffect(() => {
@@ -174,8 +176,7 @@ export default function Spreadsheet(props: {
         if (!tabs.length) throw new Error(m(msg("This workbook has no visible sheets.")));
         const data = await engine.call("sheet", { sheet: active }, { signal: controller.signal });
         settle();
-        setOpened({ engine, tabs, styles });
-        setSheet({ index: active, data });
+        setPreview({ opened: { engine, tabs, styles }, sheet: { index: active, data } });
         onDetails(sheetCount(tabs.length), data.truncated);
       })
       .catch((cause: unknown) => {
@@ -187,23 +188,30 @@ export default function Spreadsheet(props: {
       engine.close();
     };
   }, [src, onDetails, onError]);
-  if (!opened || !sheet) return <FileSurfaceLoading />;
   const show = (index: number) => {
+    if (!preview) return;
+    const { opened, sheet } = preview;
     picking.current?.abort();
+    // The previous reply may have queued a state update that React has yet to commit.
+    setPreview(preview);
     if (index === sheet.index) return;
     const controller = new AbortController();
     picking.current = controller;
     void opened.engine
       .call("sheet", { sheet: index }, { signal: controller.signal })
       .then((data) => {
-        setError("");
-        setSheet({ index, data });
-        onDetails(sheetCount(opened.tabs.length), data.truncated);
+        if (!controller.signal.aborted) {
+          setPreview({ opened, sheet: { index, data } });
+          onDetails(sheetCount(opened.tabs.length), data.truncated);
+        }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setError(m(msg("This sheet could not be opened.")));
+        if (!controller.signal.aborted)
+          setPreview({ opened, sheet, error: m(msg("This sheet could not be opened.")) });
       });
   };
+  if (!preview) return <FileSurfaceLoading />;
+  const { opened, sheet, error } = preview;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {error ? <FileSurfaceNotice>{error}</FileSurfaceNotice> : null}
@@ -224,7 +232,9 @@ export default function Spreadsheet(props: {
         aria-label={gt("Sheets")}
         className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t border-border px-2"
         onKeyDown={(event) => {
-          const current = opened.tabs.findIndex((tab) => tab.index === sheet.index);
+          // Focus moves before the worker confirms the selected sheet.
+          const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+          const current = Array.from(buttons).findIndex((button) => button === event.target);
           const count = opened.tabs.length;
           const next = {
             ArrowRight: (current + 1) % count,
@@ -236,7 +246,7 @@ export default function Spreadsheet(props: {
           event.preventDefault();
           const tab = opened.tabs[next];
           if (tab) show(tab.index);
-          event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+          buttons[next]?.focus();
         }}
       >
         {opened.tabs.map((tab) => (
