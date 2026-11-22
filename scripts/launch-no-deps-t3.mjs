@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
@@ -54,16 +55,32 @@ const serverArgs = [
   String(port),
   "--base-dir",
   STATE_DIR,
+  "--bootstrap-fd",
+  "3",
   ...(extraCwd ? [extraCwd] : []),
 ];
 
+// Same handshake as the Electron app: the server trusts this token, t3-desktop hands it to the web client.
+const bootstrapToken = NodeCrypto.randomBytes(32).toString("hex");
 const server = NodeChildProcess.spawn(process.execPath, serverArgs, {
-  stdio: ["ignore", "pipe", "pipe"],
+  stdio: ["ignore", "pipe", "pipe", "pipe"],
   env: { ...process.env, T3CODE_HOME: STATE_DIR },
 });
+server.stdio[3].end(
+  JSON.stringify({
+    mode: "desktop",
+    noBrowser: true,
+    port,
+    host: "127.0.0.1",
+    t3Home: STATE_DIR,
+    desktopBootstrapToken: bootstrapToken,
+    tailscaleServeEnabled: false,
+    tailscaleServePort: 443,
+  }) + "\n",
+);
 
-let pairingUrl = null;
-let baseUrl = null;
+const origin = `http://127.0.0.1:${port}`;
+let ready = false;
 let exited = false;
 let resolveReady;
 const readyPromise = new Promise((resolve) => {
@@ -73,13 +90,10 @@ const readyPromise = new Promise((resolve) => {
 const onChunk = (stream) => (buf) => {
   const text = buf.toString();
   if (process.env.NO_DEPS_T3_VERBOSE === "1") stream.write(text);
-  const pairMatch = text.match(/Pairing URL:\s*(https?:\/\/\S+)/);
-  if (pairMatch && !pairingUrl) {
-    pairingUrl = pairMatch[1];
+  if (!ready && text.includes(`Listening on ${origin}`)) {
+    ready = true;
     resolveReady();
   }
-  const listenMatch = text.match(/Listening on\s*(https?:\/\/\S+)/);
-  if (listenMatch && !baseUrl) baseUrl = listenMatch[1];
 };
 server.stdout.on("data", onChunk(process.stdout));
 server.stderr.on("data", onChunk(process.stderr));
@@ -108,17 +122,17 @@ const timeout = setTimeout(resolveReady, 20_000);
 await readyPromise;
 clearTimeout(timeout);
 
-const launchUrl = pairingUrl || baseUrl;
-if (!launchUrl) {
+if (!ready) {
   shutdown();
   console.error("no-deps-T3 server failed to start within 20s.");
   process.exit(1);
 }
 
 if (browserMode || !NodeFS.existsSync(DESKTOP_BIN)) {
-  console.log(`no-deps-T3 running at ${launchUrl}`);
+  const pairUrl = `${origin}/pair#token=${bootstrapToken}`;
+  console.log(`no-deps-T3 running at ${pairUrl}`);
   if (browserMode) {
-    NodeChildProcess.spawn("xdg-open", [launchUrl], { stdio: "ignore", detached: true }).unref();
+    NodeChildProcess.spawn("xdg-open", [pairUrl], { stdio: "ignore", detached: true }).unref();
   }
   await new Promise((resolve) => server.on("exit", resolve));
   process.exit(0);
@@ -126,7 +140,7 @@ if (browserMode || !NodeFS.existsSync(DESKTOP_BIN)) {
 
 const desktopArgs = [
   "--url",
-  launchUrl,
+  origin,
   "--title",
   "no-deps-T3",
   "--state-dir",
@@ -136,7 +150,10 @@ const desktopArgs = [
   ...deepLinks,
 ];
 
-const desktop = NodeChildProcess.spawn(DESKTOP_BIN, desktopArgs, { stdio: "inherit" });
+const desktop = NodeChildProcess.spawn(DESKTOP_BIN, desktopArgs, {
+  stdio: "inherit",
+  env: { ...process.env, T3_DESKTOP_BOOTSTRAP_TOKEN: bootstrapToken },
+});
 desktop.on("exit", (code) => {
   shutdown();
   setTimeout(() => process.exit(code ?? 0), 300).unref();

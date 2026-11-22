@@ -143,7 +143,10 @@ extern "C" {
         connect_flags: c_uint,
     ) -> c_ulong;
     fn g_slist_free_full(list: *mut GSList, free_func: unsafe extern "C" fn(*mut c_void));
-    fn g_idle_add(function: unsafe extern "C" fn(*mut c_void) -> c_int, data: *mut c_void) -> c_uint;
+    fn g_idle_add(
+        function: unsafe extern "C" fn(*mut c_void) -> c_int,
+        data: *mut c_void,
+    ) -> c_uint;
 
     // GIO D-Bus (for XDG Desktop Portal color-scheme without dbus-next)
     fn g_bus_get_sync(
@@ -284,8 +287,9 @@ extern "C" {
     fn webkit_find_controller_search_next(find_controller: *mut WebKitFindController);
     fn webkit_find_controller_search_previous(find_controller: *mut WebKitFindController);
     fn webkit_find_controller_search_finish(find_controller: *mut WebKitFindController);
-    fn webkit_javascript_result_get_js_value(js_result: *mut WebKitJavascriptResult)
-        -> *mut JscValue;
+    fn webkit_javascript_result_get_js_value(
+        js_result: *mut WebKitJavascriptResult,
+    ) -> *mut JscValue;
     fn jsc_value_to_string(value: *mut JscValue) -> *mut c_char;
 }
 
@@ -598,7 +602,10 @@ impl HostActions for LinuxHost {
     fn open_external(&self, url: &str) -> bool {
         let opened_via_gtk = GTK_UI.with(|cell| {
             let borrow = cell.borrow();
-            let parent = borrow.as_ref().map(|ui| ui.window).unwrap_or(ptr::null_mut());
+            let parent = borrow
+                .as_ref()
+                .map(|ui| ui.window)
+                .unwrap_or(ptr::null_mut());
             let c_url = cstring(url);
             let mut err: *mut GError = ptr::null_mut();
             let ok = unsafe { gtk_show_uri_on_window(parent, c_url.as_ptr(), 0, &mut err) };
@@ -707,7 +714,12 @@ impl HostActions for LinuxHost {
         });
     }
 
-    fn preview_create_tab(&self, tab_id: &str, zoom_factor: Option<f64>, color_scheme: Option<&str>) {
+    fn preview_create_tab(
+        &self,
+        tab_id: &str,
+        zoom_factor: Option<f64>,
+        color_scheme: Option<&str>,
+    ) {
         GTK_UI.with(|cell| {
             let mut borrow = cell.borrow_mut();
             let Some(ui) = borrow.as_mut() else { return };
@@ -849,7 +861,8 @@ impl HostActions for LinuxHost {
         with_preview_tab(tab_id, |entry| unsafe {
             let controller = webkit_web_view_get_find_controller(entry.webview);
             if new_session {
-                let mut opts = WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE | WEBKIT_FIND_OPTIONS_WRAP_AROUND;
+                let mut opts =
+                    WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE | WEBKIT_FIND_OPTIONS_WRAP_AROUND;
                 if !forward {
                     opts |= WEBKIT_FIND_OPTIONS_BACKWARDS;
                 }
@@ -925,7 +938,10 @@ fn with_preview_tab<F: FnOnce(&PreviewTabEntry)>(tab_id: &str, f: F) {
 fn run_file_chooser(action: c_int, options: FileDialogOptions) -> Vec<String> {
     GTK_UI.with(|cell| {
         let borrow = cell.borrow();
-        let parent = borrow.as_ref().map(|ui| ui.window).unwrap_or(ptr::null_mut());
+        let parent = borrow
+            .as_ref()
+            .map(|ui| ui.window)
+            .unwrap_or(ptr::null_mut());
         let title = cstring(&options.title);
         let cancel_label = cstring("_Cancel");
         let open_label = cstring("_Open");
@@ -990,7 +1006,8 @@ fn run_file_chooser(action: c_int, options: FileDialogOptions) -> Vec<String> {
 /// Cached briefly: each lookup is a blocking D-Bus round trip on the GTK thread, and a window
 /// asks several times while it starts and opens previews.
 pub fn detect_linux_color_scheme() -> ColorScheme {
-    static CACHE: std::sync::Mutex<Option<(std::time::Instant, ColorScheme)>> = std::sync::Mutex::new(None);
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, ColorScheme)>> =
+        std::sync::Mutex::new(None);
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some((at, scheme)) = *cache {
         if at.elapsed() < std::time::Duration::from_secs(2) {
@@ -1037,7 +1054,10 @@ fn query_xdg_portal_color_scheme() -> Option<ColorScheme> {
         let key = cstring("color-scheme");
 
         let make_params = || {
-            let children = [g_variant_new_string(ns.as_ptr()), g_variant_new_string(key.as_ptr())];
+            let children = [
+                g_variant_new_string(ns.as_ptr()),
+                g_variant_new_string(key.as_ptr()),
+            ];
             g_variant_new_tuple(children.as_ptr(), children.len())
         };
 

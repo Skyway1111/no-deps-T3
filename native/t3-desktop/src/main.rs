@@ -119,6 +119,11 @@ fn parse_args(args: &[String]) -> Result<CliOptions, String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
+    // Admin-scoped credential: take it before any thread starts so WebKit and spawned helpers never inherit it.
+    let bootstrap_token = env::var("T3_DESKTOP_BOOTSTRAP_TOKEN")
+        .ok()
+        .filter(|t| !t.is_empty());
+    env::remove_var("T3_DESKTOP_BOOTSTRAP_TOKEN");
     let opts = match parse_args(&args) {
         Ok(o) => o,
         Err(err) => {
@@ -145,8 +150,14 @@ fn main() -> ExitCode {
         {
             platform::linux::reveal_window_from_any_thread();
             for arg in forwarded.iter().skip(1) {
-                if arg.starts_with("t3code://") || arg.starts_with("https://") || arg.starts_with("http://") {
-                    platform::linux::emit_event_from_any_thread("desktop:web-link-open", &Json::from(arg.as_str()));
+                if arg.starts_with("t3code://")
+                    || arg.starts_with("https://")
+                    || arg.starts_with("http://")
+                {
+                    platform::linux::emit_event_from_any_thread(
+                        "desktop:web-link-open",
+                        &Json::from(arg.as_str()),
+                    );
                 }
             }
         }
@@ -190,19 +201,16 @@ fn main() -> ExitCode {
         .or_else(|| local_endpoint.as_ref().map(|e| e.http_base_url.clone()))
         .unwrap_or_else(|| "http://127.0.0.1:3773".to_string());
 
-    if local_endpoint.is_none() && target_url.starts_with("http") {
-        let ws = if let Some(rest) = target_url.strip_prefix("https://") {
-            format!("wss://{rest}")
-        } else if let Some(rest) = target_url.strip_prefix("http://") {
-            format!("ws://{rest}")
-        } else {
-            target_url.clone()
-        };
-        local_endpoint = Some(ServerEndpoint {
-            http_base_url: target_url.trim_end_matches('/').to_string(),
-            ws_base_url: ws.trim_end_matches('/').to_string(),
-            bootstrap_token: None,
-        });
+    if local_endpoint.is_none() {
+        if let Some((scheme, rest)) = target_url.split_once("://") {
+            let host = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
+            let ws_scheme = if scheme == "https" { "wss" } else { "ws" };
+            local_endpoint = Some(ServerEndpoint {
+                http_base_url: format!("{scheme}://{host}"),
+                ws_base_url: format!("{ws_scheme}://{host}"),
+                bootstrap_token,
+            });
+        }
     }
 
     let window = WindowConfig {

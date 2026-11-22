@@ -67,10 +67,18 @@ impl ServerSupervisor {
         let mut readers = Vec::new();
 
         if let Some(stdout) = child.stdout.take() {
-            readers.push(spawn_log_reader("t3-server-stdout", stdout, Arc::clone(&state)));
+            readers.push(spawn_log_reader(
+                "t3-server-stdout",
+                stdout,
+                Arc::clone(&state),
+            ));
         }
         if let Some(stderr) = child.stderr.take() {
-            readers.push(spawn_log_reader("t3-server-stderr", stderr, Arc::clone(&state)));
+            readers.push(spawn_log_reader(
+                "t3-server-stderr",
+                stderr,
+                Arc::clone(&state),
+            ));
         }
 
         Ok(Self {
@@ -82,7 +90,10 @@ impl ServerSupervisor {
 
     pub fn endpoint(&self) -> Option<ServerEndpoint> {
         let (lock, _) = &*self.state;
-        lock.lock().unwrap_or_else(|e| e.into_inner()).endpoint.clone()
+        lock.lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .endpoint
+            .clone()
     }
 
     pub fn wait_ready(&self, timeout: Duration) -> io::Result<ServerEndpoint> {
@@ -109,7 +120,9 @@ impl ServerSupervisor {
                     "timed out waiting for t3 backend listening URL",
                 ));
             }
-            let remaining = deadline.saturating_duration_since(now).min(Duration::from_millis(50));
+            let remaining = deadline
+                .saturating_duration_since(now)
+                .min(Duration::from_millis(50));
             let (next_guard, _) = cvar
                 .wait_timeout(guard, remaining)
                 .unwrap_or_else(|e| e.into_inner());
@@ -263,7 +276,9 @@ pub fn parse_endpoint_from_line(line: &str) -> Option<ServerEndpoint> {
         if let Some(idx) = trimmed.find(scheme) {
             let candidate = &trimmed[idx..];
             let end = candidate
-                .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ')' | ']' | ',' | ';'))
+                .find(|c: char| {
+                    c.is_whitespace() || matches!(c, '"' | '\'' | ')' | ']' | ',' | ';')
+                })
                 .unwrap_or(candidate.len());
             let url = candidate[..end].trim_end_matches('/');
             if url.len() > scheme.len() && url[scheme.len()..].contains(':') {
@@ -336,13 +351,71 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn wait_ready_returns_when_the_backend_exits_early() {
-        let sup = Arc::new(ServerSupervisor::spawn(&ServerConfig::new("/bin/sh", vec!["-c".into(), "exit 3".into()])).expect("spawn"));
+        let sup = Arc::new(
+            ServerSupervisor::spawn(&ServerConfig::new(
+                "/bin/sh",
+                vec!["-c".into(), "exit 3".into()],
+            ))
+            .expect("spawn"),
+        );
         let (tx, rx) = std::sync::mpsc::channel();
         let waiter = Arc::clone(&sup);
         thread::spawn(move || {
-            let _ = tx.send(waiter.wait_ready(Duration::from_secs(10)).map_err(|e| e.kind()));
+            let _ = tx.send(
+                waiter
+                    .wait_ready(Duration::from_secs(10))
+                    .map_err(|e| e.kind()),
+            );
         });
-        let result = rx.recv_timeout(Duration::from_secs(3)).expect("wait_ready deadlocked");
+        let result = rx
+            .recv_timeout(Duration::from_secs(3))
+            .expect("wait_ready deadlocked");
         assert_eq!(result, Err(io::ErrorKind::BrokenPipe));
     }
+}
+
+/// Exchanges the desktop bootstrap token for a bearer access token (`POST /oauth/token`),
+/// as Electron's `DesktopLocalEnvironmentAuth` does. Plain HTTP only: the backend is local.
+pub fn exchange_bearer_token(http_base_url: &str, bootstrap_token: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    let host = http_base_url
+        .strip_prefix("http://")
+        .ok_or_else(|| format!("bearer exchange needs an http:// backend, got {http_base_url}"))?;
+    let enc = |s: &str| s.replace(':', "%3A");
+    let body = format!(
+        "grant_type={}&subject_token={}&subject_token_type={}&requested_token_type={}&client_label=no-deps-T3&client_device_type=desktop",
+        enc("urn:ietf:params:oauth:grant-type:token-exchange"),
+        bootstrap_token,
+        enc("urn:t3:params:oauth:token-type:environment-bootstrap"),
+        enc("urn:ietf:params:oauth:token-type:access_token"),
+    );
+    let io_err = |e: io::Error| format!("bearer exchange failed: {e}");
+    let mut stream = std::net::TcpStream::connect(host).map_err(io_err)?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .map_err(io_err)?;
+    // HTTP/1.0 keeps the response un-chunked and closes the connection when done.
+    write!(
+        stream,
+        "POST /oauth/token HTTP/1.0\r\nHost: {host}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .map_err(io_err)?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).map_err(io_err)?;
+    let (head, payload) = response.split_once("\r\n\r\n").unwrap_or((&response, ""));
+    if !head.split(' ').nth(1).is_some_and(|code| code == "200") {
+        return Err(format!(
+            "bearer exchange rejected: {}",
+            head.lines().next().unwrap_or("")
+        ));
+    }
+    Json::parse(payload)
+        .ok()
+        .and_then(|j| {
+            j.get("access_token")
+                .and_then(Json::as_str)
+                .map(str::to_owned)
+        })
+        .ok_or_else(|| "bearer exchange returned no access_token".to_string())
 }

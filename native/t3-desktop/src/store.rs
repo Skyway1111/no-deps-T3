@@ -90,7 +90,10 @@ impl AtomicJsonStore {
                 if meta.file_type().is_symlink() || !meta.file_type().is_file() {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        format!("store path `{}` must be a regular file", self.path.display()),
+                        format!(
+                            "store path `{}` must be a regular file",
+                            self.path.display()
+                        ),
                     ));
                 }
             }
@@ -112,7 +115,10 @@ impl AtomicJsonStore {
         let parent = self.path.parent().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("store path `{}` has no parent directory", self.path.display()),
+                format!(
+                    "store path `{}` has no parent directory",
+                    self.path.display()
+                ),
             )
         })?;
         ensure_private_dir(parent)?;
@@ -121,7 +127,10 @@ impl AtomicJsonStore {
             if meta.file_type().is_symlink() || !meta.file_type().is_file() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("store path `{}` must be a regular file", self.path.display()),
+                    format!(
+                        "store path `{}` must be a regular file",
+                        self.path.display()
+                    ),
                 ));
             }
         }

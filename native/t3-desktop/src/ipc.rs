@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::json::{escape_json_string, Json};
 use crate::platform::{ColorScheme, FileDialogOptions, PreviewTabSnapshot};
-use crate::server::ServerEndpoint;
+use crate::server::{exchange_bearer_token, ServerEndpoint};
 use crate::store::AtomicJsonStore;
 
 pub const APP_BASE_NAME: &str = "no-deps-T3";
@@ -31,7 +31,12 @@ pub trait HostActions: Send + Sync {
     fn get_zoom_factor(&self) -> f64;
     fn set_notification_badge(&self, count: i64);
 
-    fn preview_create_tab(&self, tab_id: &str, zoom_factor: Option<f64>, color_scheme: Option<&str>);
+    fn preview_create_tab(
+        &self,
+        tab_id: &str,
+        zoom_factor: Option<f64>,
+        color_scheme: Option<&str>,
+    );
     fn preview_close_tab(&self, tab_id: &str);
     fn preview_navigate(&self, tab_id: &str, url: &str);
     fn preview_go_back(&self, tab_id: &str);
@@ -66,6 +71,7 @@ pub struct PreloadBootstrap {
 struct DispatcherState {
     local_environment_enabled: bool,
     local_endpoint: Option<ServerEndpoint>,
+    bearer_token: Option<String>,
     host_environment_id: Option<String>,
     web_links_ready: bool,
     app_activation_ready: bool,
@@ -93,6 +99,7 @@ impl IpcDispatcher {
             state: Mutex::new(DispatcherState {
                 local_environment_enabled: true,
                 local_endpoint,
+                bearer_token: None,
                 host_environment_id: Some("primary".to_string()),
                 web_links_ready: false,
                 app_activation_ready: false,
@@ -105,6 +112,7 @@ impl IpcDispatcher {
     pub fn set_local_endpoint(&self, endpoint: Option<ServerEndpoint>) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.local_endpoint = endpoint;
+        state.bearer_token = None;
     }
 
     pub fn preload_bootstrap(&self) -> PreloadBootstrap {
@@ -157,7 +165,9 @@ impl IpcDispatcher {
         match method {
             // --- Identity & environment metadata ---
             "desktop:get-app-branding" | "getAppBranding" => Ok(app_branding_json()),
-            "desktop:get-relay-telemetry-enabled" | "getRelayTelemetryEnabled" => Ok(Json::Bool(false)),
+            "desktop:get-relay-telemetry-enabled" | "getRelayTelemetryEnabled" => {
+                Ok(Json::Bool(false))
+            }
             "desktop:get-system-locale" | "getSystemLocale" => {
                 Ok(Json::from(detect_system_locale()))
             }
@@ -192,12 +202,17 @@ impl IpcDispatcher {
                 Ok(Json::from(state.host_environment_id.clone()))
             }
             "desktop:get-local-environment-bearer-token" | "getLocalEnvironmentBearerToken" => {
-                let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                let token = state
+                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(token) = &state.bearer_token {
+                    return Ok(Json::from(token.clone()));
+                }
+                let (base, bootstrap) = state
                     .local_endpoint
                     .as_ref()
-                    .and_then(|e| e.bootstrap_token.clone())
-                    .unwrap_or_default();
+                    .and_then(|e| Some((e.http_base_url.clone(), e.bootstrap_token.clone()?)))
+                    .ok_or("local backend has no bootstrap token")?;
+                let token = exchange_bearer_token(&base, &bootstrap)?;
+                state.bearer_token = Some(token.clone());
                 Ok(Json::from(token))
             }
 
@@ -377,13 +392,14 @@ impl IpcDispatcher {
                 ("checked", Json::Bool(false)),
                 ("state", disabled_update_state()),
             ])),
-            "desktop:update-download" | "downloadUpdate" | "desktop:update-install" | "installUpdate" => {
-                Ok(Json::object([
-                    ("accepted", Json::Bool(false)),
-                    ("completed", Json::Bool(false)),
-                    ("state", disabled_update_state()),
-                ]))
-            }
+            "desktop:update-download"
+            | "downloadUpdate"
+            | "desktop:update-install"
+            | "installUpdate" => Ok(Json::object([
+                ("accepted", Json::Bool(false)),
+                ("completed", Json::Bool(false)),
+                ("state", disabled_update_state()),
+            ])),
             "desktop:cli-command-get-state" | "cliCommand.getState" => Ok(Json::object([
                 ("supported", Json::Bool(false)),
                 ("installedPath", Json::Null),
@@ -1082,7 +1098,8 @@ mod tests {
         };
         let ipc = IpcDispatcher::new(&dir, Some(endpoint), host.clone());
 
-        let (id, ok, res) = ipc.handle_raw_message(r#"{"id":7,"method":"desktop:pick-folder","params":{}}"#);
+        let (id, ok, res) =
+            ipc.handle_raw_message(r#"{"id":7,"method":"desktop:pick-folder","params":{}}"#);
         assert_eq!(id, 7);
         assert!(ok);
         assert_eq!(res.as_str(), Some("/tmp/project"));
@@ -1091,8 +1108,8 @@ mod tests {
             r#"{"id":8,"method":"desktop:set-client-settings","params":{"theme":"dark","fontSize":14}}"#,
         );
         assert!(ok);
-        let (_, ok, loaded) =
-            ipc.handle_raw_message(r#"{"id":9,"method":"desktop:get-client-settings","params":null}"#);
+        let (_, ok, loaded) = ipc
+            .handle_raw_message(r#"{"id":9,"method":"desktop:get-client-settings","params":null}"#);
         assert!(ok);
         assert_eq!(loaded.get("theme").and_then(Json::as_str), Some("dark"));
 
@@ -1101,7 +1118,10 @@ mod tests {
         );
         assert!(ok);
         assert_eq!(opened.as_bool(), Some(true));
-        assert_eq!(host.opened_urls.lock().unwrap().as_slice(), ["https://t3.codes"]);
+        assert_eq!(
+            host.opened_urls.lock().unwrap().as_slice(),
+            ["https://t3.codes"]
+        );
 
         // Blocks unsafe javascript: URLs
         let (_, ok, blocked) = ipc.handle_raw_message(
@@ -1128,8 +1148,14 @@ mod tests {
 
     #[test]
     fn converts_posix_locale_to_bcp47() {
-        assert_eq!(posix_locale_to_bcp47("en_US.UTF-8").as_deref(), Some("en-US"));
-        assert_eq!(posix_locale_to_bcp47("fr_FR@euro").as_deref(), Some("fr-FR"));
+        assert_eq!(
+            posix_locale_to_bcp47("en_US.UTF-8").as_deref(),
+            Some("en-US")
+        );
+        assert_eq!(
+            posix_locale_to_bcp47("fr_FR@euro").as_deref(),
+            Some("fr-FR")
+        );
         assert_eq!(posix_locale_to_bcp47("C.UTF-8"), None);
         assert_eq!(posix_locale_to_bcp47("POSIX"), None);
     }

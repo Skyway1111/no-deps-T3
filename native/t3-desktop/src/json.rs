@@ -364,8 +364,8 @@ impl<'a> Parser<'a> {
                             if !(0xDC00..=0xDFFF).contains(&low) {
                                 return Err(self.err("invalid UTF-16 low surrogate"));
                             }
-                            let scalar = 0x10000
-                                + (((code as u32 - 0xD800) << 10) | (low as u32 - 0xDC00));
+                            let scalar =
+                                0x10000 + (((code as u32 - 0xD800) << 10) | (low as u32 - 0xDC00));
                             let ch = char::from_u32(scalar)
                                 .ok_or_else(|| self.err("invalid unicode scalar"))?;
                             out.push(ch);
