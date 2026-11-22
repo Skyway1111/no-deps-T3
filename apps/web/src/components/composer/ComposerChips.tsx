@@ -17,6 +17,7 @@ import { ComposerContextActionsContext, ComposerContextReferenceChip } from "../
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { SkillMeta } from "~/composer-rich-text-doc";
 import { cn } from "~/lib/utils";
+import { useRenderedAppearance } from "../../hooks/useTheme";
 import type { CitationInsertedSpaces, ComposerChip, OpenCitationComment } from "./types";
 
 export const ComposerCitationCommentContext = createContext<{
@@ -44,9 +45,6 @@ export const RichComposerSkillsContext = createContext<ReadonlyArray<ServerProvi
 const CHIP_CLASS =
   "relative inline-flex min-w-0 max-w-full select-none items-baseline data-[composer-chip-selected]:after:pointer-events-none data-[composer-chip-selected]:after:absolute data-[composer-chip-selected]:after:inset-0 data-[composer-chip-selected]:after:rounded-sm data-[composer-chip-selected]:after:bg-[Highlight] data-[composer-chip-selected]:after:opacity-30 data-[composer-chip-selected]:after:content-['']";
 
-const docTheme = (): "light" | "dark" =>
-  typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light";
-
 export function composerSkillMeta(skills: ReadonlyArray<ServerProviderSkill>, name: string): SkillMeta | null {
   const skill = skills.find((c) => c.name === name && isProviderSkillUserInvocable(c));
   if (!skill) return null;
@@ -56,8 +54,9 @@ export function composerSkillMeta(skills: ReadonlyArray<ServerProviderSkill>, na
   };
 }
 
-function MentionChip({ path, flatOffset, cls }: { path: string; flatOffset: number; cls: string }) {
+function MentionChip({ path, offset, cls }: { path: string; offset: number; cls: string }) {
   const gt = useGT();
+  const theme = useRenderedAppearance();
   const actions = use(ComposerContextActionsContext);
   const nativeDrag = useNativeFileDrag(actions.environmentId, () => resolvePathLinkTarget(path, actions.cwd ?? ""));
   const trigger = (
@@ -77,12 +76,12 @@ function MentionChip({ path, flatOffset, cls }: { path: string; flatOffset: numb
         environmentId={actions.environmentId}
         cwd={actions.cwd}
         label={basenameOfPath(path).normalize("NFC")}
-        theme={docTheme()}
+        theme={theme}
       />
     </ContextChip>
   );
   return (
-    <span contentEditable={false} data-composer-chip-flat={flatOffset} data-composer-mention="" className={cls}>
+    <span contentEditable={false} data-composer-chip-offset={offset} data-composer-mention="" className={cls}>
       <Tooltip>
         <TooltipTrigger render={trigger} />
         <TooltipPopup side="top" className="pointer-events-auto">
@@ -93,12 +92,12 @@ function MentionChip({ path, flatOffset, cls }: { path: string; flatOffset: numb
   );
 }
 
-function SkillChip({ chip, flatOffset, cls }: { chip: Extract<ComposerChip, { kind: "composer-skill" }>; flatOffset: number; cls: string }) {
+function SkillChip({ chip, offset, cls }: { chip: Extract<ComposerChip, { kind: "composer-skill" }>; offset: number; cls: string }) {
   const actions = use(ComposerContextActionsContext);
   const skills = use(RichComposerSkillsContext);
   const skill = skills.find((c) => c.name === chip.skillName && isProviderSkillUserInvocable(c));
   return (
-    <span contentEditable={false} data-composer-chip-flat={flatOffset} data-composer-skill="" className={cls}>
+    <span contentEditable={false} data-composer-chip-offset={offset} data-composer-skill="" className={cls}>
       <SkillChipPopover
         label={skill ? formatProviderSkillDisplayName(skill) : chip.skillLabel || chip.skillName}
         description={skill ? skillPopoverDescription(skill) : chip.skillDescription}
@@ -108,7 +107,7 @@ function SkillChip({ chip, flatOffset, cls }: { chip: Extract<ComposerChip, { ki
   );
 }
 
-function CitationChip({ chip, flatOffset, cls }: { chip: Extract<ComposerChip, { kind: "composer-citation" }>; flatOffset: number; cls: string }) {
+function CitationChip({ chip, offset, cls }: { chip: Extract<ComposerChip, { kind: "composer-citation" }>; offset: number; cls: string }) {
   const ctx = use(ComposerCitationCommentContext);
   const target = ctx.openComment?.key === chip.citeKey ? ctx.openComment : null;
   const sentRef = useRef(false);
@@ -121,7 +120,7 @@ function CitationChip({ chip, flatOffset, cls }: { chip: Extract<ComposerChip, {
     <span
       contentEditable={false}
       spellCheck={false}
-      data-composer-chip-flat={flatOffset}
+      data-composer-chip-offset={offset}
       data-composer-citation=""
       data-composer-citation-chip="true"
       className={cls}
@@ -155,44 +154,44 @@ function CitationChip({ chip, flatOffset, cls }: { chip: Extract<ComposerChip, {
 
 export function ComposerInlineChip({
   chip,
-  flatOffset,
+  offset,
   rangeSelected,
   isEditable,
   onDeleteReadOnlyChip,
 }: {
   chip: ComposerChip;
-  flatOffset: number;
+  offset: number;
   rangeSelected: boolean;
   isEditable: boolean;
-  onDeleteReadOnlyChip: (flatOffset: number) => void;
+  onDeleteReadOnlyChip: (offset: number) => void;
 }) {
   const actions = use(ComposerContextActionsContext);
   const cls = cn(CHIP_CLASS, rangeSelected && "composer-chip-range-selected");
   switch (chip.kind) {
     case "composer-mention":
-      return <MentionChip path={chip.path} flatOffset={flatOffset} cls={cls} />;
+      return <MentionChip path={chip.path} offset={offset} cls={cls} />;
     case "composer-skill":
-      return <SkillChip chip={chip} flatOffset={flatOffset} cls={cls} />;
+      return <SkillChip chip={chip} offset={offset} cls={cls} />;
     case "composer-model":
       return (
-        <span contentEditable={false} data-composer-chip-flat={flatOffset} data-composer-model="" className={cls}>
+        <span contentEditable={false} data-composer-chip-offset={offset} data-composer-model="" className={cls}>
           <ModelMentionChip environmentId={actions.environmentId} instanceId={chip.instanceId} model={chip.model} source={chip.source} />
         </span>
       );
     case "composer-citation":
-      return <CitationChip chip={chip} flatOffset={flatOffset} cls={cls} />;
+      return <CitationChip chip={chip} offset={offset} cls={cls} />;
     case "composer-context-reference":
       return (
         <span
           contentEditable={false}
-          data-composer-chip-flat={flatOffset}
+          data-composer-chip-offset={offset}
           data-composer-context-reference=""
           className={cls}
           onKeyDown={(e: ReactKeyboardEvent<HTMLElement>) => {
             if (isEditable || (e.key !== "Backspace" && e.key !== "Delete")) return;
             if (!(e.target instanceof globalThis.Node) || !e.currentTarget.contains(e.target)) return;
             e.preventDefault();
-            onDeleteReadOnlyChip(flatOffset);
+            onDeleteReadOnlyChip(offset);
           }}
         >
           <ComposerContextReferenceChip kind={chip.refKind} contextId={chip.contextId} label={chip.label} />

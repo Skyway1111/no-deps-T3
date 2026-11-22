@@ -6,9 +6,9 @@ import { useGT } from "@t3tools/shared/i18n/react";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect, useRef, useState } from "react";
 import {
-  ComposerPromptEditorTiptap as ComposerPromptEditor,
+  ComposerPromptEditor,
   type ComposerPromptEditorHandle,
-} from "../ComposerPromptEditorTiptap";
+} from "../composer/ComposerPromptEditor";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "../composerContextPresentation";
 import { terminalThemeFromApp } from "../ThreadTerminalDrawer";
 import { useRenderedAppearance, useTheme } from "../../hooks/useTheme";

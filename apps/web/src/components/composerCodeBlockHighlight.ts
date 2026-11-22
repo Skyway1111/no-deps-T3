@@ -9,6 +9,7 @@ export interface CodeBlockHighlightSpan { readonly from: number; readonly to: nu
 export const MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH = 20_000;
 export const DEFERRED_HIGHLIGHT_CODE_BLOCK_LENGTH = 2_000;
 export const DEFERRED_HIGHLIGHT_DELAY_MS = 300;
+const NO_SPANS: ReadonlyArray<CodeBlockHighlightSpan> = [];
 
 type Highlighter = Awaited<ReturnType<typeof getSyntaxHighlighterPromise>>;
 
@@ -112,7 +113,7 @@ export function createCodeBlockHighlighter(options: {
 
   return {
     getSpans: (lang, code) =>
-      code.length <= MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH ? (cache.get(signatureOf(lang, code, options.resolveTheme())) ?? []) : [],
+      (code.length <= MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH && cache.get(signatureOf(lang, code, options.resolveTheme()))) || NO_SPANS,
     syncDoc: (doc, deferLong = true) => refresh(doc, deferLong),
     dispose: () => {
       disposed = true;
@@ -121,5 +122,3 @@ export function createCodeBlockHighlighter(options: {
     },
   };
 }
-
-export const composerCodeBlockHighlight = createCodeBlockHighlighter;

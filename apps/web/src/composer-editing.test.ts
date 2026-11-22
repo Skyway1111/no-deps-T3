@@ -14,12 +14,12 @@ import {
   isListPrefix,
   resolveFlatOffset,
 } from "./components/composer/types";
-import { listIndentForTab, listOutdentForTab } from "./composer-list-continuation";
 import { normalizeMarkdownSource } from "./composer-markdown-source";
 import {
   buildComposerBlocks,
   buildComposerDoc,
   flatToMarkdown,
+  indentListItemForTab,
   markdownToFlat,
   serializeEditorDoc,
   stepCaretAcrossStyledEdge,
@@ -68,22 +68,14 @@ function composer(initial = "") {
       return api;
     },
     tab(shift = false) {
-      const map = serializeEditorDoc(state.doc);
-      const at = flatToMarkdown(map, state.selection.head);
-      const edit = (shift ? listOutdentForTab : listIndentForTab)(map.value, at, at);
-      if (!edit) return api;
-      const next = buildComposerDoc(
-        map.value.slice(0, edit.start) + edit.replacement + map.value.slice(edit.end),
-        () => null,
-        { styling: true },
+      commit(
+        indentListItemForTab(state, shift, (value) =>
+          buildComposerDoc(value, () => null, { styling: true }),
+        ),
       );
-      commit({
-        doc: next,
-        selection: collapsedSelection(markdownToFlat(serializeEditorDoc(next), edit.cursorAfter)),
-        changeKind: "other",
-      });
       return api;
     },
+    state: () => state,
     paste(text: string) {
       const res = resolveFlatOffset(state.doc, state.selection.head);
       const nested =
@@ -249,12 +241,27 @@ describe("composer editing", () => {
     ],
     ["undoes a list indent", () => composer("- a\n- b|").tab().undo(), "- a\n- b|  bullet,bullet"],
     [
+      "outdents a nested item and renumbers the items after it",
+      () => composer("1. a\n2. b\n   1. c|\n   2. d\n3. e").tab(true),
+      "1. a\n2. b\n3. c|\n   2. d\n4. e  ordered,ordered,ordered,ordered,ordered",
+    ],
+    [
       "pastes lines after a list item",
       () => composer("- a|").paste("one\ntwo"),
       "- a\n\none\ntwo|  bullet,p,p",
     ],
   ])("%s", (_, run, expected) => {
     expect(run().snap()).toBe(expected);
+  });
+
+  it("keeps an indented item's inlines, so its chips survive Tab", () => {
+    const editor = composer("- a\n- see @src/x.ts |b");
+    const before = editor.state().doc.blocks[1];
+    const after = editor.tab().state().doc.blocks[1];
+    expect(editor.md()).toBe("- a\n  - see @src/x.ts |b");
+    expect(after?.kind === "line" && before?.kind === "line" && after.inlines).toBe(
+      before?.kind === "line" && before.inlines,
+    );
   });
 
   it("groups typing and deleting into separate undo steps", () => {

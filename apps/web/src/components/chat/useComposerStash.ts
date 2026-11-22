@@ -20,7 +20,7 @@ import {
   hydrateImagesFromPersisted,
   useComposerDraftStore,
 } from "../../composerDraftStore";
-import { type ComposerPromptEditorHandle } from "../ComposerPromptEditorTiptap";
+import { type ComposerPromptEditorHandle } from "../composer/ComposerPromptEditor";
 import {
   MAX_STASH_ENTRIES,
   type PromptStashEntry,

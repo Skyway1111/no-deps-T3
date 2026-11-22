@@ -1,14 +1,9 @@
-import { Editor } from "@tiptap/core";
-import { EditorState, type Plugin, type Transaction } from "@tiptap/pm/state";
-import type { DecorationSet, EditorView } from "@tiptap/pm/view";
-import StarterKit from "@tiptap/starter-kit";
-import { afterEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import { ComposerCodeBlockExtension } from "~/composer-rich-text-doc";
 import type { DiffThemeName } from "~/lib/diffRendering";
 import { getSyntaxHighlighterPromise } from "~/lib/syntaxHighlighting";
 
-import { composerCodeBlockHighlight, tokenizeBlock } from "./composerCodeBlockHighlight";
+import { createCodeBlockHighlighter, tokenizeBlock } from "./composerCodeBlockHighlight";
 
 vi.mock("~/lib/syntaxHighlighting", () => ({ getSyntaxHighlighterPromise: vi.fn() }));
 
@@ -39,103 +34,26 @@ describe("composer code block highlighting", () => {
   });
 });
 
-describe("highlighting edited fences", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-  });
-
-  async function mountFence(text: string, resolveTheme = () => THEME, language = "ts") {
-    vi.useFakeTimers();
-    const highlighter = fakeHighlighter((content) =>
-      content.startsWith("x") ? "#ff0000" : undefined,
-    );
-    const tokenize = vi.spyOn(highlighter, "codeToTokens");
-    vi.mocked(getSyntaxHighlighterPromise).mockResolvedValue(highlighter);
-    const editor = new Editor({
-      extensions: [
-        StarterKit.configure({ codeBlock: false, trailingNode: false }),
-        ComposerCodeBlockExtension,
-        composerCodeBlockHighlight({ resolveTheme }),
-      ],
-      content: {
-        type: "doc",
-        content: [{ type: "codeBlock", attrs: { language }, content: [{ type: "text", text }] }],
-      },
-    });
-    vi.stubGlobal("document", { documentElement: {} });
-    vi.stubGlobal(
-      "MutationObserver",
-      class {
-        observe() {}
-        disconnect() {}
-      },
-    );
-    const plugin = editor.extensionManager.plugins.find((candidate) =>
-      (candidate as unknown as { key: string }).key.startsWith("composerCodeBlockHighlight"),
-    ) as Plugin<DecorationSet>;
-    // A headless editor holds no plugins in its state, so give this one its own.
-    let state = EditorState.create({ doc: editor.state.doc, plugins: [plugin] });
-    // Like a real view, every dispatch updates the plugin's view.
-    let pluginView: ReturnType<NonNullable<typeof plugin.spec.view>> | undefined;
-    const view = {
-      get state() {
-        return state;
-      },
-      dispatch: (transaction: Transaction) => {
-        const previous = state;
-        state = state.apply(transaction);
-        pluginView?.update?.(view, previous);
-      },
-    } as unknown as EditorView;
-    pluginView = plugin.spec.view!(view);
-    onTestFinished(() => {
-      pluginView?.destroy?.();
-      editor.destroy();
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    return {
-      tokenize,
-      ranges: () =>
-        plugin
-          .getState(state)!
-          .find()
-          .map(({ from, to }) => [from, to]),
-      edit: async (change: (transaction: Transaction) => Transaction) => {
-        view.dispatch(change(state.tr));
-        await vi.advanceTimersByTimeAsync(0);
-      },
-      colored: () =>
-        plugin
-          .getState(state)!
-          .find()
-          .map((decoration) => state.doc.textBetween(decoration.from, decoration.to)),
-    };
-  }
-
-  it("clips a split token to its fences without coloring the paragraph between them", async () => {
-    const fence = await mountFence("x".repeat(6_000));
-
-    await fence.edit((tr) =>
-      tr
-        .split(3_001)
-        .insert(
-          3_002,
-          tr.doc.type.schema.node("paragraph", null, [tr.doc.type.schema.text("plain")]),
-        ),
-    );
-
-    expect(fence.tokenize).toHaveBeenCalledTimes(1);
-    expect(fence.ranges()).toEqual([
-      [1, 3_001],
-      [3_010, 6_010],
-    ]);
-    expect(fence.colored()).toEqual(["x".repeat(3_000), "x".repeat(3_000)]);
-  });
-
+describe("highlighting composer code blocks", () => {
   it("highlights a gitignore fence with the ini grammar, as chat does", async () => {
-    await mountFence("*.log\n!keep.log", () => THEME, 'gitignore title=".gitignore"');
+    vi.mocked(getSyntaxHighlighterPromise).mockResolvedValue(fakeHighlighter(() => "#ff0000"));
+    const updated = Promise.withResolvers<void>();
+    const highlighter = createCodeBlockHighlighter({
+      resolveTheme: () => THEME,
+      onUpdate: () => updated.resolve(),
+    });
+    const code = "*.log\n!keep.log";
+    const language = 'gitignore title=".gitignore"';
+    expect(highlighter.getSpans(language, code)).toBe(highlighter.getSpans("ts", "other"));
+
+    highlighter.syncDoc({ blocks: [{ kind: "codeBlock", language, fence: "```", close: "\n```", code }] });
+    await updated.promise;
 
     expect(vi.mocked(getSyntaxHighlighterPromise)).toHaveBeenLastCalledWith("ini");
+    expect(highlighter.getSpans(language, code)).toEqual([
+      { from: 0, to: 5, color: "#ff0000" },
+      { from: 6, to: 15, color: "#ff0000" },
+    ]);
+    highlighter.dispose();
   });
 });

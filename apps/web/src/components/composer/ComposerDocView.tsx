@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 
 import type { RichTextMark } from "~/composer-rich-text";
 import { previewMarkdownSourceSpans } from "~/composer-markdown-source";
@@ -22,6 +22,7 @@ import {
   selectionFrom,
   selectionTo,
 } from "./types";
+
 
 function wrapMarks(node: ReactNode, marks: readonly RichTextMark[], key: string): ReactNode {
   let out = node;
@@ -87,7 +88,7 @@ function renderCode(code: string, spans: ReadonlyArray<CodeBlockHighlightSpan>):
 }
 
 type ListPrefix = Extract<LinePrefix, { kind: "bullet" | "ordered" | "task" }>;
-interface ListItemEntry { block: Extract<ComposerBlock, { kind: "line" }>; prefix: ListPrefix; blockIndex: number; span: FlatBlockSpan; dir: TextDirection | null; children: ListGroup[] }
+interface ListItemEntry { block: Extract<ComposerBlock, { kind: "line" }>; prefix: ListPrefix; blockIndex: number; dir: TextDirection | null; children: ListGroup[] }
 interface ListGroup { kind: ListPrefix["kind"]; key: string; start?: number; items: ListItemEntry[] }
 
 function groupListItems(entries: Omit<ListItemEntry, "children">[]): ListGroup[] {
@@ -129,14 +130,79 @@ function groupListItems(entries: Omit<ListItemEntry, "children">[]): ListGroup[]
   return roots;
 }
 
+type LineBlock = Extract<ComposerBlock, { kind: "line" }>;
+
+interface ComposerLineProps {
+  readonly as: "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+  readonly blockIndex: number;
+  readonly inlines: readonly ComposerInline[];
+  readonly dir?: TextDirection | undefined;
+  readonly isEditable: boolean;
+  /** Block-relative selected range; only blocks holding chips receive one. */
+  readonly selFrom: number;
+  readonly selTo: number;
+  readonly onDeleteReadOnlyChip: (blockIndex: number, offset: number) => void;
+}
+
+// DOM offsets are block-relative (domSync resolves `data-composer-block-index` against the doc), so an edit re-renders only its own line.
+const ComposerLine = memo(function ComposerLine({ as: Tag, blockIndex, inlines, dir, isEditable, selFrom, selTo, onDeleteReadOnlyChip }: ComposerLineProps) {
+  let content: ReactNode;
+  if (inlines.length === 0) content = <br data-composer-sentinel="true" />;
+  else {
+    let pos = 0;
+    const deleteChip = (offset: number) => onDeleteReadOnlyChip(blockIndex, offset);
+    content = inlines.map((item, idx) => {
+      const start = pos;
+      pos += inlineFlatLength(item);
+      if (isChipInline(item)) {
+        const el = (
+          <ComposerInlineChip
+            key={item.kind === "composer-citation" ? item.citeKey : `c-${idx}-${start}`}
+            chip={item}
+            offset={start}
+            rangeSelected={selFrom < selTo && start >= selFrom && start + 1 <= selTo}
+            isEditable={isEditable}
+            onDeleteReadOnlyChip={deleteChip}
+          />
+        );
+        return item.marks?.length ? wrapMarks(el, item.marks, `cm-${idx}`) : el;
+      }
+      if (item.isMarkdownSource) return <Fragment key={`src-${idx}`}>{renderMarkdownSource(item.text, `src-${idx}`)}</Fragment>;
+      return <Fragment key={`t-${idx}`}>{wrapMarks(item.text, item.marks, `tm-${idx}`)}</Fragment>;
+    });
+  }
+  return <Tag dir={dir} data-composer-block-index={blockIndex}>{content}</Tag>;
+});
+
+const ComposerCodeBlock = memo(function ComposerCodeBlock({ blockIndex, language, code, spans, isEditable, onChangeCodeLanguage }: {
+  readonly blockIndex: number;
+  readonly language: string;
+  readonly code: string;
+  readonly spans: ReadonlyArray<CodeBlockHighlightSpan>;
+  readonly isEditable: boolean;
+  readonly onChangeCodeLanguage: (blockIndex: number, languageInfo: string) => void;
+}) {
+  return (
+    <ComposerCodeBlockNodeView
+      languageInfo={language}
+      disabled={!isEditable}
+      onChangeLanguage={(next) => onChangeCodeLanguage(blockIndex, next)}
+      codeProps={{ "data-composer-block-index": blockIndex }}
+    >
+      {renderCode(code, spans)}
+    </ComposerCodeBlockNodeView>
+  );
+});
+
 export interface ComposerDocViewProps {
   readonly doc: ComposerDoc;
   readonly selection: ComposerSelection;
   readonly isEditable: boolean;
+  /** Must return the same array for unchanged input, so memoized code blocks skip re-rendering. */
   readonly getCodeHighlightSpans: (language: string, code: string) => ReadonlyArray<CodeBlockHighlightSpan>;
   readonly onChangeCodeLanguage: (blockIndex: number, languageInfo: string) => void;
   readonly onToggleTaskItem: (blockIndex: number) => void;
-  readonly onDeleteReadOnlyChip: (flatOffset: number) => void;
+  readonly onDeleteReadOnlyChip: (blockIndex: number, offset: number) => void;
 }
 
 export function ComposerDocView({
@@ -153,35 +219,23 @@ export function ComposerDocView({
   const selFrom = selectionFrom(selection);
   const selTo = selectionTo(selection);
 
-  const renderInlines = (inlines: readonly ComposerInline[], lineStart: number, kp: string): ReactNode => {
-    if (inlines.length === 0) return <br data-composer-sentinel="true" />;
-    let pos = lineStart;
-    return inlines.map((item, idx) => {
-      const start = pos;
-      pos += inlineFlatLength(item);
-      if (isChipInline(item)) {
-        const el = (
-          <ComposerInlineChip
-            key={item.kind === "composer-citation" ? item.citeKey : `${kp}-c-${idx}-${start}`}
-            chip={item}
-            flatOffset={start}
-            rangeSelected={selFrom < selTo && start >= selFrom && start + 1 <= selTo}
-            isEditable={isEditable}
-            onDeleteReadOnlyChip={onDeleteReadOnlyChip}
-          />
-        );
-        return item.marks?.length ? wrapMarks(el, item.marks, `${kp}-cm-${idx}`) : el;
-      }
-      if (item.isMarkdownSource) return <Fragment key={`${kp}-src-${idx}`}>{renderMarkdownSource(item.text, `${kp}-src-${idx}`)}</Fragment>;
-      return <Fragment key={`${kp}-t-${idx}`}>{wrapMarks(item.text, item.marks, `${kp}-tm-${idx}`)}</Fragment>;
-    });
+  const line = (as: ComposerLineProps["as"], bi: number, block: LineBlock, dir?: TextDirection) => {
+    const span: FlatBlockSpan = spans[bi]!;
+    const selected = selFrom < selTo && selFrom < span.end && selTo > span.start && block.inlines.some(isChipInline);
+    return (
+      <ComposerLine
+        key={`${as}-${bi}`}
+        as={as}
+        blockIndex={bi}
+        inlines={block.inlines}
+        dir={dir}
+        isEditable={isEditable}
+        selFrom={selected ? Math.max(0, selFrom - span.start) : 0}
+        selTo={selected ? Math.min(span.end, selTo) - span.start : 0}
+        onDeleteReadOnlyChip={onDeleteReadOnlyChip}
+      />
+    );
   };
-
-  const lineAttrs = (bi: number, span: FlatBlockSpan) => ({
-    "data-composer-line-start": span.start,
-    "data-composer-line-end": span.end,
-    "data-composer-block-index": bi,
-  });
 
   const renderListGroup = (group: ListGroup, gk: string): ReactNode => {
     const listDir = group.items[0]?.dir ?? undefined;
@@ -196,7 +250,7 @@ export function ComposerDocView({
                   <input type="checkbox" checked={checked} disabled={!isEditable} onChange={() => onToggleTaskItem(item.blockIndex)} />
                 </label>
                 <div>
-                  <p {...lineAttrs(item.blockIndex, item.span)}>{renderInlines(item.block.inlines, item.span.start, `b-${item.blockIndex}`)}</p>
+                  {line("p", item.blockIndex, item.block)}
                   {item.children.map((c, ci) => renderListGroup(c, `${gk}-${item.blockIndex}-${ci}`))}
                 </div>
               </li>
@@ -212,7 +266,7 @@ export function ComposerDocView({
           const marker = item.prefix.kind === "task" ? "-" : item.prefix.marker;
           return (
             <li key={`li-${item.blockIndex}`} data-marker={marker} data-marker-width={Math.min(marker.length, 10)} dir={item.dir ?? undefined}>
-              <p {...lineAttrs(item.blockIndex, item.span)}>{renderInlines(item.block.inlines, item.span.start, `b-${item.blockIndex}`)}</p>
+              {line("p", item.blockIndex, item.block)}
               {item.children.map((c, ci) => renderListGroup(c, `${gk}-${item.blockIndex}-${ci}`))}
             </li>
           );
@@ -224,20 +278,19 @@ export function ComposerDocView({
   const rendered: ReactNode[] = [];
   for (let i = 0; i < doc.blocks.length; i += 1) {
     const block = doc.blocks[i]!;
-    const span = spans[i]!;
     const dir = dirs[i] ?? undefined;
 
     if (block.kind === "codeBlock") {
       rendered.push(
-        <ComposerCodeBlockNodeView
+        <ComposerCodeBlock
           key={`code-${i}`}
-          languageInfo={block.language}
-          disabled={!isEditable}
-          onChangeLanguage={(next) => onChangeCodeLanguage(i, next)}
-          codeProps={lineAttrs(i, span)}
-        >
-          {renderCode(block.code, getCodeHighlightSpans(block.language, block.code))}
-        </ComposerCodeBlockNodeView>,
+          blockIndex={i}
+          language={block.language}
+          code={block.code}
+          spans={getCodeHighlightSpans(block.language, block.code)}
+          isEditable={isEditable}
+          onChangeCodeLanguage={onChangeCodeLanguage}
+        />,
       );
       continue;
     }
@@ -247,21 +300,15 @@ export function ComposerDocView({
     }
     if (block.prefix?.kind === "quote") {
       const qPrefix = block.prefix.prefix;
-      const lines: Array<{ bi: number; b: Extract<ComposerBlock, { kind: "line" }>; s: FlatBlockSpan }> = [];
+      const lines: ReactNode[] = [];
       let j = i;
       while (j < doc.blocks.length) {
         const cand = doc.blocks[j]!;
         if (cand.kind !== "line" || cand.prefix?.kind !== "quote" || cand.prefix.prefix !== qPrefix) break;
-        lines.push({ bi: j, b: cand, s: spans[j]! });
+        lines.push(line("p", j, cand));
         j += 1;
       }
-      rendered.push(
-        <blockquote key={`bq-${i}`} dir={dir}>
-          {lines.map((l) => (
-            <p key={`bq-${l.bi}`} {...lineAttrs(l.bi, l.s)}>{renderInlines(l.b.inlines, l.s.start, `bq-${l.bi}`)}</p>
-          ))}
-        </blockquote>,
-      );
+      rendered.push(<blockquote key={`bq-${i}`} dir={dir}>{lines}</blockquote>);
       i = j - 1;
       continue;
     }
@@ -271,7 +318,7 @@ export function ComposerDocView({
       while (j < doc.blocks.length) {
         const cand = doc.blocks[j]!;
         if (cand.kind !== "line" || !isListPrefix(cand.prefix)) break;
-        entries.push({ block: cand, prefix: cand.prefix, blockIndex: j, span: spans[j]!, dir: dirs[j] ?? null });
+        entries.push({ block: cand, prefix: cand.prefix, blockIndex: j, dir: dirs[j] ?? null });
         j += 1;
       }
       groupListItems(entries).forEach((g, gi) => rendered.push(renderListGroup(g, `list-${i}-${gi}`)));
@@ -279,11 +326,11 @@ export function ComposerDocView({
       continue;
     }
     if (block.prefix?.kind === "heading") {
-      const H = `h${Math.max(1, Math.min(6, block.prefix.level))}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-      rendered.push(<H key={`h-${i}`} dir={dir} {...lineAttrs(i, span)}>{renderInlines(block.inlines, span.start, `h-${i}`)}</H>);
+      rendered.push(line(`h${Math.max(1, Math.min(6, block.prefix.level))}` as ComposerLineProps["as"], i, block, dir));
       continue;
     }
-    rendered.push(<p key={`p-${i}`} dir={dir} {...lineAttrs(i, span)}>{renderInlines(block.inlines, span.start, `p-${i}`)}</p>);
+    rendered.push(line("p", i, block, dir));
   }
   return <>{rendered}</>;
 }
+

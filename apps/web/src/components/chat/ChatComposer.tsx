@@ -166,8 +166,8 @@ import {
 import {
   type ComposerCitationCommentRequest,
   type ComposerPromptEditorHandle,
-  ComposerPromptEditorTiptap as ComposerPromptEditor,
-} from "../ComposerPromptEditorTiptap";
+  ComposerPromptEditor,
+} from "../composer/ComposerPromptEditor";
 import {
   ComposerContextActionsContext,
   composerContextRecordsFromDraft,

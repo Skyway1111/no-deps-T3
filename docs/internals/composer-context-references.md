@@ -92,12 +92,11 @@ transcript renderer moves to records.
 
 ## Editor model (web and desktop)
 
-`ComposerContextReferenceExtension` in
-[`ComposerPromptEditorTiptap.tsx`](../../apps/web/src/components/ComposerPromptEditorTiptap.tsx) is
-the inline Tiptap node for every context kind. It stores `kind`, `contextId`, `label`, and a
-per-occurrence `referenceId`, and its text content is the canonical link. The prompt string carries
-payload identity and position, so rebuilding the editor restores equivalent chips; it does not
-preserve the editor-local occurrence ids. Old drafts that used the U+FFFC ordinal placeholder
+The `composer-context-reference` chip in
+[`composer/types.ts`](../../apps/web/src/components/composer/types.ts) is the inline atom for every
+context kind. It stores `kind`, `contextId`, and `label`, and its source is the canonical link. The
+prompt string carries payload identity and position, so rebuilding the editor restores equivalent
+chips. Old drafts that used the U+FFFC ordinal placeholder
 migrate on hydration: placeholders bind to the terminal contexts in array order, then any context
 the prompt does not mention is prepended as a link.
 

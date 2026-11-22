@@ -12,9 +12,9 @@ import "~/index.css";
 
 import { MessagesTimeline } from "~/components/chat/MessagesTimeline";
 import {
-  ComposerPromptEditorTiptap as ComposerPromptEditor,
+  ComposerPromptEditor,
   type ComposerPromptEditorHandle,
-} from "~/components/ComposerPromptEditorTiptap";
+} from "~/components/composer/ComposerPromptEditor";
 import { commitsSoFar, startCounting, stopCounting } from "./renderCounter";
 import { render } from "./render";
 

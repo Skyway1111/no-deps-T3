@@ -237,14 +237,15 @@ export function resolveFlatOffset(doc: ComposerDoc, rawOffset: number): Resolved
     return { blockIndex: 0, block: { kind: "line", prefix: null, inlines: [] }, start: 0, end: 0, offsetInBlock: 0 };
   }
   const offset = Math.max(0, Math.min(rawOffset, spans.at(-1)!.end));
-  let chosen = spans.at(-1)!;
-  for (const span of spans) {
-    if (span.block.kind === "horizontalRule") continue;
-    if (offset <= span.end) {
-      chosen = span;
-      break;
-    }
+  let lo = 0;
+  let hi = spans.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (spans[mid]!.end >= offset) hi = mid;
+    else lo = mid + 1;
   }
+  while (lo < spans.length - 1 && spans[lo]!.block.kind === "horizontalRule") lo += 1;
+  const chosen = spans[lo]!;
   return { ...chosen, offsetInBlock: Math.max(0, Math.min(offset - chosen.start, chosen.end - chosen.start)) };
 }
 

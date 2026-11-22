@@ -30,7 +30,11 @@ import {
   sortMarks,
 } from "~/components/composer/types";
 import { splitPromptIntoComposerSegments } from "~/composer-editor-mentions";
-import { nextOrderedMarkerText } from "~/composer-list-continuation";
+import {
+  listIndentForTab,
+  listOutdentForTab,
+  nextOrderedMarkerText,
+} from "~/composer-list-continuation";
 import { parseInlineMarkdown, RICH_TEXT_DELIMITERS, type RichTextMark } from "~/composer-rich-text";
 import { collectInlineContextIds } from "~/lib/composerContextReferences";
 import { markdownMathRanges } from "~/markdown/wordsHast";
@@ -340,7 +344,6 @@ export interface RichRun {
   mdLen: number;
   openLen: number;
   closeLen: number;
-  pmPos: number;
   mdStart: number;
   nodeName?: string;
 }
@@ -379,7 +382,6 @@ const pushBreak = (acc: RichAcc) => {
     mdLen: 1,
     openLen: 0,
     closeLen: 0,
-    pmPos: acc.flat,
     mdStart: acc.md,
   });
   acc.value += "\n";
@@ -395,7 +397,6 @@ const pushPrefix = (acc: RichAcc, text: string) => {
     mdLen: text.length,
     openLen: 0,
     closeLen: 0,
-    pmPos: acc.flat,
     mdStart: acc.md,
   });
   acc.value += text;
@@ -447,7 +448,6 @@ function pushInlineRun(acc: RichAcc, p: ComposerInline, open: string, close: str
     mdLen,
     openLen: open.length,
     closeLen: close.length,
-    pmPos: acc.flat,
     mdStart: acc.md,
   };
   if (!isText) run.nodeName = p.kind;
@@ -502,7 +502,6 @@ function appendInlineRuns(inlines: readonly ComposerInline[], acc: RichAcc): voi
       mdLen: 0,
       openLen: 0,
       closeLen: 0,
-      pmPos: acc.flat,
       mdStart: acc.md,
     });
     return;
@@ -519,7 +518,6 @@ function appendInlineRuns(inlines: readonly ComposerInline[], acc: RichAcc): voi
       acc.runs.push({
         ...r,
         flatStart: r.flatStart + acc.flat,
-        pmPos: r.pmPos + acc.flat,
         mdStart: r.mdStart + acc.md,
       });
     acc.value += island.value;
@@ -655,7 +653,6 @@ function buildPart(block: ComposerBlock, variant: number): RichPart {
       mdLen,
       openLen: open.length,
       closeLen: close.length,
-      pmPos: acc.flat,
       mdStart: acc.md,
       nodeName: "codeBlock",
     });
@@ -680,8 +677,9 @@ const serializedDocs = new WeakMap<ComposerDoc, RichDocMap | PendingLineEdit>();
 const NO_IDS: readonly string[] = [];
 
 /**
- * `doc` with line `index` replaced by `block`: same prefix, non-empty before and after, `delta` flat chars longer.
- * Those invariants keep every separator unchanged, so spans and serialization derive from `doc`'s in O(1) amortized.
+ * `doc` with block `index` replaced by `block`, `delta` flat chars longer. A line keeps its prefix kind and stays
+ * non-empty (a code block may change freely); that keeps every separator unchanged, so spans and serialization
+ * derive from `doc`'s in O(1) amortized.
  */
 export function withLineBlock(
   doc: ComposerDoc,
@@ -794,7 +792,6 @@ export class RichDocMap {
       return p.runs.map((r) => ({
         ...r,
         flatStart: r.flatStart + flat,
-        pmPos: r.pmPos + flat,
         mdStart: r.mdStart + md,
       }));
     }));
@@ -1122,6 +1119,64 @@ export function renumberOrderedAfter(
     prevMarker = nextOrderedMarkerText(prevMarker);
     blocks[i] = { ...sib, prefix: { ...sib.prefix, marker: prevMarker } };
   }
+}
+
+const newlinesIn = (text: string): number => {
+  let n = 0;
+  for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) n += 1;
+  return n;
+};
+
+/**
+ * Tab / Shift+Tab on a list item. The Markdown rule rewrites only list markers, so only those blocks' prefixes change
+ * and chips (with their cite keys) and per-block caches survive; `rebuild` reparses when that does not hold.
+ */
+export function indentListItemForTab(
+  state: ComposerEditorState,
+  outdent: boolean,
+  rebuild: (value: string) => ComposerDoc,
+): ComposerEditResult | null {
+  if (!selectionEmpty(state.selection)) return null;
+  const res = resolveFlatOffset(state.doc, state.selection.head);
+  if (res.block.kind !== "line" || !isListPrefix(res.block.prefix)) return null;
+  const map = serializeEditorDoc(state.doc);
+  const at = flatToMarkdown(map, state.selection.head);
+  const edit = (outdent ? listOutdentForTab : listIndentForTab)(map.value, at, at);
+  if (!edit) return null;
+  const value = map.value.slice(0, edit.start) + edit.replacement + map.value.slice(edit.end);
+  const oldLines = map.value.split("\n");
+  const newLines = value.split("\n");
+  const blocks = state.doc.blocks.slice();
+  let changed = 0;
+  let lastIndex = -1;
+  let line = 0;
+  const editEnd = Math.max(edit.end, edit.start + 1);
+  for (let j = 0; j < blocks.length && map.mds[j]! < editEnd; j += 1) {
+    const part = map.parts[j]!;
+    const own = line + (part.variant & 1) + ((part.variant >> 1) & 1);
+    line += newlinesIn(part.value);
+    const block = blocks[j]!;
+    if (map.mds[j + 1]! <= edit.start || oldLines[own] === newLines[own]) continue;
+    const parsed = isListPrefix(block.kind === "line" ? block.prefix : null)
+      ? parseListPrefix(newLines[own] ?? "")
+      : null;
+    if (block.kind !== "line" || !parsed) {
+      changed = -1;
+      break;
+    }
+    blocks[j] = { ...block, prefix: parsed.prefix };
+    changed += 1;
+    lastIndex = j;
+  }
+  let doc: ComposerDoc =
+    changed === 1 ? withLineBlock(state.doc, lastIndex, blocks[lastIndex]!, 0) : { blocks };
+  if (changed < 1 || oldLines.length !== newLines.length || serializeEditorDoc(doc).value !== value)
+    doc = rebuild(value);
+  return {
+    doc,
+    selection: collapsedSelection(markdownToFlat(serializeEditorDoc(doc), edit.cursorAfter)),
+    changeKind: "other",
+  };
 }
 
 export function splitOrLiftListItem(state: ComposerEditorState): ComposerEditResult | null {

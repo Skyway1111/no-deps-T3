@@ -21,7 +21,7 @@ import {
   composerTargetKey,
   useComposerDraftStore,
 } from "../../composerDraftStore";
-import { type ComposerPromptEditorHandle } from "../ComposerPromptEditorTiptap";
+import { type ComposerPromptEditorHandle } from "../composer/ComposerPromptEditor";
 import type { PendingUserInputProgress } from "../../pendingUserInput";
 import type { ComposerAttachmentInsertion } from "../composerAttachmentInsertion";
 import { type PendingUserInput } from "../../session-logic";

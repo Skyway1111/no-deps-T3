@@ -80,7 +80,7 @@ export function deleteRange(doc: ComposerDoc, rawFrom: number, rawTo: number): C
     if (b.kind === "codeBlock") {
       const code = b.code.slice(0, from - s.start) + b.code.slice(to - s.start);
       return {
-        doc: finalize(doc.blocks.map((blk, i) => (i === s.blockIndex ? { ...b, code } : blk))),
+        doc: withLineBlock(doc, s.blockIndex, { ...b, code }, from - to),
         selection: collapsedSelection(from),
         changeKind: "delete",
       };
@@ -90,8 +90,13 @@ export function deleteRange(doc: ComposerDoc, rawFrom: number, rawTo: number): C
         ...sliceInlines(b.inlines, 0, from - s.start),
         ...sliceInlines(b.inlines, to - s.start, s.end - s.start),
       ]);
+      const block = { ...b, inlines };
       return {
-        doc: finalize(doc.blocks.map((blk, i) => (i === s.blockIndex ? { ...b, inlines } : blk))),
+        // Emptying a line can change its separators, which withLineBlock cannot derive.
+        doc:
+          inlines.length > 0
+            ? withLineBlock(doc, s.blockIndex, block, from - to)
+            : finalize(doc.blocks.map((blk, i) => (i === s.blockIndex ? block : blk))),
         selection: collapsedSelection(from),
         changeKind: "delete",
       };
@@ -447,11 +452,7 @@ export function insertText(
     const off = pos - res.start;
     const code = res.block.code.slice(0, off) + text + res.block.code.slice(off);
     return {
-      doc: {
-        blocks: working.doc.blocks.map((b, i) =>
-          i === res.blockIndex ? { ...res.block, code } : b,
-        ),
-      },
+      doc: withLineBlock(working.doc, res.blockIndex, { ...res.block, code }, text.length),
       selection: collapsedSelection(pos + text.length),
       changeKind: "insert",
     };

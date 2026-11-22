@@ -32,10 +32,10 @@ import { flatToMarkdown, pmToFlat, serializeEditorDoc } from "~/composer-rich-te
 import { isMacPlatform } from "~/lib/utils";
 import { registerCommands } from "~/shortcuts/dispatcher";
 import {
-  ComposerPromptEditorTiptap as ComposerPromptEditor,
+  ComposerPromptEditor,
   type ComposerPromptEditorHandle,
   type ComposerPromptEditorProps,
-} from "./ComposerPromptEditorTiptap";
+} from "./composer/ComposerPromptEditor";
 
 vi.mock(import("../state/server"), async (original) => {
   const { Atom } = await import("effect/reactivity");

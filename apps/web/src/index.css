@@ -2533,13 +2533,6 @@ code {
   display: none;
 }
 
-/* Selected chips (node selection from arrowing into or clicking a chip). */
-.composer-tiptap .ProseMirror-selectednode {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-  border-radius: 6px;
-}
-
 .composer-tiptap .composer-chip-range-selected {
   position: relative;
 }

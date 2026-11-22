@@ -7,9 +7,15 @@ import {
   collapsedSelection,
   computeFlatBlockSpans,
   docFlatLength,
+  inlineFlatLength,
   isChipInline,
   normalizeInlines,
+  resolveFlatOffset,
 } from "./types";
+
+// Line elements carry only their block index; flat offsets come from the doc, so edits leave other lines' DOM untouched.
+const LINE = "[data-composer-block-index]";
+const blockIndexOf = (el: HTMLElement): number => Number(el.dataset.composerBlockIndex ?? "-1");
 
 const isUiOrSentinel = (node: Node): boolean =>
   node instanceof Element &&
@@ -18,10 +24,7 @@ const isUiOrSentinel = (node: Node): boolean =>
     node.closest("[data-composer-ui]") !== null);
 
 const isChipEl = (node: Node): node is HTMLElement =>
-  node instanceof HTMLElement && node.hasAttribute("data-composer-chip-flat");
-
-const editableLines = (root: HTMLElement): HTMLElement[] =>
-  Array.from(root.querySelectorAll<HTMLElement>("[data-composer-line-start]"));
+  node instanceof HTMLElement && node.hasAttribute("data-composer-chip-offset");
 
 function measureDomLength(node: Node): number {
   if (isUiOrSentinel(node)) return 0;
@@ -63,21 +66,19 @@ function domPointToLineOffset(lineEl: HTMLElement, targetNode: Node, targetOffse
 }
 
 export function domPointToFlatOffset(rootEl: HTMLElement, doc: ComposerDoc, node: Node, offset: number): number {
+  const spans = computeFlatBlockSpans(doc);
   const total = docFlatLength(doc);
   if (node === rootEl) {
     if (offset === 0) return 0;
     const child = rootEl.childNodes[Math.min(offset, rootEl.childNodes.length - 1)];
-    const line = child instanceof HTMLElement
-      ? child.hasAttribute("data-composer-line-start") ? child : child.querySelector<HTMLElement>("[data-composer-line-start]")
-      : null;
-    if (line) return Math.max(0, Math.min(Number(line.dataset.composerLineStart ?? "0"), total));
+    const line = child instanceof HTMLElement ? (child.matches(LINE) ? child : child.querySelector<HTMLElement>(LINE)) : null;
+    if (line) return Math.max(0, Math.min(spans[blockIndexOf(line)]?.start ?? 0, total));
     return offset >= rootEl.childNodes.length ? total : 0;
   }
-  const lineEl = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-composer-line-start]");
-  if (!lineEl || !rootEl.contains(lineEl)) return total;
-  const start = Number(lineEl.dataset.composerLineStart ?? "0");
-  const end = Number(lineEl.dataset.composerLineEnd ?? String(start));
-  return Math.max(start, Math.min(start + domPointToLineOffset(lineEl, node, offset), Math.max(end, total)));
+  const lineEl = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>(LINE);
+  const span = lineEl && rootEl.contains(lineEl) ? spans[blockIndexOf(lineEl)] : undefined;
+  if (!lineEl || !span) return total;
+  return Math.max(span.start, Math.min(span.start + domPointToLineOffset(lineEl, node, offset), Math.max(span.end, total)));
 }
 
 export function domSelectionToFlat(rootEl: HTMLElement, doc: ComposerDoc): ComposerSelection | null {
@@ -119,26 +120,17 @@ function findDomPointInLine(lineEl: HTMLElement, targetLocal: number): { node: N
   return walk(lineEl) ?? (lastText ? { node: lastText, offset: (lastText as Text).data.length } : { node: lineEl, offset: 0 });
 }
 
-export function flatOffsetToDomPoint(rootEl: HTMLElement, flatOffset: number): { node: Node; offset: number } {
-  const lines = editableLines(rootEl);
-  if (lines.length === 0) return { node: rootEl, offset: 0 };
-  let target = lines.at(-1)!;
-  for (const line of lines) {
-    if (flatOffset <= Number(line.dataset.composerLineEnd ?? "0")) {
-      target = line;
-      break;
-    }
-  }
-  const start = Number(target.dataset.composerLineStart ?? "0");
-  const end = Number(target.dataset.composerLineEnd ?? String(start));
-  return findDomPointInLine(target, Math.max(0, Math.min(flatOffset - start, end - start)));
+export function flatOffsetToDomPoint(rootEl: HTMLElement, doc: ComposerDoc, flatOffset: number): { node: Node; offset: number } {
+  const res = resolveFlatOffset(doc, flatOffset);
+  const line = rootEl.querySelector<HTMLElement>(`[data-composer-block-index="${res.blockIndex}"]`);
+  return line ? findDomPointInLine(line, res.offsetInBlock) : { node: rootEl, offset: 0 };
 }
 
-export function applyFlatSelectionToDom(rootEl: HTMLElement, selection: ComposerSelection): boolean {
+export function applyFlatSelectionToDom(rootEl: HTMLElement, doc: ComposerDoc, selection: ComposerSelection): boolean {
   const domSel = window.getSelection();
   if (!domSel) return false;
-  const a = flatOffsetToDomPoint(rootEl, selection.anchor);
-  const h = selection.anchor === selection.head ? a : flatOffsetToDomPoint(rootEl, selection.head);
+  const a = flatOffsetToDomPoint(rootEl, doc, selection.anchor);
+  const h = selection.anchor === selection.head ? a : flatOffsetToDomPoint(rootEl, doc, selection.head);
   if (domSel.anchorNode === a.node && domSel.anchorOffset === a.offset && domSel.focusNode === h.node && domSel.focusOffset === h.offset) {
     return false;
   }
@@ -156,20 +148,19 @@ export function applyFlatSelectionToDom(rootEl: HTMLElement, selection: Composer
 
 /** Fallback DOM reader for browser-driven mutations (IME compositionend, dictation, spellcheck). */
 export function readDocFromDom(rootEl: HTMLElement, prevDoc: ComposerDoc): { doc: ComposerDoc; selection: ComposerSelection } {
-  const chips = new Map<number, ComposerChip>();
-  for (const span of computeFlatBlockSpans(prevDoc)) {
-    if (span.block.kind !== "line") continue;
-    let pos = span.start;
-    for (const item of span.block.inlines) {
-      if (isChipInline(item)) { chips.set(pos, item); pos += 1; }
-      else pos += item.text.length;
+  const readInlines = (el: HTMLElement, block: ComposerBlock): ComposerInline[] => {
+    const chips = new Map<number, ComposerChip>();
+    if (block.kind === "line") {
+      let pos = 0;
+      for (const item of block.inlines) {
+        if (isChipInline(item)) chips.set(pos, item);
+        pos += inlineFlatLength(item);
+      }
     }
-  }
-  const readInlines = (el: HTMLElement): ComposerInline[] => {
     const out: ComposerInline[] = [];
     const walk = (n: Node) => {
       if (isUiOrSentinel(n)) return;
-      if (isChipEl(n)) { const c = chips.get(Number(n.dataset.composerChipFlat)); if (c) out.push(c); return; }
+      if (isChipEl(n)) { const c = chips.get(Number(n.dataset.composerChipOffset)); if (c) out.push(c); return; }
       if (n instanceof HTMLElement && n.getAttribute("contenteditable") === "false") return;
       if (n.nodeType === Node.TEXT_NODE) { if ((n as Text).data) out.push({ kind: "text", text: (n as Text).data, marks: [] }); return; }
       for (const ch of Array.from(n.childNodes)) walk(ch);
@@ -178,16 +169,16 @@ export function readDocFromDom(rootEl: HTMLElement, prevDoc: ComposerDoc): { doc
     return normalizeInlines(out);
   };
   const byBlock = new Map<number, HTMLElement>();
-  for (const el of editableLines(rootEl)) byBlock.set(Number(el.dataset.composerBlockIndex ?? "-1"), el);
+  for (const el of rootEl.querySelectorAll<HTMLElement>(LINE)) byBlock.set(blockIndexOf(el), el);
   const plainSig = (items: readonly ComposerInline[]) => items.map((i) => (i.kind === "text" ? i.text : `\uFFFC${i.kind}`)).join("");
 
   const blocks: ComposerBlock[] = prevDoc.blocks.map((block, bi) => {
     const el = byBlock.get(bi);
     if (!el || block.kind === "horizontalRule") return block;
     if (block.kind === "codeBlock") {
-      return { ...block, code: readInlines(el).map((i) => (i.kind === "text" ? i.text : "")).join("") };
+      return { ...block, code: readInlines(el, block).map((i) => (i.kind === "text" ? i.text : "")).join("") };
     }
-    const next = readInlines(el);
+    const next = readInlines(el, block);
     return { ...block, inlines: plainSig(block.inlines) === plainSig(next) ? block.inlines : next };
   });
 
@@ -197,8 +188,8 @@ export function readDocFromDom(rootEl: HTMLElement, prevDoc: ComposerDoc): { doc
   if (domSel?.anchorNode && domSel.focusNode && rootEl.contains(domSel.anchorNode)) {
     const nextSpans = computeFlatBlockSpans(nextDoc);
     const mapPt = (n: Node, off: number) => {
-      const lineEl = (n instanceof Element ? n : n.parentElement)?.closest<HTMLElement>("[data-composer-line-start]");
-      const span = lineEl ? nextSpans[Number(lineEl.dataset.composerBlockIndex ?? "0")] : undefined;
+      const lineEl = (n instanceof Element ? n : n.parentElement)?.closest<HTMLElement>(LINE);
+      const span = lineEl ? nextSpans[blockIndexOf(lineEl)] : undefined;
       if (!lineEl || !span) return docFlatLength(nextDoc);
       return Math.max(span.start, Math.min(span.start + domPointToLineOffset(lineEl, n, off), span.end));
     };
@@ -233,7 +224,19 @@ export function caretLineRect(range: Range, edge: "start" | "end"): DOMRect | nu
   return cr.height > 0 ? cr : null;
 }
 
+const pendingReveals = new Set<HTMLElement>();
+
+/** Scrolls the caret into view before the next paint; calls within a frame share one layout read. */
 export function revealCaretInScroller(scroller: HTMLElement): void {
+  if (pendingReveals.has(scroller)) return;
+  pendingReveals.add(scroller);
+  requestAnimationFrame(() => {
+    pendingReveals.delete(scroller);
+    if (scroller.isConnected && scroller.scrollHeight > scroller.clientHeight) revealNow(scroller);
+  });
+}
+
+function revealNow(scroller: HTMLElement): void {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || !sel.anchorNode || !scroller.contains(sel.anchorNode)) return;
   const caret = caretLineRect(sel.getRangeAt(0), "end");

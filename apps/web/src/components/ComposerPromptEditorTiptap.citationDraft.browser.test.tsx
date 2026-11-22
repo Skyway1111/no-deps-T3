@@ -11,9 +11,9 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { findAssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { act, render } from "../../test/render";
 import {
-  ComposerPromptEditorTiptap as ComposerPromptEditor,
+  ComposerPromptEditor,
   type ComposerPromptEditorHandle,
-} from "./ComposerPromptEditorTiptap";
+} from "./composer/ComposerPromptEditor";
 
 const citation = {
   version: 1 as const,
