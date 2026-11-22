@@ -4,14 +4,19 @@
  * handlers and name requests. Values map as in dbus-next: 64-bit integers are bigints, `ay`
  * is a Buffer, dicts are objects, structs are arrays, `v` is a {@link Variant}.
  */
-import { EventEmitter } from "node:events";
+import * as NodeEvents from "node:events";
 import * as NodeNet from "node:net";
 
 export const MessageType = { METHOD_CALL: 1, METHOD_RETURN: 2, ERROR: 3, SIGNAL: 4 } as const;
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 export const MessageFlag = { NO_REPLY_EXPECTED: 1, NO_AUTO_START: 2 } as const;
 export const NameFlag = { ALLOW_REPLACEMENT: 1, REPLACE_EXISTING: 2, DO_NOT_QUEUE: 4 } as const;
-export const RequestNameReply = { PRIMARY_OWNER: 1, IN_QUEUE: 2, EXISTS: 3, ALREADY_OWNER: 4 } as const;
+export const RequestNameReply = {
+  PRIMARY_OWNER: 1,
+  IN_QUEUE: 2,
+  EXISTS: 3,
+  ALREADY_OWNER: 4,
+} as const;
 const NO_REPLY_EXPECTED = MessageFlag.NO_REPLY_EXPECTED;
 
 export class Variant<T = unknown> {
@@ -66,10 +71,23 @@ export class Message {
     this.flags = m.flags ?? 0;
   }
   static newMethodReturn(call: Message, signature = "", body: unknown[] = []): Message {
-    return new Message({ type: MessageType.METHOD_RETURN, replySerial: call.serial, destination: call.sender, signature, body });
+    return new Message({
+      type: MessageType.METHOD_RETURN,
+      replySerial: call.serial,
+      destination: call.sender,
+      signature,
+      body,
+    });
   }
   static newError(call: Message, errorName: string, text = ""): Message {
-    return new Message({ type: MessageType.ERROR, replySerial: call.serial, destination: call.sender, errorName, signature: "s", body: [text] });
+    return new Message({
+      type: MessageType.ERROR,
+      replySerial: call.serial,
+      destination: call.sender,
+      errorName,
+      signature: "s",
+      body: [text],
+    });
   }
 }
 
@@ -99,7 +117,8 @@ export function splitSignature(signature: string): string[] {
         one();
       }
       i++;
-    } else if (c === undefined || !"ybnqiuxtdhsogv".includes(c)) throw new Error(`Bad signature ${signature}`);
+    } else if (c === undefined || !"ybnqiuxtdhsogv".includes(c))
+      throw new Error(`Bad signature ${signature}`);
   };
   while (i < signature.length) {
     const start = i;
@@ -109,7 +128,37 @@ export function splitSignature(signature: string): string[] {
   return types;
 }
 
-const ALIGN: Record<string, number> = { y: 1, b: 4, n: 2, q: 2, i: 4, u: 4, x: 8, t: 8, d: 8, h: 4, s: 4, o: 4, g: 1, a: 4, "(": 8, "{": 8, v: 1 };
+const ALIGN: Record<string, number> = {
+  y: 1,
+  b: 4,
+  n: 2,
+  q: 2,
+  i: 4,
+  u: 4,
+  x: 8,
+  t: 8,
+  d: 8,
+  h: 4,
+  s: 4,
+  o: 4,
+  g: 1,
+  a: 4,
+  "(": 8,
+  "{": 8,
+  v: 1,
+};
+const FIXED_SIZE: Record<string, number> = {
+  y: 1,
+  n: 2,
+  q: 2,
+  b: 4,
+  i: 4,
+  u: 4,
+  h: 4,
+  x: 8,
+  t: 8,
+  d: 8,
+};
 
 class Writer {
   buf = Buffer.alloc(256);
@@ -132,28 +181,50 @@ class Writer {
     this.len += b.length;
   }
   fixed(type: string, value: unknown) {
-    this.align(ALIGN[type]!);
-    const size = { y: 1, n: 2, q: 2, b: 4, i: 4, u: 4, h: 4, x: 8, t: 8, d: 8 }[type as "y"];
+    const size = FIXED_SIZE[type]!;
+    this.align(size);
     this.reserve(size);
     const b = this.buf;
     const at = this.len;
-    if (type === "y") b.writeUInt8(Number(value), at);
-    else if (type === "n") b.writeInt16LE(Number(value), at);
-    else if (type === "q") b.writeUInt16LE(Number(value), at);
-    else if (type === "b") b.writeUInt32LE(value ? 1 : 0, at);
-    else if (type === "i") b.writeInt32LE(Number(value), at);
-    else if (type === "u" || type === "h") b.writeUInt32LE(Number(value), at);
-    else if (type === "x") b.writeBigInt64LE(BigInt(value as number), at);
-    else if (type === "t") b.writeBigUInt64LE(BigInt(value as number), at);
-    else b.writeDoubleLE(Number(value), at);
+    switch (type) {
+      case "y":
+        b.writeUInt8(Number(value), at);
+        break;
+      case "n":
+        b.writeInt16LE(Number(value), at);
+        break;
+      case "q":
+        b.writeUInt16LE(Number(value), at);
+        break;
+      case "b":
+        b.writeUInt32LE(value ? 1 : 0, at);
+        break;
+      case "i":
+        b.writeInt32LE(Number(value), at);
+        break;
+      case "u":
+      case "h":
+        b.writeUInt32LE(Number(value), at);
+        break;
+      case "x":
+        b.writeBigInt64LE(BigInt(value as number), at);
+        break;
+      case "t":
+        b.writeBigUInt64LE(BigInt(value as number), at);
+        break;
+      default:
+        b.writeDoubleLE(Number(value), at);
+    }
     this.len += size;
   }
   string(type: string, value: unknown) {
-    const s = Buffer.from(String(value), "utf8");
-    if (type === "g") this.fixed("y", s.length);
-    else this.fixed("u", s.length);
-    this.bytes(s);
-    this.bytes(Buffer.of(0));
+    const text = String(value);
+    const length = Buffer.byteLength(text, "utf8");
+    this.fixed(type === "g" ? "y" : "u", length);
+    this.reserve(length + 1);
+    this.buf.write(text, this.len, length, "utf8");
+    this.buf[this.len + length] = 0;
+    this.len += length + 1;
   }
   value(type: string, value: unknown) {
     const c = type[0]!;
@@ -177,10 +248,16 @@ class Writer {
       this.fixed("u", 0);
       this.align(ALIGN[element[0]!]!);
       const start = this.len;
-      if (element === "y") this.bytes(typeof value === "string" ? Buffer.from(value) : Uint8Array.from(value as ArrayLike<number>));
+      if (element === "y")
+        this.bytes(
+          typeof value === "string"
+            ? Buffer.from(value)
+            : Uint8Array.from(value as ArrayLike<number>),
+        );
       else if (element[0] === "{") {
         const [keyType, valueType] = splitSignature(element.slice(1, -1)) as [string, string];
-        const entries = value instanceof Map ? [...value.entries()] : Object.entries(value as object);
+        const entries =
+          value instanceof Map ? [...value.entries()] : Object.entries(value as object);
         for (const [k, v] of entries) {
           this.align(8);
           this.value(keyType, "xtnqiuy".includes(keyType) ? Number(k) : k);
@@ -213,24 +290,33 @@ class Reader {
     this.pos += (n - (this.pos % n)) % n;
   }
   fixed(type: string): number | bigint | boolean {
-    this.align(ALIGN[type]!);
+    const size = FIXED_SIZE[type]!;
+    this.align(size);
     const b = this.buf;
     const at = this.pos;
     const le = this.le;
-    const read = {
-      y: () => [b.readUInt8(at), 1],
-      n: () => [le ? b.readInt16LE(at) : b.readInt16BE(at), 2],
-      q: () => [le ? b.readUInt16LE(at) : b.readUInt16BE(at), 2],
-      b: () => [(le ? b.readUInt32LE(at) : b.readUInt32BE(at)) !== 0, 4],
-      i: () => [le ? b.readInt32LE(at) : b.readInt32BE(at), 4],
-      u: () => [le ? b.readUInt32LE(at) : b.readUInt32BE(at), 4],
-      h: () => [le ? b.readUInt32LE(at) : b.readUInt32BE(at), 4],
-      x: () => [le ? b.readBigInt64LE(at) : b.readBigInt64BE(at), 8],
-      t: () => [le ? b.readBigUInt64LE(at) : b.readBigUInt64BE(at), 8],
-      d: () => [le ? b.readDoubleLE(at) : b.readDoubleBE(at), 8],
-    }[type as "y"]() as [number | bigint | boolean, number];
-    this.pos += read[1];
-    return read[0];
+    this.pos += size;
+    switch (type) {
+      case "y":
+        return b.readUInt8(at);
+      case "n":
+        return le ? b.readInt16LE(at) : b.readInt16BE(at);
+      case "q":
+        return le ? b.readUInt16LE(at) : b.readUInt16BE(at);
+      case "b":
+        return (le ? b.readUInt32LE(at) : b.readUInt32BE(at)) !== 0;
+      case "i":
+        return le ? b.readInt32LE(at) : b.readInt32BE(at);
+      case "u":
+      case "h":
+        return le ? b.readUInt32LE(at) : b.readUInt32BE(at);
+      case "x":
+        return le ? b.readBigInt64LE(at) : b.readBigInt64BE(at);
+      case "t":
+        return le ? b.readBigUInt64LE(at) : b.readBigUInt64BE(at);
+      default:
+        return le ? b.readDoubleLE(at) : b.readDoubleBE(at);
+    }
   }
   string(type: string): string {
     const length = Number(this.fixed(type === "g" ? "y" : "u"));
@@ -337,11 +423,14 @@ export function decodeMessage(buf: Buffer): Message {
 
 type MethodHandler = (message: Message) => boolean;
 
-export class MessageBus extends EventEmitter {
+export class MessageBus extends NodeEvents.EventEmitter {
   name: string | null = null;
   private serial = 1;
   private readonly socket: NodeNet.Socket;
-  private readonly pending = new Map<number, { resolve: (m: Message) => void; reject: (e: Error) => void }>();
+  private readonly pending = new Map<
+    number,
+    { resolve: (m: Message) => void; reject: (e: Error) => void }
+  >();
   private readonly handlers: MethodHandler[] = [];
   private readonly ready: Promise<void>;
   private connected = false;
@@ -362,7 +451,12 @@ export class MessageBus extends EventEmitter {
     this.ready = this.authenticate().then(async () => {
       this.connected = true;
       const reply = await this.request(
-        new Message({ destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus", interface: "org.freedesktop.DBus", member: "Hello" }),
+        new Message({
+          destination: "org.freedesktop.DBus",
+          path: "/org/freedesktop/DBus",
+          interface: "org.freedesktop.DBus",
+          member: "Hello",
+        }),
       );
       this.name = String(reply?.body[0] ?? "");
       this.emit("connect");
@@ -378,7 +472,8 @@ export class MessageBus extends EventEmitter {
         text += chunk.toString("latin1");
         if (!text.includes("\r\n")) return;
         this.socket.off("data", onData);
-        if (!text.startsWith("OK ")) return reject(new Error(`D-Bus authentication failed: ${text.trim()}`));
+        if (!text.startsWith("OK "))
+          return reject(new Error(`D-Bus authentication failed: ${text.trim()}`));
         this.socket.write("BEGIN\r\n");
         let buffer: Buffer = Buffer.alloc(0);
         this.socket.on("data", (data: Buffer) => {
@@ -401,12 +496,22 @@ export class MessageBus extends EventEmitter {
       const waiter = this.pending.get(message.replySerial);
       if (waiter) {
         this.pending.delete(message.replySerial);
-        if (message.type === MessageType.ERROR) waiter.reject(new DBusError(message.errorName, String(message.body[0] ?? ""), message));
+        if (message.type === MessageType.ERROR)
+          waiter.reject(new DBusError(message.errorName, String(message.body[0] ?? ""), message));
         else waiter.resolve(message);
       }
     } else if (message.type === MessageType.METHOD_CALL) {
-      if (!this.handlers.some((handler) => handler(message)) && !(message.flags & NO_REPLY_EXPECTED)) {
-        this.send(Message.newError(message, "org.freedesktop.DBus.Error.UnknownMethod", `No handler for ${message.interface}.${message.member}`));
+      if (
+        !this.handlers.some((handler) => handler(message)) &&
+        !(message.flags & NO_REPLY_EXPECTED)
+      ) {
+        this.send(
+          Message.newError(
+            message,
+            "org.freedesktop.DBus.Error.UnknownMethod",
+            `No handler for ${message.interface}.${message.member}`,
+          ),
+        );
       }
     }
     this.emit("message", message);
@@ -436,7 +541,10 @@ export class MessageBus extends EventEmitter {
   }
 
   send(message: Message): void {
-    void this.ready.then(() => this.write(message), () => undefined);
+    void this.ready.then(
+      () => this.write(message),
+      () => undefined,
+    );
   }
 
   addMethodHandler(handler: MethodHandler): void {
@@ -467,7 +575,9 @@ function parseAddress(address: string): NodeNet.NetConnectOpts {
   for (const entry of address.split(";")) {
     const [transport, params = ""] = entry.split(/:(.*)/s) as [string, string?];
     if (transport !== "unix") continue;
-    const values = Object.fromEntries(params.split(",").map((kv) => kv.split(/=(.*)/s).map(decodeURIComponent)));
+    const values = Object.fromEntries(
+      params.split(",").map((kv) => kv.split(/=(.*)/s).map(decodeURIComponent)),
+    );
     if (values.path) return { path: values.path };
     if (values.abstract) return { path: `\0${values.abstract}` };
   }
@@ -476,6 +586,7 @@ function parseAddress(address: string): NodeNet.NetConnectOpts {
 
 export function sessionBus(): MessageBus {
   const address =
-    process.env.DBUS_SESSION_BUS_ADDRESS ?? (process.env.XDG_RUNTIME_DIR ? `unix:path=${process.env.XDG_RUNTIME_DIR}/bus` : "");
+    process.env.DBUS_SESSION_BUS_ADDRESS ??
+    (process.env.XDG_RUNTIME_DIR ? `unix:path=${process.env.XDG_RUNTIME_DIR}/bus` : "");
   return new MessageBus(address);
 }

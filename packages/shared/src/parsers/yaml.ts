@@ -5,8 +5,19 @@ export class YamlError extends Error {}
 
 const isBlank = (c: string | undefined) => c === undefined || c === " " || c === "\t" || c === "\n";
 const FLOW_END = new Set([",", "[", "]", "{", "}"]);
+const DOUBLE_QUOTED_SPECIAL = /["\\\n]/g;
+const SINGLE_QUOTED_SPECIAL = /['\n]/g;
+const trimSpacesEnd = (text: string) => {
+  let end = text.length;
+  while (end > 0 && (text.charCodeAt(end - 1) === 0x20 || text.charCodeAt(end - 1) === 0x09)) end--;
+  return end === text.length ? text : text.slice(0, end);
+};
+
+// First characters of every non-string plain scalar: null, booleans, numbers, .inf and .nan.
+const RESOLVABLE_START = /^(?:$|[~nNtTfF\d+\-.])/;
 
 function resolvePlain(raw: string): unknown {
+  if (!RESOLVABLE_START.test(raw)) return raw;
   if (/^(?:~|null|Null|NULL|)$/.test(raw)) return null;
   if (/^(?:true|True|TRUE)$/.test(raw)) return true;
   if (/^(?:false|False|FALSE)$/.test(raw)) return false;
@@ -272,9 +283,22 @@ class Parser {
 
   private quoted(): string {
     const quote = this.src[this.pos++];
+    const special = quote === '"' ? DOUBLE_QUOTED_SPECIAL : SINGLE_QUOTED_SPECIAL;
     let out = "";
     for (;;) {
+      // Literal runs are copied whole; only quotes, escapes and line breaks are looked at.
+      special.lastIndex = this.pos;
+      const runEnd = special.exec(this.src)?.index ?? this.src.length;
+      const run = this.src.slice(this.pos, runEnd);
+      this.pos = runEnd;
       const c = this.src[this.pos];
+      if (c === "\n") {
+        // Trailing spaces before a break are dropped, reaching back past the run only if it is all spaces.
+        const kept = trimSpacesEnd(run);
+        out = (kept ? out + kept : trimSpacesEnd(out)) + this.fold();
+        continue;
+      }
+      out += run;
       if (c === undefined) this.fail("unterminated quoted scalar");
       if (c === quote) {
         if (quote === "'" && this.src[this.pos + 1] === "'") {
@@ -285,9 +309,7 @@ class Parser {
         this.pos++;
         return out;
       }
-      if (c === "\n") {
-        out = out.replace(/[ \t]+$/, "") + this.fold();
-      } else if (c === "\\" && quote === '"') {
+      if (c === "\\") {
         const e = this.src[this.pos + 1]!;
         if (e === "\n") {
           this.pos++;
@@ -305,9 +327,6 @@ class Parser {
           out += ESCAPES[e];
           this.pos += 2;
         }
-      } else {
-        out += c;
-        this.pos++;
       }
     }
   }
@@ -455,21 +474,24 @@ class Parser {
     else if (c === '"' || c === "'") value = this.quoted();
     else {
       let out = "";
-      for (;;) {
+      for (let runStart = this.pos; ;) {
         const ch = this.src[this.pos];
-        if (
+        const end =
           ch === undefined ||
           FLOW_END.has(ch) ||
           (ch === ":" &&
             (isBlank(this.src[this.pos + 1]) || FLOW_END.has(this.src[this.pos + 1]!))) ||
-          (ch === "#" && isBlank(this.src[this.pos - 1]))
-        )
-          break;
-        if (ch === "\n") out = out.trimEnd() + this.fold();
-        else {
-          out += ch;
-          this.pos++;
-        }
+          (ch === "#" && isBlank(this.src[this.pos - 1]));
+        if (end || ch === "\n") {
+          const run = this.src.slice(runStart, this.pos);
+          if (end) {
+            out += run;
+            break;
+          }
+          const kept = run.trimEnd();
+          out = (kept ? out + kept : out.trimEnd()) + this.fold();
+          runStart = this.pos;
+        } else this.pos++;
       }
       out = out.trim();
       value = tag === "!!str" ? out : resolvePlain(out);

@@ -34,7 +34,7 @@ const MASK = 0xfff;
 const EDGE_HASH = new Int32Array(MASK + 1);
 const EDGE_PARENT = new Int32Array(MASK + 1);
 const EDGE_CHILD = new Int32Array(MASK + 1); // 0 = empty slot; the root (0) is never a child.
-const EDGE_LABEL: string[] = [];
+const EDGE_LABEL: string[] = new Array<string>(MASK + 1).fill("");
 const FLAGS = [0]; // per node: 1 = listed suffix, 2 = wildcard (any child label is one)
 
 let hash = 0;
@@ -70,7 +70,7 @@ function child(host: string, from: number, to: number, parent: number): number {
 
 function insert(suffix: string, flag: number) {
   let node = 0;
-  for (let pos = suffix.length; pos > 0; ) {
+  for (let pos = suffix.length; pos > 0;) {
     const dot = label(suffix, pos, node);
     let kid = child(suffix, dot + 1, pos, node);
     if (!kid) {
@@ -86,11 +86,15 @@ function insert(suffix: string, flag: number) {
   }
   FLAGS[node]! |= flag;
 }
-for (const suffix of PRIVATE.split(" ")) insert(suffix, 1);
-for (const [label, tlds] of Object.entries(CCTLD_SECOND_LEVELS))
-  for (const tld of tlds.split(" ")) insert(`${label}.${tld}`, 1);
-for (const suffix of WILDCARD.split(" ")) insert(suffix, 2);
-if (FLAGS.length > MASK / 2) throw new Error("publicSuffix: grow MASK");
+let built = false;
+function build() {
+  built = true;
+  for (const suffix of PRIVATE.split(" ")) insert(suffix, 1);
+  for (const [label, tlds] of Object.entries(CCTLD_SECOND_LEVELS))
+    for (const tld of tlds.split(" ")) insert(`${label}.${tld}`, 1);
+  for (const suffix of WILDCARD.split(" ")) insert(suffix, 2);
+  if (FLAGS.length > MASK / 2) throw new Error("publicSuffix: grow MASK");
+}
 
 /** `^\d{1,3}(\.\d{1,3}){3}$` over `host[0, end)`. */
 function isIPv4(host: string, end: number): boolean {
@@ -132,5 +136,6 @@ export function getPublicSuffix(hostname: string): string | null {
   if (end === 0 || hostname.charCodeAt(0) === 91 || hostname.includes(":")) return null;
   const last = hostname.charCodeAt(end - 1);
   if (last >= 48 && last <= 57 && isIPv4(hostname, end)) return null;
+  if (!built) build();
   return suffixOf(hostname, false) ?? suffixOf(hostname.toLowerCase(), true)!;
 }

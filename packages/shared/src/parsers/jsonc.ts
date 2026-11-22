@@ -3,7 +3,8 @@
  * Returns `undefined` for malformed input, which no JSON document can parse to.
  */
 export function parseJsonc(source: string): unknown {
-  let out = "";
+  // Each part after a `,` starts with it, so a trailing comma is dropped from its own part.
+  const parts: string[] = [];
   let start = source.charCodeAt(0) === 0xfeff ? 1 : 0;
   let comma = -1;
   let previous = 0;
@@ -18,18 +19,18 @@ export function parseJsonc(source: string): unknown {
     } else if (c === 0x2f /* / */ && (source[i + 1] === "/" || source[i + 1] === "*")) {
       const end = source[i + 1] === "/" ? source.indexOf("\n", i) : source.indexOf("*/", i + 2) + 2;
       if (end === 1) return undefined;
-      out += `${source.slice(start, i)} `;
+      parts.push(`${source.slice(start, i)} `);
       start = end < 0 ? source.length : end;
       i = start - 1;
     } else if (c === 0x2c /* , */) {
-      out += source.slice(start, i);
+      parts.push(source.slice(start, i));
       start = i;
-      comma = previous === 0x5b || previous === 0x7b ? -1 : out.length;
+      comma = previous === 0x5b || previous === 0x7b ? -1 : parts.length;
       previous = c;
     } else if (c === 0x5d /* ] */ || c === 0x7d /* } */) {
-      out += source.slice(start, i);
+      parts.push(source.slice(start, i));
       start = i;
-      if (comma >= 0) out = out.slice(0, comma) + out.slice(comma + 1);
+      if (comma >= 0) parts[comma] = parts[comma]!.slice(1);
       comma = -1;
       previous = c;
     } else if (c > 0x20) {
@@ -38,7 +39,8 @@ export function parseJsonc(source: string): unknown {
     }
   }
   try {
-    return JSON.parse(out + source.slice(start));
+    parts.push(source.slice(start));
+    return JSON.parse(parts.join(""));
   } catch {
     return undefined;
   }

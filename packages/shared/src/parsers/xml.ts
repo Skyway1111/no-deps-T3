@@ -66,6 +66,13 @@ export class XmlStreamParser {
   private base = 0;
   private start = 0;
   private cursor = 0;
+  // The token at `start` was searched up to `scanned` for `scanFor` without finding it, so chunked
+  // text and long comments are scanned once rather than again on every write.
+  private scanned = 0;
+  private scanFor = "";
+  // Chunks that cannot complete the pending token, joined only once one can.
+  private deferred: string[] = [];
+  private deferredTail = "";
   private final = false;
   private sawRoot = false;
   private closedRoot = false;
@@ -85,15 +92,37 @@ export class XmlStreamParser {
   }
 
   write(chunk: string): this {
-    this.buffer = this.buffer.slice(this.start) + chunk;
-    this.base += this.start;
-    this.start = this.cursor = 0;
+    if (this.scanFor) {
+      const window = this.deferredTail + chunk;
+      if (!window.includes(this.scanFor)) {
+        this.deferred.push(chunk);
+        this.deferredTail = window.slice(1 - this.scanFor.length || window.length);
+        return this;
+      }
+    }
+    this.join(chunk);
     this.run();
     return this;
   }
 
+  private join(chunk: string) {
+    this.buffer = this.buffer.slice(this.start) + this.deferred.join("") + chunk;
+    this.base += this.start;
+    this.scanned += this.deferredLength() - this.start;
+    this.start = this.cursor = 0;
+    this.deferred = [];
+    this.deferredTail = "";
+  }
+
+  private deferredLength() {
+    let length = 0;
+    for (const chunk of this.deferred) length += chunk.length;
+    return length;
+  }
+
   close(): this {
     this.final = true;
+    if (this.deferred.length) this.join("");
     this.run();
     if (this.start < this.buffer.length) this.fail("unterminated markup");
     if (this.stack.length) this.fail(`unclosed tag <${this.stack.at(-1)!.tag.name}>`);
@@ -158,7 +187,7 @@ export class XmlStreamParser {
       if (buffer.charCodeAt(start) === 0x3c /* < */) {
         end = this.markup(start);
       } else {
-        end = buffer.indexOf("<", start);
+        end = this.find("<", start);
         if (end < 0 && this.final) end = buffer.length;
         if (end >= 0) this.text(start, end);
       }
@@ -176,9 +205,21 @@ export class XmlStreamParser {
     this.handlers.text?.(this.decode(text));
   }
 
+  /** `indexOf`, resuming where an earlier write's search for the same token stopped. */
+  private find(terminator: string, from: number) {
+    const resume = this.scanFor === terminator ? this.scanned - terminator.length + 1 : 0;
+    const index = this.buffer.indexOf(terminator, Math.max(from, resume));
+    if (index < 0) {
+      this.scanFor = terminator;
+      this.scanned = this.buffer.length;
+      this.deferredTail = this.buffer.slice(1 - terminator.length || this.buffer.length);
+    } else this.scanFor = "";
+    return index;
+  }
+
   /** Index just past `terminator`, or -1 while the input may still complete it. */
   private until(terminator: string, from: number) {
-    const index = this.buffer.indexOf(terminator, from);
+    const index = this.find(terminator, from);
     if (index >= 0) return index + terminator.length;
     return this.final ? this.fail("unterminated markup") : -1;
   }
@@ -267,6 +308,7 @@ export class XmlStreamParser {
     let declared = NO_DECLARATIONS;
     const names: string[] = [];
     const values: string[] = [];
+    let seen: Set<string> | undefined;
     while (i < stop) {
       if (isSpace(source.charCodeAt(i))) {
         i++;
@@ -289,8 +331,10 @@ export class XmlStreamParser {
       if (value.includes("<")) this.fail("'<' in an attribute value");
       if (value.includes("\n") || value.includes("\r") || value.includes("\t"))
         value = value.replace(/\r\n|[\t\n\r]/g, " ");
-      if (names.includes(attribute)) this.fail("duplicate attribute");
+      if (seen ? seen.has(attribute) : names.includes(attribute)) this.fail("duplicate attribute");
       names.push(attribute);
+      if (seen) seen.add(attribute);
+      else if (names.length > 16) seen = new Set(names);
       values.push(this.decode(value));
       if (attribute === "xmlns" || attribute.startsWith("xmlns:")) {
         if (declared === NO_DECLARATIONS) {
