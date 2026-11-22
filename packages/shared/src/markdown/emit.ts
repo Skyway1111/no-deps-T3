@@ -235,7 +235,12 @@ function emitDirective(node: MdDirective, ctx: EmitContext, inLink: boolean): El
   return fallbackText();
 }
 
-function emitMathPlaceholder(tex: string, display: boolean, ctx: EmitContext, node: MdNode): ElElement {
+function emitMathPlaceholder(
+  tex: string,
+  display: boolean,
+  ctx: EmitContext,
+  node: MdNode,
+): ElElement {
   const svg = renderMathSvg(tex, display);
   const wrapped = wrapMathSvg(svg, tex, display);
   if (node.position) wrapped.position = node.position;
@@ -377,7 +382,8 @@ function emitInlineNodes(
         const count = (ctx.footnoteCounts.get(id) ?? 0) + 1;
         ctx.footnoteCounts.set(id, count);
         const orderIndex = ctx.footnoteOrder.indexOf(id) + 1;
-        const refId = count === 1 ? `user-content-fnref-${id}` : `user-content-fnref-${id}-${count}`;
+        const refId =
+          count === 1 ? `user-content-fnref-${id}` : `user-content-fnref-${id}-${count}`;
         out.push({
           type: "element",
           tagName: "sup",
@@ -723,7 +729,12 @@ function buildFootnotesSection(ctx: EmitContext): ElElement | null {
           ? [{ type: "text", value: "\u21a9" }]
           : [
               { type: "text", value: "\u21a9" },
-              { type: "element", tagName: "sup", properties: {}, children: [{ type: "text", value: String(r) }] },
+              {
+                type: "element",
+                tagName: "sup",
+                properties: {},
+                children: [{ type: "text", value: String(r) }],
+              },
             ];
       backrefs.push(
         { type: "text", value: " " },
@@ -788,7 +799,10 @@ function buildFootnotesSection(ctx: EmitContext): ElElement | null {
 function expandRawHtmlMarkers(root: ElRoot): ElRoot {
   const builder = createRawHtmlBuilder({ type: "root", children: [] });
 
-  const walk = (node: ElRoot | ElElement, targetBuilder: ReturnType<typeof createRawHtmlBuilder>) => {
+  const walk = (
+    node: ElRoot | ElElement,
+    targetBuilder: ReturnType<typeof createRawHtmlBuilder>,
+  ) => {
     for (const child of node.children) {
       if (child.type === "element" && child.tagName === "__t3_raw_html__") {
         targetBuilder.pushRawHtml(String(child.properties.value ?? ""));
@@ -1009,10 +1023,20 @@ export function htmlAttributeName(prop: string, inSvg: boolean): string {
   }
   const mapped = PROP_TO_HTML_ATTR[prop];
   if (mapped) return mapped;
-  if (prop.startsWith("data") && prop.length > 4 && prop.charCodeAt(4) >= 65 && prop.charCodeAt(4) <= 90) {
+  if (
+    prop.startsWith("data") &&
+    prop.length > 4 &&
+    prop.charCodeAt(4) >= 65 &&
+    prop.charCodeAt(4) <= 90
+  ) {
     return prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
   }
-  if (prop.startsWith("aria") && prop.length > 4 && prop.charCodeAt(4) >= 65 && prop.charCodeAt(4) <= 90) {
+  if (
+    prop.startsWith("aria") &&
+    prop.length > 4 &&
+    prop.charCodeAt(4) >= 65 &&
+    prop.charCodeAt(4) <= 90
+  ) {
     return prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
   }
   return prop.toLowerCase();
@@ -1055,7 +1079,9 @@ export function renderMarkdownToHtml(
   parseOptions?: ParseOptions,
   emitOptions?: EmitOptions,
 ): string {
-  return elToHtml(renderMarkdownToElements(markdown, parseOptions, { sanitize: true, ...emitOptions }));
+  return elToHtml(
+    renderMarkdownToElements(markdown, parseOptions, { sanitize: true, ...emitOptions }),
+  );
 }
 
 // --- Direct Element Tree -> React element renderer (replaces hast-util-to-jsx-runtime & html-url-attributes) ---
@@ -1135,12 +1161,22 @@ export function elToReactProps(node: ElElement, inSvg = false): Record<string, u
       props.className = Array.isArray(value) ? value.join(" ") : String(value);
       continue;
     }
-    if (key.startsWith("data") && key.length > 4 && key.charCodeAt(4) >= 65 && key.charCodeAt(4) <= 90) {
+    if (
+      key.startsWith("data") &&
+      key.length > 4 &&
+      key.charCodeAt(4) >= 65 &&
+      key.charCodeAt(4) <= 90
+    ) {
       const attr = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
       props[attr] = value === true ? "" : Array.isArray(value) ? value.join(" ") : value;
       continue;
     }
-    if (key.startsWith("aria") && key.length > 4 && key.charCodeAt(4) >= 65 && key.charCodeAt(4) <= 90) {
+    if (
+      key.startsWith("aria") &&
+      key.length > 4 &&
+      key.charCodeAt(4) >= 65 &&
+      key.charCodeAt(4) <= 90
+    ) {
       const attr = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
       props[attr] = Array.isArray(value) ? value.join(" ") : value;
       continue;
@@ -1187,7 +1223,8 @@ export function elToReact<T = unknown>(
     }
     const svg = inSvg || n.tagName === "svg";
     const props = elToReactProps(n, svg);
-    const custom = components && Object.hasOwn(components, n.tagName) ? components[n.tagName] : undefined;
+    const custom =
+      components && Object.hasOwn(components, n.tagName) ? components[n.tagName] : undefined;
     const type = custom ?? n.tagName;
     if (passNode && custom !== undefined) {
       props.node = n;

@@ -379,7 +379,12 @@ function sanitizeProperties(tagName: string, rawProps: ElProperties): ElProperti
 
   for (const key of Object.keys(rawProps)) {
     const rawValue = rawProps[key];
-    if (rawValue === null || rawValue === undefined || rawValue === false || Number.isNaN(rawValue)) {
+    if (
+      rawValue === null ||
+      rawValue === undefined ||
+      rawValue === false ||
+      Number.isNaN(rawValue)
+    ) {
       continue;
     }
     if (!GLOBAL_ATTRS.has(key) && !extra?.has(key)) continue;
@@ -502,9 +507,7 @@ export function parseRawHtmlAttributes(attrSource: string | undefined): ElProper
       result[prop] = BOOLEAN_PROPS.has(prop) ? true : "";
       continue;
     }
-    const decoded = rawVal.includes("&")
-      ? decodeHtmlEntities(rawVal, { attribute: true })
-      : rawVal;
+    const decoded = rawVal.includes("&") ? decodeHtmlEntities(rawVal, { attribute: true }) : rawVal;
     if (SPACE_SEPARATED_PROPS.has(prop)) {
       result[prop] = decoded.split(/\s+/).filter(Boolean);
     } else if (BOOLEAN_PROPS.has(prop)) {

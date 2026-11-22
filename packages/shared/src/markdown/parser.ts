@@ -38,10 +38,7 @@ const isDigit = (c: number) => c >= 48 && c <= 57;
 const isAlpha = (c: number) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
 const isAlphaNum = (c: number) => isDigit(c) || isAlpha(c);
 const isAsciiPunct = (c: number) =>
-  (c >= 33 && c <= 47) ||
-  (c >= 58 && c <= 64) ||
-  (c >= 91 && c <= 96) ||
-  (c >= 123 && c <= 126);
+  (c >= 33 && c <= 47) || (c >= 58 && c <= 64) || (c >= 91 && c <= 96) || (c >= 123 && c <= 126);
 
 const UNICODE_PUNCT_RE = /[\p{P}\p{S}]/u;
 const UNICODE_SPACE_RE = /\s/u;
@@ -244,7 +241,10 @@ function sliceText(src: string, slice: LineSlice): string {
   return prefix + src.slice(slice.start, slice.end);
 }
 
-function trimSliceLeadingWs(src: string, slice: LineSlice): { text: string; ws: string; start: number } {
+function trimSliceLeadingWs(
+  src: string,
+  slice: LineSlice,
+): { text: string; ws: string; start: number } {
   const scan = scanIndent(src, slice);
   const ws =
     (slice.insideTabSpaces > 0 ? " ".repeat(slice.insideTabSpaces) : "") +
@@ -807,11 +807,7 @@ function canInterruptParagraph(ctx: ParserContext, slices: LineSlice[], i: numbe
   return false;
 }
 
-function parseBlocks(
-  ctx: ParserContext,
-  slices: LineSlice[],
-  isTopLevel: boolean,
-): MdNode[] {
+function parseBlocks(ctx: ParserContext, slices: LineSlice[], isTopLevel: boolean): MdNode[] {
   const blocks: MdNode[] = [];
   let i = 0;
 
@@ -1484,10 +1480,7 @@ function parseBlocks(
           }
           break;
         }
-        while (
-          fnSlices.length > 0 &&
-          scanIndent(ctx.src, fnSlices[fnSlices.length - 1]!).isBlank
-        ) {
+        while (fnSlices.length > 0 && scanIndent(ctx.src, fnSlices[fnSlices.length - 1]!).isBlank) {
           fnSlices.pop();
         }
         const fnDef: MdFootnoteDefinition = {
@@ -1751,7 +1744,12 @@ function findInlineHtmlOrAutolinkEnd(src: string, start: number, limit: number):
 
 const CITATION_BRACKET_RE = /^\s*\d+(?:\s*[,–-]\s*\d+)*\s*$/;
 
-function isValidSingleDollarCloser(src: string, closePos: number, limit: number, contentStart: number): boolean {
+function isValidSingleDollarCloser(
+  src: string,
+  closePos: number,
+  limit: number,
+  contentStart: number,
+): boolean {
   if (closePos <= contentStart) return false;
   const before = src.charCodeAt(closePos - 1);
   if (isSpace(before) || isEol(before)) return false;
@@ -1767,7 +1765,7 @@ function isValidSingleDollarCloser(src: string, closePos: number, limit: number,
         after === 40 /* ( */ ||
         after === 64 /* @ */ ||
         after === 63 /* ? */ ||
-        after === 36 /* $ */)
+        after === 36) /* $ */
     ) {
       return false;
     }
@@ -1831,8 +1829,13 @@ function findInlineDollarMathEnd(src: string, start: number, limit: number): num
   return -1;
 }
 
-function findInlineTexMathEnd(src: string, start: number, limit: number, isDisplay: boolean): number {
-  const closeChar = isDisplay ? 93 /* ] */ : 41 /* ) */;
+function findInlineTexMathEnd(
+  src: string,
+  start: number,
+  limit: number,
+  isDisplay: boolean,
+): number {
+  const closeChar = isDisplay ? 93 /* ] */ : 41; /* ) */
   let pos = start + 2;
   while (pos < limit) {
     const c = src.charCodeAt(pos);
@@ -1999,7 +2002,9 @@ function tryParseInlineDirective(
   for (const name of DIRECTIVE_INLINE_NAMES) {
     if (
       src.startsWith(name, start + 1) &&
-      directiveNameEndsChar(start + 1 + name.length < limit ? src[start + 1 + name.length] : undefined)
+      directiveNameEndsChar(
+        start + 1 + name.length < limit ? src[start + 1 + name.length] : undefined,
+      )
     ) {
       matchedName = name;
       break;
@@ -2153,11 +2158,7 @@ function buildInlineBuffer(src: string, slices: LineSlice[], keepLeadingWs: bool
   return { text, origOffset, lineLeadingWs };
 }
 
-function parseInlines(
-  ctx: ParserContext,
-  slices: LineSlice[],
-  inTableCell: boolean,
-): MdNode[] {
+function parseInlines(ctx: ParserContext, slices: LineSlice[], inTableCell: boolean): MdNode[] {
   const buf = buildInlineBuffer(ctx.src, slices, ctx.opts.leadingWhitespace);
   return parseInlineRange(ctx, buf, 0, buf.text.length, inTableCell, false);
 }
@@ -2233,12 +2234,20 @@ function parseInlineRange(
     if (c === 10 /* \n */) {
       // Check for trailing 2+ spaces hard break on previous text node
       const prev = nodes.at(-1);
-      if (prev?.type === "text" && prev.value.endsWith("  ") && !isProtectedDelimNode(nodes.length - 1)) {
+      if (
+        prev?.type === "text" &&
+        prev.value.endsWith("  ") &&
+        !isProtectedDelimNode(nodes.length - 1)
+      ) {
         prev.value = prev.value.replace(/ +$/, "");
         if (prev.value === "") nodes.pop();
         nodes.push({ type: "break", position: pos(i, i + 1) });
       } else {
-        if (prev?.type === "text" && prev.value.endsWith(" ") && !isProtectedDelimNode(nodes.length - 1)) {
+        if (
+          prev?.type === "text" &&
+          prev.value.endsWith(" ") &&
+          !isProtectedDelimNode(nodes.length - 1)
+        ) {
           prev.value = prev.value.slice(0, -1);
           if (prev.value === "") nodes.pop();
         }
@@ -2489,7 +2498,13 @@ function parseInlineRange(
       const nodeIndex = nodes.length;
       nodes.push({ type: "text", value: "[", position: pos(i, i + 1) });
       delimNodeIndices.add(nodeIndex);
-      brackets.push({ image: false, nodeIndex, offset: i, delimIndex: delims.length, active: true });
+      brackets.push({
+        image: false,
+        nodeIndex,
+        offset: i,
+        delimIndex: delims.length,
+        active: true,
+      });
       i++;
       continue;
     }
@@ -2517,7 +2532,7 @@ function parseInlineRange(
     }
 
     // 11. Emphasis / Strikethrough delimiters (`*`, `_`, `~`)
-    if (c === 42 /* * */ || c === 95 /* _ */ || (ctx.opts.gfm && c === 126 /* ~ */)) {
+    if (c === 42 /* * */ || c === 95 /* _ */ || (ctx.opts.gfm && c === 126) /* ~ */) {
       const ch = src[i]!;
       let runEnd = i + 1;
       while (runEnd < rangeEnd && src.charCodeAt(runEnd) === c) runEnd++;
@@ -2593,7 +2608,7 @@ function parseInlineRange(
             ch === 72 /* H */ ||
             ch === 119 /* w */ ||
             ch === 87 /* W */ ||
-            ch === 64 /* @ */))
+            ch === 64) /* @ */)
       ) {
         // For email `@`, backtrack only if needed — instead, handle bare email right at word start!
         if (ch === 64) {
@@ -2632,7 +2647,10 @@ function parseInlineRange(
       }
       i++;
     }
-    if (i > textStart && !(nodes.at(-1)?.type === "link" && nodes.at(-1)!.position?.end.offset === buf.origOffset(i))) {
+    if (
+      i > textStart &&
+      !(nodes.at(-1)?.type === "link" && nodes.at(-1)!.position?.end.offset === buf.origOffset(i))
+    ) {
       pushText(src.slice(textStart, i), textStart, i);
     }
   }
@@ -2681,7 +2699,15 @@ function startsBareUrl(src: string, i: number, rangeStart: number, rangeEnd: num
     const prev = prevChar(src, i);
     const pc = prev.charCodeAt(0);
     // Allowed before bare URL: start, whitespace, `(`, `*`, `_`, `~`, or non-ASCII (e.g. CJK punctuation/text)
-    if (pc < 128 && !isSpace(pc) && !isEol(pc) && pc !== 40 && pc !== 42 && pc !== 95 && pc !== 126) {
+    if (
+      pc < 128 &&
+      !isSpace(pc) &&
+      !isEol(pc) &&
+      pc !== 40 &&
+      pc !== 42 &&
+      pc !== 95 &&
+      pc !== 126
+    ) {
       return false;
     }
   }
@@ -2756,7 +2782,10 @@ function tryParseBareAutolink(
     }
     if (ch === ";") {
       const amp = src.lastIndexOf("&", end - 2);
-      if (amp >= start && /^&(?:#\d+|#x[0-9a-f]+|[a-zA-Z][a-zA-Z0-9]*);$/i.test(src.slice(amp, end))) {
+      if (
+        amp >= start &&
+        /^&(?:#\d+|#x[0-9a-f]+|[a-zA-Z][a-zA-Z0-9]*);$/i.test(src.slice(amp, end))
+      ) {
         end--;
         continue;
       }
@@ -2809,7 +2838,15 @@ function tryParseBareEmailBacktrack(
   if (localStart > textStart) {
     const prev = prevChar(src, localStart);
     const pc = prev.charCodeAt(0);
-    if (pc < 128 && !isSpace(pc) && !isEol(pc) && pc !== 40 && pc !== 42 && pc !== 95 && pc !== 126) {
+    if (
+      pc < 128 &&
+      !isSpace(pc) &&
+      !isEol(pc) &&
+      pc !== 40 &&
+      pc !== 42 &&
+      pc !== 95 &&
+      pc !== 126
+    ) {
       return null;
     }
   }
@@ -2882,7 +2919,10 @@ function handleClosingBracket(
         nextPos = p + 1;
       }
     }
-    const labelRaw = refText && refText.length > 0 ? refText : src.slice(opener.offset + (opener.image ? 2 : 1), closeIdx);
+    const labelRaw =
+      refText && refText.length > 0
+        ? refText
+        : src.slice(opener.offset + (opener.image ? 2 : 1), closeIdx);
     const id = normalizeLabel(labelRaw);
     const def = id ? ctx.definitions.get(id) : undefined;
     if (def) {
@@ -2907,21 +2947,22 @@ function handleClosingBracket(
   let replacement: MdNode;
   if (opener.image) {
     const alt = plainTextOf(inner);
-    replacement = isReference && refId !== undefined
-      ? {
-          type: "imageReference",
-          identifier: refId,
-          label: refLabel ?? alt,
-          alt,
-          position: fullPos,
-        }
-      : {
-          type: "image",
-          url,
-          alt,
-          ...(title !== null ? { title } : {}),
-          position: fullPos,
-        };
+    replacement =
+      isReference && refId !== undefined
+        ? {
+            type: "imageReference",
+            identifier: refId,
+            label: refLabel ?? alt,
+            alt,
+            position: fullPos,
+          }
+        : {
+            type: "image",
+            url,
+            alt,
+            ...(title !== null ? { title } : {}),
+            position: fullPos,
+          };
   } else {
     // Deactivate earlier link openers (no nested links)
     for (const b of brackets) {
@@ -2981,11 +3022,7 @@ function processEmphasis(nodes: MdNode[], delims: Delimiter[], stackBottom: numb
 
     const opener = delims[openerIdx]!;
     const useCount =
-      closer.ch === "~"
-        ? opener.count
-        : opener.count >= 2 && closer.count >= 2
-          ? 2
-          : 1;
+      closer.ch === "~" ? opener.count : opener.count >= 2 && closer.count >= 2 ? 2 : 1;
 
     opener.count -= useCount;
     closer.count -= useCount;
