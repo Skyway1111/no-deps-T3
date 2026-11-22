@@ -1,33 +1,21 @@
-import type { GitStatusEntry } from "@pierre/trees";
-import { FileTree, useFileTree } from "@pierre/trees/react";
 import { T, useGT } from "@t3tools/shared/i18n/react";
+import { diffFileTreePositions } from "@t3tools/client-runtime/diff-file-order";
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "~/ui-core/icons";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";
-import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
-import {
-  PIERRE_TREE_UNSAFE_CSS,
-  pierreTreeStyle,
-  titleClippedPierreTreeRow,
-} from "~/pierre-tree-theme";
+import { FileTree } from "~/ui-core/fileTree";
+import { ancestorDirectories, useFileTree, useFileTreeSelector } from "~/ui-core/fileTreeModel";
 
-import {
-  areAllDirectoriesExpanded,
-  setAllDirectoriesExpanded,
-  subscribeOncePerTask,
-} from "../files/fileTreeExpansion";
+import { areAllDirectoriesExpanded } from "../files/fileTreeExpansion";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
-  buildDiffFileTreeUpdates,
   compareDiffFileTreeEntries,
   collectDirectoryPaths,
-  diffFileTreeModel,
   type DiffFileTreeEntry,
 } from "./diffFileTree.logic";
-import { diffFileTreePositions } from "@t3tools/client-runtime/diff-file-order";
 
 export type { DiffFileTreeEntry } from "./diffFileTree.logic";
 
@@ -53,13 +41,9 @@ export function DiffFileTree({
   className,
 }: DiffFileTreeProps) {
   const gt = useGT();
-  const { resolvedTheme } = useTheme();
   const paths = entries.map((entry) => entry.path);
-  const presented = diffFileTreeModel(paths);
-  const modelPaths = presented.paths;
-  const icons = presented.icons;
-  const directoryPaths = collectDirectoryPaths(modelPaths);
-  const positions = diffFileTreePositions(modelPaths);
+  const directoryPaths = collectDirectoryPaths(paths);
+  const positions = diffFileTreePositions(paths);
   const [ordering] = useState(() => {
     let currentPositions: ReadonlyMap<string, number> = new Map();
     return {
@@ -69,102 +53,46 @@ export function DiffFileTree({
       },
     };
   });
-  const gitStatus: ReadonlyArray<GitStatusEntry> = entries.map((entry) => ({
-    path: presented.modelPath(entry.path),
-    status: entry.status,
-  }));
   const syncingSelectionRef = useRef(false);
   const handledRevealRef = useRef<{
     path: string;
     revealRequestId: number;
   } | null>(null);
-  const mountedPresentationRef = useRef<ReturnType<typeof diffFileTreeModel> | null>(null);
+  const mountedPathsRef = useRef<readonly string[] | null>(null);
 
   // The tree model keeps the first selection handler it was given.
   const handleSelectionChange = useStableCallback((selectedPaths: ReadonlyArray<string>) => {
     if (syncingSelectionRef.current) return;
-    const modelPath = selectedPaths.at(-1);
-    if (modelPath && modelPaths.includes(modelPath)) {
-      onSelectFile(presented.selectionPath(modelPath));
-    }
+    const path = selectedPaths.at(-1);
+    if (path && paths.includes(path)) onSelectFile(path);
   });
 
-  const { model } = useFileTree({
-    density: "compact",
+  const model = useFileTree({
     flattenEmptyDirectories: true,
     initialExpansion: "open",
-    icons,
     onSelectionChange: handleSelectionChange,
-    paths: [],
-    search: false,
     sort: ordering.sort,
-    unsafeCSS: PIERRE_TREE_UNSAFE_CSS,
   });
-  const allDirectoriesExpanded = useSyncExternalStore(
-    (listener) => subscribeOncePerTask(model, listener),
-    () => areAllDirectoriesExpanded(model, directoryPaths),
+  const allDirectoriesExpanded = useFileTreeSelector(model, (current) =>
+    areAllDirectoriesExpanded(current, directoryPaths),
   );
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes the icon set into the imperative Pierre file tree model
-  useEffect(() => {
-    model.setIcons(icons);
-  }, [icons, model]);
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies path updates, ordering and git status to the imperative Pierre file tree model
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies paths, ordering and git status to the imperative tree model
   useEffect(() => {
     ordering.update(positions);
-    const mounted = mountedPresentationRef.current;
-    if (mounted?.paths === modelPaths) return;
-    mountedPresentationRef.current = presented;
-    if (mounted === null) {
-      model.resetPaths(modelPaths);
-    } else if (mounted.paths.every((path, index) => modelPaths[index] === path)) {
-      const updates = buildDiffFileTreeUpdates(mounted.paths, modelPaths);
-      if (updates.length > 0) model.batch(updates);
-    } else {
-      // A reset can turn a file path into a directory. Carry selection and focus
-      // through real paths so paging keeps the same file without revealing it again.
-      const focusedPath = model.getFocusedPath();
-      const nextFocusedPath =
-        focusedPath === null ? null : presented.modelPath(mounted.selectionPath(focusedPath));
-      const selectedPaths = model
-        .getSelectedPaths()
-        .map((path) => presented.modelPath(mounted.selectionPath(path)))
-        .filter((path) => path.endsWith("/") || modelPaths.includes(path));
-      const collapsedDirectories = directoryPaths.filter((path) => {
-        const directory = model.getItem(path);
-        return directory !== null && "isExpanded" in directory && !directory.isExpanded();
-      });
-      syncingSelectionRef.current = true;
-      model.resetPaths(modelPaths);
-      for (const path of model.getSelectedPaths()) model.getItem(path)?.deselect();
-      for (const path of selectedPaths) model.getItem(path)?.select();
-      queueMicrotask(() => {
-        syncingSelectionRef.current = false;
-      });
-      for (const path of collapsedDirectories) {
-        const directory = model.getItem(path);
-        if (directory !== null && "collapse" in directory) directory.collapse();
-      }
-      if (
-        nextFocusedPath !== null &&
-        (modelPaths.includes(nextFocusedPath) || directoryPaths.includes(nextFocusedPath))
-      ) {
-        model.focusPath(nextFocusedPath);
-      }
-    }
-    model.setGitStatus(gitStatus);
-  }, [directoryPaths, gitStatus, model, modelPaths, ordering, positions, presented]);
+    if (mountedPathsRef.current === paths) return;
+    mountedPathsRef.current = paths;
+    model.setPaths(paths);
+    model.setGitStatus(entries);
+  }, [entries, model, ordering, paths, positions]);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- expands ancestors, selects and scrolls to the requested file in the Pierre tree model
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- expands ancestors, selects and scrolls to the requested file in the tree model
   useEffect(() => {
     if (selectedPath === null) {
       handledRevealRef.current = null;
       return;
     }
-    const modelPath = presented.modelPath(selectedPath);
-    const item = model.getItem(modelPath);
-    if (item === null || item.isDirectory()) {
+    if (!paths.includes(selectedPath)) {
       handledRevealRef.current = null;
       return;
     }
@@ -174,21 +102,13 @@ export function DiffFileTree({
     }
     handledRevealRef.current = { path: selectedPath, revealRequestId };
     syncingSelectionRef.current = true;
-    for (const path of model.getSelectedPaths()) {
-      if (path !== modelPath) model.getItem(path)?.deselect();
-    }
-    let ancestor = "";
-    for (const segment of modelPath.split("/").slice(0, -1)) {
-      ancestor += `${segment}/`;
-      const directory = model.getItem(ancestor);
-      if (directory !== null && "expand" in directory) directory.expand();
-    }
-    item.select();
-    model.scrollToPath(modelPath, { offset: "nearest" });
+    model.setExpanded(ancestorDirectories(selectedPath), true);
+    model.selectOnly(selectedPath);
+    model.scrollToPath(selectedPath, { offset: "nearest" });
     queueMicrotask(() => {
       syncingSelectionRef.current = false;
     });
-  }, [model, presented, revealRequestId, selectedPath]);
+  }, [model, paths, revealRequestId, selectedPath]);
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col bg-background", className)}>
@@ -212,9 +132,7 @@ export function DiffFileTree({
                   aria-label={
                     allDirectoriesExpanded ? gt("Collapse all folders") : gt("Expand all folders")
                   }
-                  onClick={() =>
-                    setAllDirectoriesExpanded(model, directoryPaths, !allDirectoriesExpanded)
-                  }
+                  onClick={() => model.setExpanded(directoryPaths, !allDirectoriesExpanded)}
                 />
               }
             >
@@ -244,20 +162,15 @@ export function DiffFileTree({
           ) {
             return;
           }
-          // Pierre emits no change for its sole selected row; read before the click to avoid double reveals.
+          // Clicking the sole selected row changes no selection; read it before the click to avoid double reveals.
           const selected = model.getSelectedPaths();
           const path = selected.length === 1 ? selected[0] : undefined;
-          if (!path || !modelPaths.includes(path)) return;
-          const clickedSelectedRow = event.nativeEvent
-            .composedPath()
-            .some(
-              (node) => node instanceof HTMLElement && node.getAttribute("data-item-path") === path,
-            );
-          if (clickedSelectedRow) onSelectFile(presented.selectionPath(path));
+          if (!path || !paths.includes(path) || !(event.target instanceof Element)) return;
+          if (event.target.closest("[data-item-path]")?.getAttribute("data-item-path") === path) {
+            onSelectFile(path);
+          }
         }}
         className="min-h-0 flex-1 overflow-hidden"
-        style={pierreTreeStyle(resolvedTheme)}
-        onPointerOver={titleClippedPierreTreeRow}
       />
       {footer}
     </div>

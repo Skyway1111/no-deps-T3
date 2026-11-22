@@ -755,6 +755,10 @@
     "./sys/win": {
       "types": "./src/sys/win.ts",
       "import": "./src/sys/win.ts"
+    },
+    "./file-icons": {
+      "types": "./src/fileIcons/index.ts",
+      "import": "./src/fileIcons/index.ts"
     }
   },
   "scripts": {

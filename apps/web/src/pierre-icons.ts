@@ -2,16 +2,12 @@ import {
   createFileTreeIconResolver,
   getBuiltInSpriteSheet,
   type FileTreeIcons,
-} from "@pierre/trees";
+  type ResolvedFileIcon,
+} from "@t3tools/shared/file-icons";
 import { VIDEO_FILE_EXTENSIONS } from "@t3tools/shared/video";
 import { fileIconPathForMimeType } from "@t3tools/shared/mediaPreview";
 
 import type { ContextChipAccentKind } from "~/lib/contextChipAccents";
-
-export interface PierreIconResolution {
-  name: string;
-  token?: string;
-}
 
 const PIERRE_ICON_SPRITE_ID = "t3code-pierre-file-icon-sprite";
 
@@ -133,8 +129,6 @@ const T3_FILE_ICON_SPRITE = `
 </svg>`;
 
 export const T3_PIERRE_ICONS = {
-  set: "complete",
-  colored: true,
   spriteSheet: T3_FILE_ICON_SPRITE,
   byFileName: {
     "package.json": "file-tree-builtin-npm",
@@ -237,16 +231,13 @@ export function resolvePierreIconForEntry(
   pathValue: string,
   kind: "file" | "directory",
   mimeType?: string,
-): PierreIconResolution | null {
+): ResolvedFileIcon | null {
   if (kind === "directory") return null;
-  const icon = completeIconResolver.resolveIcon("file-tree-icon-file", pathValue);
-  if (icon?.name === "file-tree-builtin-image" && icon.token === undefined)
+  const icon = completeIconResolver.resolveIcon(pathValue);
+  if (icon.name === "file-tree-builtin-image" && icon.token === undefined)
     return { ...icon, token: "image" };
-  return icon?.token === "default" && mimeType
-    ? completeIconResolver.resolveIcon(
-        "file-tree-icon-file",
-        fileIconPathForMimeType(pathValue, mimeType),
-      )
+  return icon.token === "default" && mimeType
+    ? completeIconResolver.resolveIcon(fileIconPathForMimeType(pathValue, mimeType))
     : icon;
 }
 
@@ -282,6 +273,6 @@ export function ensurePierreIconSprite(): void {
   container.style.height = "0";
   container.style.overflow = "hidden";
   container.style.pointerEvents = "none";
-  container.innerHTML = `${getBuiltInSpriteSheet("complete")}${T3_FILE_ICON_SPRITE}`;
+  container.innerHTML = `${getBuiltInSpriteSheet()}${T3_FILE_ICON_SPRITE}`;
   document.body.prepend(container);
 }

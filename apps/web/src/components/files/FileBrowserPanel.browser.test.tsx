@@ -48,21 +48,11 @@ vi.mock("~/fileContextMenu", () => ({
 vi.mock("~/hooks/useWorkspaceMutationRefresh", () => ({ useWorkspaceMutationRefresh: () => {} }));
 
 function findTreeRow(path: string): HTMLElement | null {
-  for (const host of document.querySelectorAll("*")) {
-    const row = host.shadowRoot?.querySelector<HTMLElement>(`[data-item-path="${path}"]`);
-    if (row) return row;
-  }
-  return null;
+  return document.querySelector<HTMLElement>(`[data-item-path="${path}"]`);
 }
 
 function findTreeScroller(): HTMLElement | null {
-  for (const host of document.querySelectorAll("*")) {
-    const scroller = host.shadowRoot?.querySelector<HTMLElement>(
-      "[data-file-tree-virtualized-scroll]",
-    );
-    if (scroller) return scroller;
-  }
-  return null;
+  return document.querySelector<HTMLElement>("[data-file-tree-virtualized-scroll]");
 }
 
 function isTreeRowInView(path: string): boolean {
@@ -127,7 +117,7 @@ describe("FileBrowserPanel", () => {
     await userEvent.keyboard("{Shift>}{F10}{/Shift}");
     await expect.element(action).toHaveFocus();
     await userEvent.keyboard("{Escape}");
-    await vi.waitFor(() => expect((row.getRootNode() as ShadowRoot).activeElement).toBe(row));
+    await vi.waitFor(() => expect(document.activeElement).toBe(row));
   });
 
   it("dragging a file row carries a composer mention without opening it, and dragend releases it", async () => {
