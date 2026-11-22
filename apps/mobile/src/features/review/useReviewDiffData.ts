@@ -1,4 +1,4 @@
-import { msg, useLocale, useMessages } from "gt-react-native";
+import { msg, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 

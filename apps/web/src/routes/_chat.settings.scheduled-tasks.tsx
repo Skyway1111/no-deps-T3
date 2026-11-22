@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "~/ui-core/router";
 import { validateScheduledTasksSearch } from "../components/settings/scheduledTasksSettings.logic";
 
 import { ScheduledTasksSettings } from "../components/settings/ScheduledTasksSettings";

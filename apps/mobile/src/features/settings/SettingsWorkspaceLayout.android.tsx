@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { NavigationRouteContext } from "@react-navigation/native";
 import { Activity, useState, type ReactNode } from "react";
 import { View } from "react-native";

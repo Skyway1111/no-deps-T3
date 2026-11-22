@@ -3,7 +3,7 @@ import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import * as Dialog from "../components/ui/Dialog";
 import type { MediaActionsSource } from "../lib/mediaActionsSource";
 import { useNavigation } from "@react-navigation/native";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import {
   formatFilePathForClipboard,

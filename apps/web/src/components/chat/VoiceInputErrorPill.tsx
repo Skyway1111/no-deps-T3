@@ -1,7 +1,7 @@
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import type { VoiceInputErrorCode } from "@t3tools/client-runtime/voice-input";
-import { useNavigate } from "@tanstack/react-router";
-import { CircleAlertIcon, XIcon } from "lucide-react";
+import { useNavigate } from "~/ui-core/router";
+import { CircleAlertIcon, XIcon } from "~/ui-core/icons";
 
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";

@@ -1,6 +1,6 @@
-import { useGT } from "gt-react";
-import { PlayIcon, WrapTextIcon, CheckIcon, CopyIcon } from "lucide-react";
-import { toHtml } from "hast-util-to-html";
+import { elToHtml, type ElNode } from "@t3tools/shared/markdownHast";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { PlayIcon, TextWrapIcon as WrapTextIcon, CheckIcon, CopyIcon } from "~/ui-core/icons";
 import React, { use, useEffect, useState, type ReactNode } from "react";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
@@ -354,7 +354,7 @@ function UncachedShikiCodeBlock({
     })();
     // A finished block is cached for the next mount; a streaming one is still changing.
     if (!isStreaming) {
-      const highlightedHtml = typeof result === "string" ? result : toHtml(result);
+      const highlightedHtml = typeof result === "string" ? result : elToHtml(result as ElNode);
       highlightedCodeCache.set(
         cacheKey,
         highlightedHtml,

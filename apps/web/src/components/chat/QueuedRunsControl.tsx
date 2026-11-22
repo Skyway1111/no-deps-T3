@@ -19,7 +19,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
-import { Link } from "@tanstack/react-router";
+import { Link } from "~/ui-core/router";
 import {
   ArrowUpIcon,
   CalendarClockIcon,
@@ -28,9 +28,9 @@ import {
   MessagesSquareIcon,
   PencilIcon,
   XIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import * as DateTime from "effect/DateTime";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 

@@ -19,7 +19,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { useLayoutEffect, useRef, useState } from "react";
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 import { ensureLocalApi } from "../../localApi";

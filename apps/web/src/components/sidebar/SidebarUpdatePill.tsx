@@ -1,8 +1,8 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { managedUpdatesDenial } from "@t3tools/client-runtime/contract-labels";
 import { type DesktopBridge, type DesktopUpdateState } from "@t3tools/contracts";
-import { TriangleAlertIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { TriangleAlertIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { type ComponentProps, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";

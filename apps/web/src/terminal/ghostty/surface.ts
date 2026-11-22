@@ -21,7 +21,7 @@ import {
 import symbolsFontUrl from "./fonts/SymbolsNerdFontMono-Regular.woff2?url";
 import { isMonospaceFamily } from "../../appearanceFonts";
 import { observeResize } from "../../lib/observeResize";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 const DEFAULT_TERMINAL_FONT_SIZE = 12;

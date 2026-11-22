@@ -1,4 +1,4 @@
-import { T, useMessages } from "gt-react";
+import { T, useMessages } from "@t3tools/shared/i18n/react";
 import {
   getClientSettings,
   updateClientSettings,

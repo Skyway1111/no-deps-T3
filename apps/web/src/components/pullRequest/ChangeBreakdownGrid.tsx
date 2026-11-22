@@ -1,6 +1,6 @@
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import type { PullRequestChangeBreakdown } from "@t3tools/contracts";
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 const KIND_LABELS = {
   code: msg("Code", { $context: "kind of changed file" }),

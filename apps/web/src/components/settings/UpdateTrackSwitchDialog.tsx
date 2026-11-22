@@ -5,7 +5,7 @@ import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime
 import type { DesktopUpdateChannel } from "@t3tools/contracts";
 import { acceptsTrackSwitchRelease, desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { isMacPlatform } from "@t3tools/shared/keybindings";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { AsyncResult } from "effect/reactivity";
 

@@ -1,6 +1,6 @@
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -143,15 +143,13 @@ import {
 } from "react";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "~/ui-core/router";
 import {
   assistantCitationFromLocation,
   useSideChatCitationReveal,
 } from "../lib/assistantCitationNavigation";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import { useStore } from "zustand";
-import { shallow } from "zustand/vanilla/shallow";
-import { useShallow } from "zustand/react/shallow";
+import { useStore, shallow, useShallow } from "@t3tools/shared/core/react";
 import {
   isAtomCommandInterrupted,
   mapAtomCommandResult,
@@ -169,7 +167,7 @@ import {
   findRevertCheckpoint,
   isLatestRunSettled,
 } from "../session-logic";
-import { type LegendListRef } from "@legendapp/list/react";
+import { type VirtualListRef } from "~/ui-core/virtualList";
 import { useWorkspaceRevision } from "../hooks/useWorkspaceRevision";
 import { DEFAULT_INTERACTION_MODE, type ChatMessage } from "../types";
 import { buildThreadRouteParams } from "../threadRoutes";
@@ -772,7 +770,7 @@ export default function ChatView(props: ChatViewProps) {
     pendingServerThreadStartFromOriginByThreadId,
     setPendingServerThreadStartFromOriginByThreadId,
   ] = useState<Record<string, boolean>>({});
-  const legendListRef = useRef<LegendListRef | null>(null);
+  const legendListRef = useRef<VirtualListRef | null>(null);
   const conversationArea = workspaceAreaProps("conversation", 1, gt("Conversation"));
   const [composerOverlayElement, setComposerOverlayElement] = useState<HTMLDivElement | null>(null);
   const [composerTimelineInset, setComposerTimelineInset] = useState(0);
@@ -1099,7 +1097,7 @@ export default function ChatView(props: ChatViewProps) {
     setTimelineAnchor({ threadKey: activeThreadKey, messageId: null });
   }
   const timelineAnchorMessageId = timelineAnchor.messageId;
-  // LegendList never recomputes anchored end-space geometry, leaving phantom scroll range after content fits.
+  // VirtualList never recomputes anchored end-space geometry, leaving phantom scroll range after content fits.
   const anchorRunSettled = (() => {
     if (timelineAnchorMessageId === null) return false;
     const anchorRun = serverProjection?.runs.find(

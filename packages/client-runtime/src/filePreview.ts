@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { translatableError } from "./errors/translatable.ts";
 import { decodeFilePreviewText, FILE_TEXT_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
 

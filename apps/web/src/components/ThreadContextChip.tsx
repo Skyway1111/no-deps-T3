@@ -1,8 +1,8 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { ThreadContextRecord, ProjectId } from "@t3tools/contracts";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { MessagesSquareIcon } from "lucide-react";
-import { useGT } from "gt-react";
+import { Link, useNavigate } from "~/ui-core/router";
+import { MessagesSquareIcon } from "~/ui-core/icons";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { resolveThreadOpenRoute } from "~/lib/sideChatPane";
 import { buildThreadRouteParams } from "~/threadRoutes";

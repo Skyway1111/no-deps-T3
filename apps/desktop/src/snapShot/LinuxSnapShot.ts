@@ -13,7 +13,7 @@ import {
   sessionBus,
   type MessageBus,
   type MessageLike,
-} from "dbus-next";
+} from "@t3tools/shared/sys/dbus";
 import * as Schema from "effect/Schema";
 import { isKdeCaptureSession, type KdeCapturePaths } from "./KdeSnapShot.ts";
 import { isGnomeCaptureSession, readPortalPng, resizeLinuxCapture } from "./linuxCaptureSession.ts";

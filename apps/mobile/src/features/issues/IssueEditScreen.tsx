@@ -1,5 +1,5 @@
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 
 import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";

@@ -9,8 +9,8 @@ import {
 } from "@t3tools/client-runtime/connection";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { ChevronRightIcon } from "lucide-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
+import { ChevronRightIcon } from "~/ui-core/icons";
 
 import { APP_VERSION } from "~/branding";
 import { environmentCatalog } from "~/connection/catalog";

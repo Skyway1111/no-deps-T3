@@ -1,7 +1,7 @@
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs/types";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../i18n/messages";
 import { READABLE_LIGHT_THEME_NAME } from "./readableSyntaxTheme";

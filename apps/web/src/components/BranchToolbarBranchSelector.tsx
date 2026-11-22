@@ -14,8 +14,8 @@ import {
   type VcsRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { GitBranchIcon } from "lucide-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
+import { GitBranchIcon } from "~/ui-core/icons";
 import {
   useEffect,
   useEffectEvent,

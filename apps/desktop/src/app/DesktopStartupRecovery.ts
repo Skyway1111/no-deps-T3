@@ -7,7 +7,7 @@ import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as Electron from "electron";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";

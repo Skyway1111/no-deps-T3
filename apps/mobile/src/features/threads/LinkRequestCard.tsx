@@ -24,7 +24,7 @@ import {
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View, type ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

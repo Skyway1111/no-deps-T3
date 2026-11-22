@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "~/ui-core/router";
 
 import {
   HostedPairingRouteSurface,

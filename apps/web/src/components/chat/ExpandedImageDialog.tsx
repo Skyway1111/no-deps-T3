@@ -1,13 +1,13 @@
 import { memo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import {
   ArrowLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ImageIcon,
-  TextIcon,
-} from "lucide-react";
+  TextAlignStartIcon as TextIcon,
+} from "~/ui-core/icons";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import type { ExpandedImageItem, ExpandedImagePreview } from "./ExpandedImagePreview";

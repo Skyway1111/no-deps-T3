@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "~/ui-core/router";
 
 export const Route = createFileRoute("/projects/$projectKey")({
   beforeLoad: async ({ context, params }) => {

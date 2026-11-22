@@ -3,7 +3,7 @@ import {
   type TerminalGrid,
   type TerminalOutputState,
 } from "@t3tools/client-runtime/state/terminal";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import {
   Pressable,

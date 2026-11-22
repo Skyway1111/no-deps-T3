@@ -12,7 +12,7 @@ import {
 } from "@t3tools/contracts";
 import { deriveSubagentElapsedMs } from "@t3tools/shared/orchestrationTiming";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 

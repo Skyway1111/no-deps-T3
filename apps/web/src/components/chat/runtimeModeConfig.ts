@@ -1,18 +1,18 @@
 import { managedRuntimeModeDenial } from "@t3tools/client-runtime/contract-labels";
 import type { ManagedPolicySummary, RuntimeMode } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "~/i18n/messages";
 import {
-  type LucideIcon,
+  type IconComponent,
   LockIcon,
   PenLineIcon,
   ShieldCheckIcon,
   ShieldOffIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 
 export const runtimeModeConfig: Record<
   RuntimeMode,
-  { label: string; description: string; icon: LucideIcon }
+  { label: string; description: string; icon: IconComponent }
 > = {
   "approval-required": {
     label: msg("Supervised", { $context: "permission mode, agent asks before acting" }),
@@ -58,7 +58,7 @@ export function resolveRuntimeModeOption(
   mode: RuntimeMode;
   label: string;
   description: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   disabledReason?: string;
 } {
   const config = runtimeModeConfig[mode];

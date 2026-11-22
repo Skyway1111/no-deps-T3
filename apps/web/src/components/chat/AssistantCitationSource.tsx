@@ -1,6 +1,6 @@
-import type { LegendListRef } from "@legendapp/list/react";
+import type { VirtualListRef } from "~/ui-core/virtualList";
 import type { AssistantCitation, MessageId, ScopedThreadRef } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import {
   resolveAssistantCitationRange,
@@ -110,7 +110,7 @@ function observeAssistantCitationSource({
   root: HTMLElement;
   itemKey: string;
   request: AssistantCitationTarget;
-  list: LegendListRef;
+  list: VirtualListRef;
 }) {
   const activation = request.activationRef.current;
   if (activation.dismissed) return;
@@ -354,11 +354,11 @@ export function AssistantCitationSource({
   threadRef?: ScopedThreadRef;
   itemKey: string;
   request: AssistantCitationTarget | null;
-  listRef: RefObject<LegendListRef | null>;
+  listRef: RefObject<VirtualListRef | null>;
   children: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- observes this message's DOM for a citation reveal request and scrolls the LegendList to it
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- observes this message's DOM for a citation reveal request and scrolls the VirtualList to it
   useEffect(() => {
     const root = rootRef.current;
     const list = listRef.current;

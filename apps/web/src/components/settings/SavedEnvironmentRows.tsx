@@ -5,7 +5,7 @@ import {
   ChevronsLeftRightEllipsisIcon,
   EllipsisIcon,
   RouteIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
@@ -23,7 +23,7 @@ import {
   environmentMcpUrl,
 } from "@t3tools/client-runtime/connection";
 import * as Option from "effect/Option";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../../i18n/messages";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";

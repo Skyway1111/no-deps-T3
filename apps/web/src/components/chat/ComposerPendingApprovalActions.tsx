@@ -3,9 +3,9 @@ import {
   type ProviderApprovalOption,
   type RuntimeRequestId,
 } from "@t3tools/contracts";
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo } from "react";
-import { EllipsisIcon, TriangleAlertIcon } from "lucide-react";
+import { EllipsisIcon, TriangleAlertIcon } from "~/ui-core/icons";
 import { Button, InlineButton } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";

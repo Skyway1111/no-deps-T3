@@ -2,11 +2,11 @@ import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/assistantInsi
 import { MessageId, type RunId, type TurnItemId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { agentWorkingDirectories } from "@t3tools/client-runtime/workspace-basename-lookup";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, use, useState } from "react";
 import { type ChatMessage, type TurnDiffSummary } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
-import { GitForkIcon, ReplyIcon } from "lucide-react";
+import { GitForkIcon, ReplyIcon } from "~/ui-core/icons";
 import { captureAssistantMessageOpening } from "~/lib/assistantTextSelection";
 import { responseContextRecord } from "~/lib/composerContextRecords";
 import { Button } from "../ui/button";

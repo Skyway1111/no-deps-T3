@@ -1,4 +1,4 @@
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { Button } from "../../components/ui/Button";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { ConnectionTraceId } from "./ConnectionTraceId";

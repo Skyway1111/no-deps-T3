@@ -1,0 +1,199 @@
+/* oxlint-disable react/no-array-index-key -- Text runs keep their order within an immutable frame. */
+import { useEffect, useState } from "react";
+import type { OfficeFrame, OfficeImage, Paint } from "../decoders/officeEngine";
+import { officeImageBitmap } from "./image-bitmap";
+import { externalUrl } from "./links";
+import { createWorkerClient } from "./worker-rpc";
+import type { OfficeMethods } from "./office.worker";
+
+export type OfficeEngine = ReturnType<typeof createWorkerClient<OfficeMethods>>;
+
+/** Starts the document's worker, runs `open` and decodes its images; everything is released on change or unmount. */
+export function useOfficeDocument<T extends { images: OfficeImage[] }>(
+  bytes: ArrayBuffer,
+  open: (engine: OfficeEngine, bytes: ArrayBuffer, signal: AbortSignal) => Promise<T>,
+  describe: (model: T) => string,
+  onDetails: (text: string) => void,
+  onError: (cause: unknown) => void,
+) {
+  const [opened, setOpened] = useState<{ model: T; images: (ImageBitmap | null)[] }>();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the Office worker and decoded image bitmaps for this file, releasing both when it changes or unmounts.
+  useEffect(() => {
+    const controller = new AbortController();
+    const worker = new Worker(new URL("./office.worker.ts", import.meta.url), { type: "module" });
+    const engine = createWorkerClient<OfficeMethods>(worker);
+    let images: (ImageBitmap | null)[] = [];
+    const copy = bytes.slice(0);
+    void open(engine, copy, controller.signal)
+      .then(async (model) => {
+        images = await Promise.all(
+          model.images.map((image) =>
+            officeImageBitmap(new Blob([image.bytes as Uint8Array<ArrayBuffer>], { type: image.mime })).catch(() => null),
+          ),
+        );
+        if (controller.signal.aborted) return images.forEach((bitmap) => bitmap?.close());
+        setOpened({ model, images });
+        onDetails(describe(model));
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) onError(cause);
+      });
+    return () => {
+      controller.abort();
+      engine.close();
+      images.forEach((bitmap) => bitmap?.close());
+    };
+  }, [bytes, open, describe, onDetails, onError]);
+  return opened;
+}
+
+function shapePath(context: CanvasRenderingContext2D, item: Extract<Paint, { t: "rect" }>) {
+  const { x, y, w, h } = item;
+  const polygon = (points: number[][]) => {
+    points.forEach(([px, py], i) => (i ? context.lineTo(x + px! * w, y + py! * h) : context.moveTo(x + px! * w, y + py! * h)));
+    context.closePath();
+  };
+  context.beginPath();
+  switch (item.shape) {
+    case "ellipse":
+    case "donut":
+      context.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      break;
+    case "roundRect":
+    case "flowChartAlternateProcess":
+    case "flowChartTerminator":
+      context.roundRect(x, y, w, h, Math.min(w, h) * (item.shape === "flowChartTerminator" ? 0.5 : 0.17));
+      break;
+    case "triangle":
+      polygon([[0.5, 0], [1, 1], [0, 1]]);
+      break;
+    case "rtTriangle":
+      polygon([[0, 0], [1, 1], [0, 1]]);
+      break;
+    case "diamond":
+    case "flowChartDecision":
+      polygon([[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]]);
+      break;
+    case "parallelogram":
+      polygon([[0.25, 0], [1, 0], [0.75, 1], [0, 1]]);
+      break;
+    case "hexagon":
+      polygon([[0.25, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0.25, 1], [0, 0.5]]);
+      break;
+    case "chevron":
+    case "homePlate":
+    case "pentagon":
+      polygon([[0, 0], [0.8, 0], [1, 0.5], [0.8, 1], [0, 1], ...(item.shape === "chevron" ? [[0.2, 0.5]] : [])]);
+      break;
+    case "rightArrow":
+      polygon([[0, 0.25], [0.7, 0.25], [0.7, 0], [1, 0.5], [0.7, 1], [0.7, 0.75], [0, 0.75]]);
+      break;
+    case "leftArrow":
+      polygon([[1, 0.25], [0.3, 0.25], [0.3, 0], [0, 0.5], [0.3, 1], [0.3, 0.75], [1, 0.75]]);
+      break;
+    default:
+      context.rect(x, y, w, h);
+  }
+}
+
+/** Paints a laid-out page or slide at `scale` device pixels per layout pixel. */
+export function paintFrame(canvas: HTMLCanvasElement, frame: OfficeFrame, images: readonly (ImageBitmap | null)[], scale: number) {
+  canvas.width = Math.max(1, Math.round(frame.width * scale));
+  canvas.height = Math.max(1, Math.round(frame.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.scale(scale, scale);
+  context.fillStyle = frame.background ?? "#fff";
+  context.fillRect(0, 0, frame.width, frame.height);
+  context.textBaseline = "alphabetic";
+  for (const item of frame.items) {
+    if (item.t === "rect") {
+      context.save();
+      if (item.rotation) {
+        context.translate(item.x + item.w / 2, item.y + item.h / 2);
+        context.rotate((item.rotation * Math.PI) / 180);
+        context.translate(-(item.x + item.w / 2), -(item.y + item.h / 2));
+      }
+      shapePath(context, item);
+      if (item.fill) {
+        context.fillStyle = item.fill;
+        context.fill();
+      }
+      if (item.stroke) {
+        context.strokeStyle = item.stroke;
+        context.lineWidth = item.lineWidth ?? 1;
+        context.stroke();
+      }
+      context.restore();
+    } else if (item.t === "line") {
+      context.beginPath();
+      context.moveTo(item.x1, item.y1);
+      context.lineTo(item.x2, item.y2);
+      context.strokeStyle = item.color;
+      context.lineWidth = item.width;
+      context.stroke();
+    } else if (item.t === "image") {
+      const bitmap = images[item.image];
+      if (bitmap) context.drawImage(bitmap, item.x, item.y, item.w, item.h);
+      else {
+        context.fillStyle = "#e5e5e5";
+        context.fillRect(item.x, item.y, item.w, item.h);
+      }
+    } else {
+      context.font = item.font;
+      context.fillStyle = item.color;
+      context.fillText(item.text, item.x, item.y);
+      if (item.underline || item.strike) {
+        const y = item.underline ? item.y + item.size * 0.12 : item.y - item.size * 0.3;
+        context.fillRect(item.x, y, item.width, Math.max(0.75, item.size / 16));
+      }
+    }
+  }
+}
+
+/** Selectable, transparent copies of a frame's text over its canvas, with links a reader can follow. */
+export function FrameText(props: { frame: OfficeFrame; onInternalLink?: (target: string) => void }) {
+  const { frame } = props;
+  return (
+    <div
+      className="absolute inset-0 select-text overflow-hidden whitespace-pre text-transparent selection:bg-primary/30 selection:text-transparent"
+      style={{ containerType: "inline-size", fontSize: 0, lineHeight: 1.15 }}
+    >
+      {frame.items.map((item, index) => {
+        if (item.t !== "text") return null;
+        const url = item.link && !item.link.startsWith("#") ? externalUrl(item.link) : undefined;
+        const internal = item.link?.startsWith("#") ? item.link.slice(1) : undefined;
+        const follow = () => {
+          if (url) window.open(url, "_blank", "noopener,noreferrer");
+          else if (internal) props.onInternalLink?.(internal);
+        };
+        return (
+          <span
+            key={index}
+            role={url || internal ? "link" : undefined}
+            tabIndex={url || internal ? 0 : undefined}
+            title={url}
+            className="absolute origin-top-left"
+            style={{
+              left: `${(item.x / frame.width) * 100}%`,
+              top: `${((item.y - item.size * 0.95) / frame.height) * 100}%`,
+              font: item.font.replace(/[\d.]+px/, `${(item.size / frame.width) * 100}cqw`),
+              cursor: url || internal ? "pointer" : "text",
+            }}
+            onClick={(event) => {
+              if ((url || internal) && event.button === 0 && (getSelection()?.isCollapsed ?? true)) follow();
+            }}
+            onKeyDown={(event) => {
+              if ((url || internal) && event.key === "Enter") {
+                event.preventDefault();
+                follow();
+              }
+            }}
+          >
+            {item.text}
+          </span>
+        );
+      })}
+    </div>
+  );
+}

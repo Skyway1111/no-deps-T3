@@ -1,4 +1,4 @@
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { AuthAccessWriteScope, type AuthPairingLink, type EnvironmentId } from "@t3tools/contracts";
 import { useEffect, useEffectEvent } from "react";
 

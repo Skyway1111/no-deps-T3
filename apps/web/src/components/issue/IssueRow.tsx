@@ -1,5 +1,5 @@
 import type { EnvironmentIssueEntry } from "@t3tools/client-runtime/issue-list";
-import { MessageSquareIcon } from "lucide-react";
+import { MessageSquareIcon } from "~/ui-core/icons";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";

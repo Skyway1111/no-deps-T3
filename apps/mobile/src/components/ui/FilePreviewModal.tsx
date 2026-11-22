@@ -1,6 +1,6 @@
 import * as Dialog from "./Dialog";
 import { requireNativeModule } from "expo";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 import { m } from "../../i18n/messages";

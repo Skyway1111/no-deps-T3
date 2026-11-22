@@ -1,24 +1,13 @@
 import { MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { isMacPlatform } from "@t3tools/shared/keybindings";
-import { type CxOptions, cx } from "class-variance-authority";
 import * as Hex from "effect/encoding/Hex";
-import { msg } from "gt-react";
-import { extendTailwindMerge } from "tailwind-merge";
+import { msg } from "@t3tools/shared/i18n/react";
+import { type ClassValue, createTwMerge } from "@t3tools/shared/ui/twMerge";
 import { DraftId } from "../composerDraftStore";
 import { m, type MessageResolver } from "../i18n/messages";
 
-// Register extra font sizes and background images so tailwind-merge does not
-// treat text-2xs or bg-composer-seam-below as colors.
-const twMerge = extendTailwindMerge({
-  extend: {
-    theme: { text: ["2xs", "3xs", "4xs", "5xs"] },
-    classGroups: { "bg-image": [{ bg: ["composer-seam-below", "composer-seam-above"] }] },
-  },
-});
-
-export function cn(...inputs: CxOptions) {
-  return twMerge(cx(inputs));
-}
+// Custom background images, so bg-composer-seam-* does not read as a color and drop bg-*.
+export const cn: (...inputs: ClassValue[]) => string = createTwMerge("bg-image=bg:composer-seam-below composer-seam-above");
 
 export { isMacPlatform };
 

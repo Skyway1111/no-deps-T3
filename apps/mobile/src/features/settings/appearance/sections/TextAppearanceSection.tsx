@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import {
   BASE_FONT_SIZE_STEP,
   MAX_BASE_FONT_SIZE,

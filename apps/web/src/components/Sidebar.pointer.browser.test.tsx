@@ -1,4 +1,4 @@
-import type { SensorProps } from "@dnd-kit/core";
+import { type SensorProps } from "~/ui-core/dnd";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { fakeTimers } from "../../test/render";
 import { SidebarPointerSensor } from "./Sidebar.pointer";

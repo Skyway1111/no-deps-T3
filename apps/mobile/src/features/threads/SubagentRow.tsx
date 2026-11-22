@@ -10,7 +10,7 @@ import {
 } from "@t3tools/client-runtime/state/subagent-display";
 import { formatSubagentEffort } from "@t3tools/client-runtime/state/thread-execution";
 import type { EnvironmentId, OrchestrationV2Subagent } from "@t3tools/contracts";
-import { msg, T, useMessages, Var } from "gt-react-native";
+import { msg, T, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 

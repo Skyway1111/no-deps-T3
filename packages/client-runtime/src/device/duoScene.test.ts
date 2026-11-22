@@ -7,7 +7,7 @@ import {
   PlaneGeometry,
   Texture,
   Vector3,
-} from "three";
+} from "./webglEngine.ts";
 import { expect, it } from "vite-plus/test";
 import { createDuoScene, duoDisplayKey, duoRawPoint } from "./duoScene.ts";
 

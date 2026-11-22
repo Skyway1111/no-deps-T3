@@ -1,13 +1,8 @@
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useSortable, CSS } from "~/ui-core/dnd";
 import { type ReactNode, useLayoutEffect } from "react";
 import { cn } from "~/lib/utils";
-import {
-  animateSidebarLayoutChanges,
-  sidebarMarkerId,
-  type SidebarListMarker,
-} from "../Sidebar.logic";
+import { sidebarMarkerId, type SidebarListMarker } from "../Sidebar.logic";
 import { SIDEBAR_SORTABLE_DRAG_DISABLED } from "./SidebarThreadRow";
 
 function SortableSidebarMarker(props: {
@@ -20,7 +15,6 @@ function SortableSidebarMarker(props: {
   const { node, setNodeRef, transform, transition } = useSortable({
     id: sidebarMarkerId(props.marker),
     disabled: SIDEBAR_SORTABLE_DRAG_DISABLED,
-    animateLayoutChanges: animateSidebarLayoutChanges,
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the projected drop box inside the scroll viewport as drag transforms move it
   useLayoutEffect(() => {

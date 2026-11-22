@@ -1,4 +1,4 @@
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useId } from "react";
 import { Pressable, View } from "react-native";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";

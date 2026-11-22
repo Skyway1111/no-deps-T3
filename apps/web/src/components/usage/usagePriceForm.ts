@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { UsageModelPriceOverride } from "@t3tools/contracts";
 
 export const USAGE_PRICE_FIELDS = [

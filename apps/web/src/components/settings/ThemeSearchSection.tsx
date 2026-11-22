@@ -1,7 +1,7 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { ExternalLinkIcon, PackagePlusIcon, PaletteIcon, SearchIcon } from "lucide-react";
+import { ExternalLinkIcon, PackagePlusIcon, PaletteIcon, SearchIcon } from "~/ui-core/icons";
 import { type ReactNode, useState } from "react";
 import {
   importOpenVsxThemeExtension,
@@ -30,7 +30,7 @@ import { Button } from "../ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 const DOWNLOAD_FORMAT = new Intl.NumberFormat(undefined, {

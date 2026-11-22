@@ -5,16 +5,12 @@ import {
   CanvasTexture,
   DirectionalLight,
   Euler,
-  LinearFilter,
   PerspectiveCamera,
-  PMREMGenerator,
   Quaternion,
   Scene,
-  SRGBColorSpace,
   Vector3,
   WebGLRenderer,
-} from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+} from "./webglEngine.ts";
 import {
   createDuoScene,
   duoDisplayKey,
@@ -70,37 +66,15 @@ export function createDuoViewer(options: {
       context.fillRect(0, 0, canvas.width, canvas.height);
       return { id, canvas, context };
     })
-    .map(({ id, canvas, context }) => {
-      const texture = new CanvasTexture(canvas);
-      texture.colorSpace = SRGBColorSpace;
-      texture.minFilter = texture.magFilter = LinearFilter;
-      texture.generateMipmaps = false;
-      return { id, canvas, context, texture };
-    });
+    .map(({ id, canvas, context }) => ({ id, canvas, context, texture: new CanvasTexture(canvas) }));
   const renderer = new WebGLRenderer({
     canvas: options.canvas,
     alpha: true,
     antialias: true,
     powerPreference: "low-power",
   });
-  renderer.outputColorSpace = SRGBColorSpace;
   const scene = new Scene();
-  const environment = (() => {
-    const generator = new PMREMGenerator(renderer);
-    const room = new RoomEnvironment();
-    try {
-      return generator.fromScene(room, 0.04);
-    } catch (cause) {
-      for (const surface of surfaces) surface.texture.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss();
-      throw cause;
-    } finally {
-      room.dispose();
-      generator.dispose();
-    }
-  })();
-  scene.environment = environment.texture;
+  scene.environment = 1;
   const camera = new PerspectiveCamera(36, 1, 0.1, 150);
   const key = new DirectionalLight(0xffffff, 4);
   key.position.set(-6, 10, 14);
@@ -574,8 +548,6 @@ export function createDuoViewer(options: {
       slot.dispose();
       options.canvas.removeEventListener("webglcontextlost", lost);
       for (const surface of surfaces) surface.texture.dispose();
-      scene.environment = null;
-      environment.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },

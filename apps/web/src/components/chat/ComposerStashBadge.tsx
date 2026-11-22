@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { BookmarkIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { BookmarkIcon } from "~/ui-core/icons";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";

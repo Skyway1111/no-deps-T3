@@ -4,47 +4,28 @@ import * as SchemaGetter from "effect/SchemaGetter";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import {
-  YAMLParseError,
-  parse as parseYamlString,
-  stringify as stringifyYamlValue,
-  type CreateNodeOptions,
-  type DocumentOptions,
-  type ParseOptions,
-  type SchemaOptions,
-  type ToJSOptions,
-  type ToStringOptions,
-} from "yaml";
+  YamlError,
+  parseYaml as parseYamlString,
+  stringifyYaml as stringifyYamlValue,
+} from "./parsers/yaml.ts";
 
-export type YamlParseOptions = ParseOptions & DocumentOptions & SchemaOptions & ToJSOptions;
-export type YamlStringifyOptions = DocumentOptions &
-  SchemaOptions &
-  ParseOptions &
-  CreateNodeOptions &
-  ToStringOptions;
-
-function formatYamlParseError(error: unknown): string {
-  if (!(error instanceof YAMLParseError)) {
-    return "Invalid YAML.";
-  }
-
-  const position = error.linePos?.[0];
-  const location = position === undefined ? "" : `, line=${position.line}, column=${position.col}`;
-  return `Invalid YAML (code=${error.code}${location}).`;
-}
-
-function parseYaml<E extends string>(options?: YamlParseOptions): SchemaGetter.Getter<unknown, E> {
+function parseYaml<E extends string>(): SchemaGetter.Getter<unknown, E> {
   return SchemaGetter.transformEffect((input: E) =>
     Effect.try({
-      try: () => parseYamlString(input, options) as unknown,
-      catch: (error) => new SchemaIssue.InvalidValue({ message: formatYamlParseError(error) }),
+      try: () => parseYamlString(input),
+      // YamlError messages carry a position, never source text.
+      catch: (error) =>
+        new SchemaIssue.InvalidValue({
+          message: error instanceof YamlError ? error.message : "Invalid YAML.",
+        }),
     }),
   );
 }
 
-function stringifyYaml(options?: YamlStringifyOptions): SchemaGetter.Getter<string, unknown> {
+function stringifyYaml(): SchemaGetter.Getter<string, unknown> {
   return SchemaGetter.transformEffect((input: unknown) =>
     Effect.try({
-      try: () => stringifyYamlValue(input, options),
+      try: () => stringifyYamlValue(input),
       catch: () => new SchemaIssue.InvalidValue({ message: "Failed to stringify YAML." }),
     }),
   );

@@ -4,9 +4,8 @@ import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
-import { msg } from "gt-react";
-import "culori/css";
-import { converter, parse } from "culori/fn";
+import { msg } from "@t3tools/shared/i18n/react";
+import { toOklch } from "@t3tools/shared/ui/color";
 import {
   BUILT_IN_THEMES,
   EMBER_THEME,
@@ -470,18 +469,15 @@ const THEME_DARK_FOREGROUND: ThemeRgbColor = { r: 36, g: 21, b: 35 };
 const THEME_WHITE_FOREGROUND: ThemeRgbColor = { r: 255, g: 255, b: 255 };
 const THEME_BLACK_FOREGROUND: ThemeRgbColor = { r: 0, g: 0, b: 0 };
 
-const convertToOklch = converter("oklch");
-
 function parseThemeColor(value: unknown): ParsedThemeColor | null {
   if (typeof value !== "string") return null;
   const input = value.trim();
-  const parsed = parse(input);
-  if (!parsed) return null;
-  const color = convertToOklch(parsed);
-  const lightness = color.l ?? 0;
-  const chroma = color.c ?? 0;
+  const color = toOklch(input);
+  if (!color) return null;
+  const lightness = color.l;
+  const chroma = color.c;
   const hue = color.h ?? 0;
-  // Missing CSS components are zero; Culori omits none alpha, so distinguish it from absent alpha.
+  // Missing CSS components are zero; `none` alpha parses as absent, so distinguish it from no alpha.
   const alpha = /\/\s*none\s*\)$/i.test(input) ? 0 : (color.alpha ?? 1);
   if (![lightness, chroma, hue, alpha].every(Number.isFinite)) return null;
   return {

@@ -2,8 +2,8 @@ import type { ChatComposerProps } from "./ChatComposer";
 import type { PromptUltrathink } from "./TraitsPicker";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { type AppModelOption } from "../../modelSelection";
-import { useGT, useMessages } from "gt-react";
-import { CircleAlertIcon } from "lucide-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { CircleAlertIcon } from "~/ui-core/icons";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerControl } from "./ComposerControl";
 import {

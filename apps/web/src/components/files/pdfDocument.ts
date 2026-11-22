@@ -1,50 +1,14 @@
-import { getDocument, GlobalWorkerOptions, PDFWorker } from "pdfjs-dist";
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import fallbackUrl from "pdfjs-dist/wasm/openjpeg_nowasm_fallback.js?url";
+import { PdfDocument, type PdfTextItem } from "./decoders/pdfEngine";
 
-GlobalWorkerOptions.workerSrc = workerUrl;
+export type { PdfDocument, PdfTextItem };
+export const openPdf = (bytes: ArrayBuffer) => PdfDocument.open(bytes);
 
-const standardFonts = import.meta.glob<string>(
-  "../../../node_modules/pdfjs-dist/standard_fonts/*",
-  { query: "?url", import: "default", eager: true },
-);
-const cMaps = import.meta.glob<string>("../../../node_modules/pdfjs-dist/cmaps/*.bcmap", {
-  query: "?url",
-  import: "default",
-  eager: true,
-});
-const wasm = import.meta.glob<string>("../../../node_modules/pdfjs-dist/wasm/*.{wasm,js}", {
-  query: "?url",
-  import: "default",
-  eager: true,
-});
-export class BinaryDataFactory {
-  async fetch({ kind, filename }: { kind: string; filename: string }) {
-    const assets = kind === "cMapUrl" ? cMaps : kind === "wasmUrl" ? wasm : standardFonts;
-    const directory = kind === "cMapUrl" ? "cmaps" : kind === "wasmUrl" ? "wasm" : "standard_fonts";
-    const url = assets[`../../../node_modules/pdfjs-dist/${directory}/${filename}`];
-    if (!url) throw new Error(`Unsupported PDF ${directory} asset.`);
-    const response = await fetch(url);
-    if (!response.ok || response.headers.get("content-type")?.startsWith("text/html"))
-      throw new Error(`PDF ${directory} asset unavailable.`);
-    return new Uint8Array(await response.arrayBuffer());
-  }
-}
-
-// Without a shared worker, pdf.js starts a worker and recompiles its 1.3 MB script for every document.
-let worker: PDFWorker | undefined;
-
-export function openPdf(bytes: ArrayBuffer) {
-  worker ??= new PDFWorker();
-  return getDocument({
-    worker,
-    data: new Uint8Array(bytes),
-    useSystemFonts: true,
-    useWorkerFetch: false,
-    BinaryDataFactory,
-    // PDF.js imports JavaScript decoders directly, bypassing BinaryDataFactory.
-    wasmUrl: new URL(".", new URL(fallbackUrl, window.location.href)).href,
-    canvasMaxAreaInBytes: 32 * 1024 * 1024,
-    useWasm: true,
-  });
+let measure: CanvasRenderingContext2D | null | undefined;
+/** How much a text layer span stretches so the browser's sans-serif covers the PDF run's width. */
+export function pdfSpanScale(text: string, fontPx: number, widthPx: number) {
+  measure ??= document.createElement("canvas").getContext("2d");
+  if (!measure || !fontPx) return 1;
+  measure.font = `${fontPx}px sans-serif`;
+  const measured = measure.measureText(text).width;
+  return measured > 0 ? widthPx / measured : 1;
 }

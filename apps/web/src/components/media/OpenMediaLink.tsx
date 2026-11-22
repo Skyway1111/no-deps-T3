@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { DownloadIcon, ExternalLinkIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { DownloadIcon, ExternalLinkIcon } from "~/ui-core/icons";
 
 import { resolveExternalWebLinkHost } from "../chat/externalLinkContextMenu";
 import { Button } from "../ui/button";

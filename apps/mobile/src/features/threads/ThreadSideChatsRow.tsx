@@ -1,5 +1,5 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";

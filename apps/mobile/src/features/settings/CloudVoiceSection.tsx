@@ -1,4 +1,4 @@
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { cloudSpeechDisclosure } from "@t3tools/shared/speechCopy";
 import { setCloudSpeechKey } from "@t3tools/client-runtime/voice-input";

@@ -1,5 +1,5 @@
 import type { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { getActiveLocale, m, type MessageResolver } from "../../i18n/messages";
 import {

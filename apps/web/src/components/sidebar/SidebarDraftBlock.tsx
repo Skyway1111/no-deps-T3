@@ -3,8 +3,8 @@ import type { ContextMenuSource } from "@t3tools/contracts";
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
-import { T, useGT } from "gt-react";
-import { SquarePenIcon, XIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { SquarePenIcon, XIcon } from "~/ui-core/icons";
 import {
   memo,
   useState,
@@ -12,7 +12,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "@t3tools/shared/core/react";
 import { cn } from "~/lib/utils";
 import { resolveSidebarRowAccessibility } from "../Sidebar.logic";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";

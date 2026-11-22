@@ -1,4 +1,4 @@
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { AppBar } from "../../components/ui/AppBar";
 import type { AppBarAction, AppBarMenu } from "../../components/ui/AppBar.types";

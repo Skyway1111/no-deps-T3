@@ -1,6 +1,6 @@
 import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../native/NativeWorkspaceColumns";
 import Constants from "expo-constants";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 

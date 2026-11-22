@@ -8,8 +8,8 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ContextMenuSource, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { useGT } from "gt-react";
-import { FolderIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { FolderIcon } from "~/ui-core/icons";
 
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import { readLocalApi } from "../../localApi";

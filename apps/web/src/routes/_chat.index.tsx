@@ -1,8 +1,8 @@
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { T, useGT } from "gt-react";
+import { createFileRoute, useRouter } from "~/ui-core/router";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { isElectron } from "../env";

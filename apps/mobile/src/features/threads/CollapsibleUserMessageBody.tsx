@@ -1,4 +1,4 @@
-import { T } from "gt-react-native";
+import { T } from "@t3tools/shared/i18n/react";
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Pressable,

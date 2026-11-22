@@ -1,4 +1,4 @@
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { Menu } from "../../components/ui/Menu";

@@ -5,7 +5,7 @@ import type { LinkedPrompt } from "@t3tools/shared/promptLinks";
 import { parseThreadLinkPrompt } from "@t3tools/shared/promptLinksCopy";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import { findStackRoute } from "../../lib/appLinking";

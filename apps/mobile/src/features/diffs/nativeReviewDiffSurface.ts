@@ -10,7 +10,7 @@ import {
 } from "react";
 import { View, type NativeSyntheticEvent, type ViewProps } from "react-native";
 import { requireNativeView } from "expo";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 
 import { EmptyState } from "../../components/ui/EmptyState";
 import { NativeViewResolutionError } from "../../native/nativeViewResolutionError";

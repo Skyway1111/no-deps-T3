@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { Hct, SchemeTonalSpot, argbFromHex, hexFromArgb } from "@material/material-color-utilities";
 
+import { argbFromHex, hexFromArgb, schemeTonalSpot } from "../../../zero-dep";
 import { MOBILE_THEME_IDS } from "../../../lib/mobileTheme";
 import { getMobileThemeRuntimeVariables } from "../../../lib/mobileThemeVariables";
 import { materialYouPaletteToMobileThemeVariables } from "../../../lib/materialYouTheme.android";
@@ -59,11 +59,7 @@ describe("Android workspace navigation colors", () => {
     "keeps Material You selection visible for system seed %s",
     (seed) => {
       for (const appearance of ["light", "dark"] as const) {
-        const scheme = new SchemeTonalSpot(
-          Hct.fromInt(argbFromHex(seed)),
-          appearance === "dark",
-          0,
-        );
+        const scheme = schemeTonalSpot(argbFromHex(seed), appearance === "dark");
         const roles = [
           "primary",
           "onPrimary",

@@ -1,6 +1,6 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 

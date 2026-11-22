@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
-import type { Scene, PerspectiveCamera, Box3, Quaternion } from "three";
+import type { Scene, PerspectiveCamera, Box3, Quaternion } from "./webglEngine.ts";
 
 const gpu = vi.hoisted(() => ({
   instances: [] as {
@@ -10,10 +10,9 @@ const gpu = vi.hoisted(() => ({
     dispose: ReturnType<typeof vi.fn>;
     forceContextLoss: ReturnType<typeof vi.fn>;
   }[],
-  environmentDispose: vi.fn(),
 }));
-vi.mock("three", async () => {
-  const actual = await vi.importActual<typeof import("three")>("three");
+vi.mock("./webglEngine.ts", async () => {
+  const actual = await vi.importActual<typeof import("./webglEngine.ts")>("./webglEngine.ts");
   return {
     ...actual,
     WebGLRenderer: class {
@@ -51,16 +50,10 @@ vi.mock("three", async () => {
         this.state.forceContextLoss();
       }
     },
-    PMREMGenerator: class {
-      fromScene() {
-        return { texture: new actual.Texture(), dispose: gpu.environmentDispose };
-      }
-      dispose() {}
-    },
   };
 });
 const models = vi.hoisted(() => ({
-  resolve: (_model: { asset: import("three").Group; dispose: () => void }) => {},
+  resolve: (_model: { asset: import("./webglEngine.ts").Group; dispose: () => void }) => {},
   signal: null as AbortSignal | null,
 }));
 vi.mock("./modelScene.ts", () => ({
@@ -71,14 +64,13 @@ vi.mock("./modelScene.ts", () => ({
     });
   },
 }));
-import { Group, Mesh, MeshBasicMaterial, PlaneGeometry } from "three";
+import { Group, Mesh, MeshBasicMaterial, PlaneGeometry } from "./webglEngine.ts";
 import { createDuoViewer } from "./duoViewer.ts";
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   gpu.instances.length = 0;
-  gpu.environmentDispose.mockClear();
 });
 
 function fixture(

@@ -1,7 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { Navigate } from "@tanstack/react-router";
-import { useGT } from "gt-react";
+import { Navigate } from "~/ui-core/router";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { isElectron } from "~/env";
 import { linkedThreadSurface } from "../../linkedThreadSurface";

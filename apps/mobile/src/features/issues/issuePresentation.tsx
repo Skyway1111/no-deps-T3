@@ -6,7 +6,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { IssueDetail, IssueLabel, IssueState } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { View } from "react-native";
 
 import type { AppSymbolName } from "../../components/ui/AppSymbol";

@@ -32,7 +32,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { AgentCursorMark } from "~/components/preview/AgentBrowserCursor";
 import { CommandBlock } from "~/components/CommandBlock";

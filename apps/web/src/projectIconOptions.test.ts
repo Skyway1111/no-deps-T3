@@ -1,4 +1,8 @@
-import { AlarmClockCheck, ArrowDown01, Layers3 } from "lucide-react";
+import {
+  AlarmClockCheckIcon as AlarmClockCheck,
+  ArrowDown01Icon as ArrowDown01,
+  LayersIcon as Layers3,
+} from "~/ui-core/icons";
 import { describe, expect, it } from "vite-plus/test";
 import { lucideIconByName } from "./lib/lucideIconByName";
 import { filterProjectIconNames, firstEmoji, isValidProjectMonogram } from "./projectIconOptions";

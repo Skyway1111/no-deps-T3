@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Event-driven fake of the portal transport.
 import * as NodeEvents from "node:events";
-import { DBusError, Message, MessageType, Variant, type MessageBus } from "dbus-next";
+import { DBusError, Message, MessageType, Variant, type MessageBus } from "@t3tools/shared/sys/dbus";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { PortalCaptureShortcut, portalShortcutTrigger } from "./PortalCaptureShortcut.ts";
 
@@ -80,7 +80,7 @@ class FakeBus extends NodeEvents.EventEmitter {
     const reply = (body: unknown[] = []) =>
       new Message({
         type: MessageType.METHOD_RETURN,
-        replySerial: "1",
+        replySerial: 1,
         destination: ":1.23",
         body,
       });

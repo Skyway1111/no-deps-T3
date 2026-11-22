@@ -1,6 +1,6 @@
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
-import { SettingsIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { SettingsIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { type BackgroundActivityProfile } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";

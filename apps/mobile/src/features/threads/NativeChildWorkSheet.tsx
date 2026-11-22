@@ -4,7 +4,7 @@ import type {
   OrchestrationV2NativeChildWork,
   ThreadId,
 } from "@t3tools/contracts";
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 

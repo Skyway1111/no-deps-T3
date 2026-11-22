@@ -12,7 +12,7 @@ import {
   type PullRequestComment,
 } from "@t3tools/contracts";
 import { StackActions, type NavigationProp } from "@react-navigation/native";
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { parseMarkdownDocument } from "../../lib/markdownDocument";

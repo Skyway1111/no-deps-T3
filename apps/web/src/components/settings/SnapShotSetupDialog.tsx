@@ -20,7 +20,7 @@ import {
   captureSetupShortcutReady,
   type CaptureSetupStep,
 } from "./SnapShotSetupDialog.logic";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 const SETUP_STEPS = [
   { id: "access", label: msg("Access", { $context: "setup step: capture permissions" }) },

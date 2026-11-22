@@ -1,5 +1,5 @@
 /* oxlint-disable react/no-array-index-key -- Captured table cells have stable positions and may contain identical values. */
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { ScrollView, View } from "react-native";
 import type { parseDelimitedPreview } from "@t3tools/shared/delimitedPreview";
 import { AppText as Text } from "../../components/ui/AppText";

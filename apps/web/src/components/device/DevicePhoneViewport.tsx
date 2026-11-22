@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef } from "react";
 import type { PhoneViewer } from "@t3tools/client-runtime/device/phone-viewer";
 import type {

@@ -1,4 +1,4 @@
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtomValue } from "@effect/atom-react";

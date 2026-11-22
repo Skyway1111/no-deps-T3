@@ -7,8 +7,8 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { linkOptions, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import { useGT } from "gt-react";
+import { linkOptions, useNavigate, useParams, useRouter } from "~/ui-core/router";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
@@ -49,7 +49,7 @@ import {
 import { toastManager } from "./ui/toast";
 import { readIssueListPreferences } from "./issue/issueListPreferences";
 
-declare module "@tanstack/react-router" {
+declare module "~/ui-core/router" {
   interface HistoryState {
     reopenedViewId?: string;
   }

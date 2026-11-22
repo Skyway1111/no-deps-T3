@@ -1,4 +1,4 @@
-import type { AnyRouter } from "@tanstack/react-router";
+import type { AnyRouter } from "~/ui-core/router";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";

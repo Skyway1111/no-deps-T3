@@ -1,5 +1,5 @@
-import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
-import { cva, type VariantProps } from "class-variance-authority";
+import { Toggle as TogglePrimitive } from "~/ui-core/primitives";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
 
 import { cn } from "~/lib/utils";
 
@@ -43,7 +43,12 @@ function Toggle({
 }: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
   return (
     <TogglePrimitive
-      className={cn(toggleVariants({ className, size, variant }))}
+      className={(state) =>
+        cn(
+          toggleVariants({ size, variant }),
+          typeof className === "function" ? className(state) : className,
+        )
+      }
       data-slot="toggle"
       {...props}
     />

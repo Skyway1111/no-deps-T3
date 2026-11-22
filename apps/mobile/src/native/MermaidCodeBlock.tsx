@@ -1,8 +1,7 @@
 import * as Hash from "effect/Hash";
 import { File, Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
-import { T, useGT, Var } from "gt-react-native";
-import type { DiagramType } from "pele/lazy";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { Suspense, use, useRef, useState } from "react";
 import { PixelRatio, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { parse, Svg, SvgXml } from "react-native-svg";
@@ -14,7 +13,7 @@ import { themeColorWithAlpha } from "../lib/mobileTheme";
 import { CodeBlockFrame, CodeBlockHeaderButton } from "./CodeBlockFrame";
 import type { NativeMarkdownTextStyle } from "./SelectableMarkdownText.types";
 
-type Pele = typeof import("pele/lazy");
+type Engine = typeof import("@t3tools/shared/diagrams/mermaid");
 type Diagram =
   | {
       readonly status: "ready";
@@ -25,10 +24,7 @@ type Diagram =
   | { readonly status: "error"; readonly reason: "load" }
   | { readonly status: "error"; readonly reason: "render"; readonly message: string | null };
 
-let peleLoad: Promise<Pele | null> | null = null;
-// Each diagram type is its own chunk, so a thread with one flowchart only
-// evaluates the flowchart parser and layout.
-const typeLoads = new Map<DiagramType, Promise<boolean>>();
+let engineLoad: Promise<Engine | null> | null = null;
 // A message scrolled back into view reuses its settled promise, which `use`
 // reads without suspending, instead of flashing the source.
 const diagramLoads = new Map<string, Promise<Diagram>>();
@@ -47,47 +43,20 @@ function loadDiagram(source: string): Promise<Diagram> {
 }
 
 const MONOSPACE = Platform.OS === "ios" ? "Menlo" : "monospace";
-// Pele measures labels with metrics close to Helvetica when no canvas is available.
+// The engine measures labels with metrics close to Helvetica when no canvas is available.
 const DIAGRAM_FONT = Platform.OS === "ios" ? "Helvetica" : "sans-serif";
 
 async function renderDiagram(source: string): Promise<Diagram> {
-  peleLoad ??= import("pele/lazy").catch(() => null);
-  const pele = await peleLoad;
-  if (!pele) {
+  engineLoad ??= import("@t3tools/shared/diagrams/mermaid").catch(() => null);
+  const engine = await engineLoad;
+  if (!engine) {
     // Not cached, so the next mount tries again.
-    peleLoad = null;
+    engineLoad = null;
     diagramLoads.delete(source);
     return { status: "error", reason: "load" };
   }
-  let type: DiagramType | null = null;
   try {
-    type = pele.detectType(source);
-  } catch {
-    // An unknown type falls through to render, which reports why.
-  }
-  if (type) {
-    let load = typeLoads.get(type);
-    if (!load) {
-      load = pele.load(type).then(
-        () => true,
-        () => false,
-      );
-      typeLoads.set(type, load);
-    }
-    if (!(await load)) {
-      typeLoads.delete(type);
-      diagramLoads.delete(source);
-      return { status: "error", reason: "load" };
-    }
-  }
-  try {
-    const { svg, width, height } = pele.render(source, {
-      links: false,
-      images: false,
-      // Keep the author's direction; a wide diagram scales down to fit instead of turning vertical.
-      autoDirection: false,
-    });
-    return { status: "ready", svg, width, height };
+    return { status: "ready", ...engine.renderMermaid(source) };
   } catch (error) {
     return {
       status: "error",

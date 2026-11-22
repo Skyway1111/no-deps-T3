@@ -18,7 +18,7 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { resolveSelectableModel } from "@t3tools/shared/model";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 

@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import type { EnvironmentId, ThreadId, TurnItemId } from "@t3tools/contracts";
 import { TERMINAL_PALETTES, terminalOutputSpans } from "@t3tools/shared/terminalOutput";
 import type React from "react";

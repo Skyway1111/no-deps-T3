@@ -5,7 +5,7 @@ import {
   createRoute,
   createRouter,
   redirect,
-} from "@tanstack/react-router";
+} from "~/ui-core/router";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveSettingsScope } from "./settingsScope";

@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { translatableDetail } from "../errors/translatable.ts";
 import {
   CLIENT_CAPABILITIES_QUERY_PARAM,

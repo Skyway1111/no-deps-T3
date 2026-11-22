@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, ProviderDriverKind } from "@t3tools/contracts";
-import { T, Var } from "gt-react";
-import { InfoIcon } from "lucide-react";
+import { T, Var } from "@t3tools/shared/i18n/react";
+import { InfoIcon } from "~/ui-core/icons";
 
 import { serverEnvironment } from "../../state/server";
 import { Alert, AlertDescription } from "../ui/alert";

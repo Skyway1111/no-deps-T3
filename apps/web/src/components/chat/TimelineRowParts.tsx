@@ -1,4 +1,4 @@
-import { useMessages } from "gt-react";
+import { useMessages } from "@t3tools/shared/i18n/react";
 import { type ReactNode } from "react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";

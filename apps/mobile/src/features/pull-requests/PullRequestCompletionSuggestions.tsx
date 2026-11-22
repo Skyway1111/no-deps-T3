@@ -1,4 +1,4 @@
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";

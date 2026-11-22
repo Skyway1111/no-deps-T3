@@ -1,6 +1,5 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -91,7 +90,7 @@ function Button({ className, variant, size, render, ...props }: ButtonProps) {
     type: typeValue,
   };
 
-  return useRender({
+  return renderElement({
     defaultTagName: "button",
     props: mergeProps<"button">(defaultProps, props),
     render,
@@ -131,7 +130,7 @@ export function InlineButton({
     "data-slot": "inline-button",
     type: render ? undefined : ("button" as const),
   };
-  return useRender({
+  return renderElement({
     defaultTagName: "button",
     props: mergeProps<"button">(defaultProps, props),
     render,

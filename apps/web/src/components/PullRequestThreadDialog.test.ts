@@ -37,8 +37,8 @@ vi.mock("react", async (importOriginal) => ({
   useRef: (current: unknown) => ({ current }),
   useEffect: () => {},
 }));
-vi.mock("gt-react", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("gt-react")>()),
+vi.mock("@t3tools/shared/i18n/react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@t3tools/shared/i18n/react")>()),
   useGT:
     () =>
     (text: string, values: Record<string, unknown> = {}) =>
@@ -47,7 +47,7 @@ vi.mock("gt-react", async (importOriginal) => ({
   T: ({ children }: { children: ReactNode }) => children,
   Var: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock("@tanstack/react-pacer", () => ({
+vi.mock("~/ui-core/pacer", () => ({
   useDebouncedValue: (value: unknown) => [value, { state: { isPending: false } }],
 }));
 vi.mock("~/state/session", () => ({

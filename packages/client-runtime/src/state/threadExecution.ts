@@ -52,9 +52,8 @@ import {
 } from "./models.ts";
 import { commandDisplayText } from "../work-log/commandLabel.ts";
 import { formatSubagentDisplayTitle } from "./subagentDisplay.ts";
-import { mFallback, msg } from "gt-i18n";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 import { markedTextEnglish } from "../errors/translatable.ts";
-import type { MFunctionType } from "gt-i18n/types";
 
 const ACTIVITY_RUN_STATUSES = new Set(["preparing", "starting", "running", "waiting"]);
 const INTERRUPTIBLE_RUN_STATUSES = new Set(["preparing", "starting", "running"]);

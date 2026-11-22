@@ -1,4 +1,4 @@
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import {
   duoFoldState,

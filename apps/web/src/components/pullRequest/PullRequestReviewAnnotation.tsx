@@ -15,8 +15,8 @@ import {
   Trash2Icon,
   CircleCheckIcon,
   CircleIcon,
-} from "lucide-react";
-import { T, useGT } from "gt-react";
+} from "~/ui-core/icons";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useRef, useState } from "react";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 

@@ -1,6 +1,4 @@
-import { md5, sha1 } from "@noble/hashes/legacy";
-import { sha256 } from "@noble/hashes/sha2";
-import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
+import { bytesToHex, md5, sha1, sha256 } from "./parsers/crypto.ts";
 
 export interface PullRequestAnchorRange {
   readonly start: number;
@@ -194,7 +192,7 @@ export function resolvePullRequestReviewAnchor(
 }
 
 export function pullRequestDiffPathMatches(digest: string, path: string): boolean {
-  const bytes = utf8ToBytes(path);
+  const bytes = new TextEncoder().encode(path);
   // GitLab uses SHA-1, abbreviated to 9 characters in Rapid Diffs line anchors.
   if (digest.length === 40 || digest.length === 9)
     return bytesToHex(sha1(bytes)).startsWith(digest);

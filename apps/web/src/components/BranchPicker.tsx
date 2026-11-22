@@ -1,8 +1,8 @@
-import { useLegendListRef } from "~/hooks/useLegendListRef";
+import { useVirtualListRef } from "~/hooks/useVirtualListRef";
 import type { VcsRef } from "@t3tools/contracts";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
 import { useId, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 
 import { MiddleTruncate } from "./ui/middle-truncate";
 import { cn } from "../lib/utils";
@@ -75,14 +75,14 @@ export function BranchPicker({
 
     onLoadNext();
   };
-  const branchListRef = useRef<LegendListRef | null>(null);
+  const branchListRef = useRef<VirtualListRef | null>(null);
   const updateBranchListScrollFades = () => {
     const metrics = branchListRef.current?.getState();
     if (!metrics) return;
     setShowTopBranchScrollFade(!metrics.isAtStart);
     setShowBottomBranchScrollFade(!metrics.isAtEnd);
   };
-  const branchScrollRef = useLegendListRef(branchListRef, updateBranchListScrollFades);
+  const branchScrollRef = useVirtualListRef(branchListRef, updateBranchListScrollFades);
 
   return (
     <Combobox
@@ -133,7 +133,7 @@ export function BranchPicker({
           </ComboboxEmpty>
           <div className="relative flex min-h-0 w-full max-h-56 flex-1 flex-col overflow-hidden">
             <ComboboxListVirtualized className="flex size-full min-h-0 min-w-0 flex-col">
-              <LegendList<string>
+              <VirtualList<string>
                 ref={branchScrollRef}
                 data={filteredItems}
                 initialScrollOffset={0}

@@ -1,5 +1,5 @@
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { AdvancedSettings } from "./AdvancedSettings";
 import { BranchNamingSettings } from "./BranchNamingSettings";

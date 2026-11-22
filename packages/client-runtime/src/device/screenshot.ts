@@ -1,5 +1,5 @@
 // @effect-diagnostics globalFetch:off - This browser transport runs without an Effect runtime, like the live stream.
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { type MarkedText, markedTextEnglish } from "../errors/translatable.ts";
 import * as Schema from "effect/Schema";
 import { extractPng } from "@t3tools/shared/png";

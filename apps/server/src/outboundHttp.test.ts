@@ -9,7 +9,6 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { FetchHttpClient, HttpClient } from "effect/http";
-import * as Undici from "undici";
 import { afterAll, afterEach, beforeAll, describe, expect } from "vite-plus/test";
 
 import {
@@ -45,7 +44,13 @@ const server = NodeHttp2.createSecureServer(
 );
 let origin = "";
 const defaultCaCertificates = NodeTls.getCACertificates("default");
-const defaultDispatcher = Undici.getGlobalDispatcher();
+const DISPATCHER_SYMBOLS = [
+  Symbol.for("undici.globalDispatcher.2"),
+  Symbol.for("undici.globalDispatcher.1"),
+] as const;
+const globalDispatchers = globalThis as unknown as Record<symbol, unknown>;
+void globalThis.Headers; // Loads Node's bundled undici and its default dispatcher.
+const defaultDispatchers = DISPATCHER_SYMBOLS.map((symbol) => globalDispatchers[symbol]);
 const defaultAttemptTimeout = NodeNet.getDefaultAutoSelectFamilyAttemptTimeout();
 
 beforeAll(async () => {
@@ -55,7 +60,9 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
-  Undici.setGlobalDispatcher(defaultDispatcher);
+  DISPATCHER_SYMBOLS.forEach((symbol, index) => {
+    globalDispatchers[symbol] = defaultDispatchers[index];
+  });
   NodeNet.setDefaultAutoSelectFamilyAttemptTimeout(defaultAttemptTimeout);
 });
 
@@ -64,42 +71,20 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-const versionViaGlobalDispatcher = async () => (await Undici.request(origin)).body.text();
-
 const versionViaBuiltinFetch = () =>
   HttpClient.get(origin).pipe(
     Effect.flatMap((response) => response.text),
     Effect.provide(FetchHttpClient.layer),
   );
 
-describe("installHttp1FetchDispatcher", () => {
-  it("makes the global dispatcher negotiate HTTP/1.1 and keeps the env proxy agent", async () => {
-    Undici.setGlobalDispatcher(new Undici.Agent());
-    expect(await versionViaGlobalDispatcher()).toBe("2.0");
-
-    installHttp1FetchDispatcher();
-    expect(await versionViaGlobalDispatcher()).toBe("1.1");
-
-    Undici.setGlobalDispatcher(new Undici.EnvHttpProxyAgent());
-    installHttp1FetchDispatcher();
-    expect(Undici.getGlobalDispatcher()).toBeInstanceOf(Undici.EnvHttpProxyAgent);
-  });
-
-  // Only bundled undici 8 (Node 26+) offers fetch h2 and can prove dispatcher replacement.
-  it.effect.runIf(builtinFetchUsesHttp2(process.versions.undici))(
-    "moves the built-in fetch off HTTP/2",
-    () =>
-      Effect.gen(function* () {
-        expect(yield* versionViaBuiltinFetch()).toBe("2.0");
-        installHttp1FetchDispatcher();
-        expect(yield* versionViaBuiltinFetch()).toBe("1.1");
-      }),
-  );
-});
-
-const runNode = Effect.fnUntraced(function* (args: Array<string>) {
+const runNode = Effect.fnUntraced(function* (
+  args: Array<string>,
+  env: Record<string, string> = {},
+) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const child = yield* spawner.spawn(ChildProcess.make(process.execPath, args));
+  const child = yield* spawner.spawn(
+    ChildProcess.make(process.execPath, args, { env, extendEnv: true }),
+  );
   return yield* Effect.all(
     {
       stdout: child.stdout.pipe(Stream.decodeText(), Stream.mkString),
@@ -109,6 +94,56 @@ const runNode = Effect.fnUntraced(function* (args: Array<string>) {
     { concurrency: "unbounded" },
   );
 }, Effect.scoped);
+
+// Only bundled undici 8 (Node 26+) offers fetch h2 and can prove dispatcher replacement.
+describe.runIf(builtinFetchUsesHttp2(process.versions.undici))("installHttp1FetchDispatcher", () => {
+  it.effect("moves the built-in fetch off HTTP/2", () =>
+    Effect.gen(function* () {
+      expect(yield* versionViaBuiltinFetch()).toBe("2.0");
+      installHttp1FetchDispatcher();
+      expect(yield* versionViaBuiltinFetch()).toBe("1.1");
+    }),
+  );
+
+  // --use-env-proxy needs a proxy at startup; the rebuilt agent reads the real one from env.
+  it.effect("keeps the --use-env-proxy agent and tunnels HTTP/1.1 through it", () =>
+    Effect.gen(function* () {
+      const child = yield* runNode(
+        [
+          "--use-env-proxy",
+          "--input-type=module",
+          "--eval",
+          `
+import * as NodeHttp from "node:http";
+import * as NodeNet from "node:net";
+import * as NodeTls from "node:tls";
+import { installHttp1FetchDispatcher } from ${JSON.stringify(new URL("./outboundHttp.ts", import.meta.url).href)};
+
+NodeTls.setDefaultCACertificates([${JSON.stringify(TEST_CERT)}]);
+let tunnels = 0;
+const proxy = NodeHttp.createServer().on("connect", (request, client) => {
+  tunnels++;
+  const [host, port] = request.url.split(":");
+  const upstream = NodeNet.connect(Number(port), host, () => {
+    client.write("HTTP/1.1 200 OK\\r\\n\\r\\n");
+    upstream.pipe(client).pipe(upstream);
+  });
+});
+await new Promise((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+process.env.HTTPS_PROXY = "http://127.0.0.1:" + proxy.address().port;
+installHttp1FetchDispatcher();
+const dispatcher = globalThis[Symbol.for("undici.globalDispatcher.2")].constructor.name;
+console.log(dispatcher, await (await fetch(${JSON.stringify(origin)})).text(), tunnels);
+process.exit();
+`,
+        ],
+        { HTTPS_PROXY: "http://127.0.0.1:1" },
+      );
+      expect(child.exitCode, child.stderr).toBe(0);
+      expect(child.stdout.trim()).toBe("EnvHttpProxyAgent 1.1 1");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+});
 
 describe("ignoreMacosTypeOfServiceEinval", () => {
   const errnoError = (code: string) =>

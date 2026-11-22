@@ -1,5 +1,5 @@
 import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "~/i18n/messages";
 
 export interface FileCommentAnnotationEntry {

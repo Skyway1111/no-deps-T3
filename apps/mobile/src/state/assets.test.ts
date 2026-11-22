@@ -59,8 +59,8 @@ vi.mock("@t3tools/client-runtime/state/runtime", async (importOriginal) => ({
   executeAtomQuery: state.executeQuery,
 }));
 vi.mock("./use-atom-query-runner", () => ({ useAtomQueryRunner: () => state.mint }));
-vi.mock("gt-react-native", async (importOriginal) => {
-  const gt = await importOriginal<typeof import("gt-react-native")>();
+vi.mock("@t3tools/shared/i18n/react", async (importOriginal) => {
+  const gt = await importOriginal<typeof import("@t3tools/shared/i18n/react")>();
   return { ...gt, useMessages: () => gt.mFallback };
 });
 

@@ -18,7 +18,7 @@ import {
   ThreadId,
   type OrchestrationV2Subagent,
 } from "@t3tools/contracts";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
 import {
   createRef,
   Profiler,
@@ -105,7 +105,7 @@ type Entry = TimelineProps["timelineEntries"][number];
 function baseProps(): Omit<TimelineProps, "timelineEntries"> {
   return {
     isWorking: false,
-    listRef: createRef<LegendListRef | null>(),
+    listRef: createRef<VirtualListRef | null>(),
     latestRun: null,
     turnDiffSummaries: [],
     runs: [],
@@ -321,7 +321,7 @@ describe("MessagesTimeline work rows", () => {
       { container },
     );
     const heading = screen.getByRole("button", { name: /^Worked for/ });
-    // LegendList keeps rows click-through until its initial scroll settles on animation
+    // VirtualList keeps rows click-through until its initial scroll settles on animation
     // frames, which the fake clock below would freeze.
     await expect.element(heading).toHaveStyle({ pointerEvents: "auto" });
     const viewport = props.listRef.current!.getScrollableNode()!;
@@ -2242,7 +2242,7 @@ function TimelineChangedFilesCard() {
 
 function ChangedFilesTimeline() {
   return (
-    <LegendList
+    <VirtualList
       data={["files", "after"]}
       keyExtractor={(item) => item}
       estimatedItemSize={100}

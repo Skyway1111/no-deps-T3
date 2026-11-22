@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { translatableMessage } from "../errors/translatable.ts";
 import { remapComposerContextAttachments } from "@t3tools/shared/composerContextReferences";
 import {

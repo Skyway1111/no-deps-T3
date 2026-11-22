@@ -1,4 +1,4 @@
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";

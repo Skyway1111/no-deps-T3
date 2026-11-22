@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import type { PullRequestReviewGuideNote } from "@t3tools/contracts";
 
 import { cn } from "~/lib/utils";

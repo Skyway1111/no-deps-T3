@@ -1,8 +1,8 @@
-import { Toolbar } from "@base-ui/react/toolbar";
+import { Toolbar } from "~/ui-core/primitives";
 import { type ProviderInstanceId } from "@t3tools/contracts";
 import { memo, useLayoutEffect, useRef, useState } from "react";
-import { msg, T, useMessages } from "gt-react";
-import { StarIcon } from "lucide-react";
+import { msg, T, useMessages } from "@t3tools/shared/i18n/react";
+import { StarIcon } from "~/ui-core/icons";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";

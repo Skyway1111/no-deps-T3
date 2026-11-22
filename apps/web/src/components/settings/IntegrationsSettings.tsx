@@ -39,10 +39,10 @@ import {
 import { usePrimaryManagedPolicy } from "~/state/managedPolicy";
 import { isValidSearchUrlTemplate } from "@t3tools/shared/preview";
 import { PREVIEW_VIEWPORT_PRESETS } from "@t3tools/shared/previewViewport";
-import { MoreVertical, Plus as PlusIcon } from "lucide-react";
+import { EllipsisVerticalIcon as MoreVertical, PlusIcon } from "~/ui-core/icons";
 import * as Schema from "effect/Schema";
 import { useRef, useState } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m as resolveNow, type MessageResolver } from "../../i18n/messages";
 
 import { ScreenRotationIcon } from "~/browser/ScreenRotationIcon";

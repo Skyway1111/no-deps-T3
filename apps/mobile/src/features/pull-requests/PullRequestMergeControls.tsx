@@ -7,7 +7,7 @@ import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 import type { PullRequestDetail, PullRequestMergeMethod } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { AsyncResult } from "effect/reactivity";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 import { View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";

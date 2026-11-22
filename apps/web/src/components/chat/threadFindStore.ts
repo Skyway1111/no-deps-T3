@@ -9,7 +9,7 @@ import {
   messagePhrase,
   messageSearchTokens,
 } from "@t3tools/shared/paletteSearch";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 import type { ThemeAppearance } from "~/themePalette";
 import type { ThreadFindPositionReader, ThreadFindStart } from "./threadFind";
 

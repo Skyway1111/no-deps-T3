@@ -6,7 +6,7 @@ import {
   type SnapShotShortcut,
 } from "@t3tools/contracts";
 import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
 import {

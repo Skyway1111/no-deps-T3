@@ -1,6 +1,6 @@
 import { useAuth, useClerk } from "@clerk/react";
 import { readConnectAuthorizeRequest } from "@t3tools/shared/connectAuth";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {

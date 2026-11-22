@@ -8,7 +8,7 @@ import {
   useState,
   type Ref,
 } from "react";
-import { decodeOptions, msg, useGT } from "gt-react-native";
+import { decodeOptions, msg, useGT } from "@t3tools/shared/i18n/react";
 import { Platform, View } from "react-native";
 import { WebView } from "react-native-webview";
 import type { DeviceStreamStatus } from "@t3tools/client-runtime/device/stream";

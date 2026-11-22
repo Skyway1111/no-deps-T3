@@ -25,7 +25,7 @@ import type {
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { hasFeatureFlag } from "@t3tools/client-runtime/state/server";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import {
   CheckIcon,
   ExternalLinkIcon,
@@ -34,7 +34,7 @@ import {
   LockIcon,
   MinusIcon,
   ShieldCheckIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { serverEnvironment } from "../../state/server";

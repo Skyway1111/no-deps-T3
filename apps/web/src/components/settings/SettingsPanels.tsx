@@ -3,9 +3,9 @@ import { m as resolveMessage } from "~/i18n/messages";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
-import { CheckIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { CheckIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { Link, useNavigate } from "~/ui-core/router";
 import { useRef, useState } from "react";
 import {
   type DesktopUpdateChannel,

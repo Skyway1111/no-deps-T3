@@ -1,4 +1,4 @@
-import { T, msg, useGT, useMessages } from "gt-react";
+import { T, msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -6,12 +6,12 @@ import { type EnvironmentId } from "@t3tools/contracts";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { WifiOffIcon } from "lucide-react";
+import { WifiOffIcon } from "~/ui-core/icons";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { environmentCatalog } from "../../connection/catalog";
 import { ConnectionDiagnosisHeadline } from "../settings/ConnectionDiagnosisDetails";

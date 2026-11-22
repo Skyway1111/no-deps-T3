@@ -14,7 +14,7 @@ import {
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "~/i18n/messages";
 import { appAtomRegistry } from "~/rpc/atomRegistry";

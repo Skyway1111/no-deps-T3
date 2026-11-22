@@ -9,12 +9,12 @@ import {
   CopyIcon,
   InboxIcon,
   MessageSquareIcon,
-  MoreHorizontalIcon,
+  EllipsisIcon as MoreHorizontalIcon,
   PencilIcon,
   PlayIcon,
   PlusIcon,
   Trash2Icon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { type ReactNode, useRef, useState } from "react";
 import type {
   EnvironmentId,
@@ -50,7 +50,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useLocale, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../../i18n/messages";
 
 import { formatRelativeTime } from "../../timestampFormat";
@@ -60,7 +60,7 @@ import { providerInstanceEntriesFor } from "../../providerInstances";
 import { usePrimaryCloudLinkState } from "../../cloud/cloudLinkState";
 import { requestConfirmDialog } from "../../confirmDialog";
 import { webhookAddress } from "@t3tools/client-runtime/webhook-address";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "~/ui-core/router";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import {

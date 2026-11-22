@@ -1,55 +1,24 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- Owns Playwright resources and their idle timer outside the Effect runtime.
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- Owns CDP browser resources and their idle timer outside the Effect runtime.
 import { INCOGNITO_BROWSER_PROFILE_ID } from "@t3tools/contracts";
+import {
+  connectOverCdp,
+  launchCdpBrowser,
+  launchPersistentCdpContext,
+  type CdpBrowser as Browser,
+  type CdpBrowserContext as BrowserContext,
+  type CdpContextOptions,
+  type CdpSession as CDPSession,
+} from "@t3tools/shared/cdp";
 import { constVoid } from "effect/Function";
 import * as NodeFSP from "node:fs/promises";
-import * as NodeModule from "node:module";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import type { Browser, BrowserContext, CDPSession } from "playwright-core";
 
 import { sandboxDisabled } from "./PreviewBrowserHost.ts";
 
-// Playwright needs its files on disk. createRequire also resolves it from a Node SEA executable.
-const requirePlaywright = NodeModule.createRequire(import.meta.url);
-const loadPlaywright = () =>
-  requirePlaywright("playwright-core") as typeof import("playwright-core");
-
-const BADGE_STUB = `if (typeof WorkerNavigator === "function") for (const name of ["setAppBadge", "clearAppBadge"]) WorkerNavigator.prototype[name] = () => Promise.resolve();`;
-
-interface CdpSession {
-  send(method: string, params?: object): Promise<unknown>;
-  createChildSession(...args: ReadonlyArray<unknown>): CdpSession;
-}
-
 // The headless shell binds no BadgeService for service workers and kills the renderer of a
-// worker that calls navigator.setAppBadge. Playwright resumes each worker itself, so the stub
-// can only go in ahead of that resume through its in-process session; without it nothing is stubbed.
-const stubWorkerBadges = (client: Browser | BrowserContext) => {
-  const { _connection: connection } = client as unknown as {
-    readonly _connection?: {
-      readonly toImpl?: (
-        client: unknown,
-      ) =>
-        | { readonly _session?: CdpSession; readonly _browser?: { readonly _session?: CdpSession } }
-        | undefined;
-    };
-  };
-  const impl = connection?.toImpl?.(client);
-  const root = impl?._browser?._session ?? impl?._session;
-  if (!root) return;
-  const createChildSession = root.createChildSession.bind(root);
-  root.createChildSession = (...args) => {
-    const session = createChildSession(...args);
-    const send = session.send.bind(session);
-    session.send = (method, params) => {
-      if (method === "Runtime.runIfWaitingForDebugger") {
-        void send("Runtime.evaluate", { expression: BADGE_STUB }).catch(constVoid);
-      }
-      return send(method, params);
-    };
-    return session;
-  };
-};
+// worker that calls navigator.setAppBadge; inject this stub before resuming paused workers.
+const BADGE_STUB = `if (typeof WorkerNavigator === "function") for (const name of ["setAppBadge", "clearAppBadge"]) WorkerNavigator.prototype[name] = () => Promise.resolve();`;
 
 interface Options {
   readonly profilesDir: string;
@@ -183,11 +152,9 @@ export class ServerBrowserContexts {
   private sharedBrowser() {
     if (!this.browser) {
       const launched = this.launchOptions().then(async ({ executable, ...options }) => {
-        const { chromium } = loadPlaywright();
         const browser = await this.launch(executable, (executablePath) =>
-          chromium.launch({ ...options, executablePath }),
+          launchCdpBrowser({ ...options, executablePath, workerInitScript: BADGE_STUB }),
         );
-        stubWorkerBadges(browser);
         browser.on("disconnected", () => {
           if (this.browser === launched) this.browser = undefined;
         });
@@ -201,7 +168,7 @@ export class ServerBrowserContexts {
     return this.browser;
   }
 
-  private async sharedContext(options?: Parameters<Browser["newContext"]>[0]) {
+  private async sharedContext(options?: CdpContextOptions) {
     clearTimeout(this.idleTimer);
     this.pendingSharedContexts++;
     const launched = this.sharedBrowser();
@@ -267,16 +234,14 @@ export class ServerBrowserContexts {
     const directory = this.profileDirectory(profileId);
     await NodeFSP.mkdir(directory, { recursive: true });
     const { executable, ...options } = await this.launchOptions();
-    const { chromium } = loadPlaywright();
-    const context = await this.launch(executable, (executablePath) =>
-      chromium.launchPersistentContext(directory, {
+    return this.launch(executable, (executablePath) =>
+      launchPersistentCdpContext(directory, {
         ...options,
         ...contextOptions,
         executablePath,
+        workerInitScript: BADGE_STUB,
       }),
     );
-    stubWorkerBadges(context);
-    return context;
   }
 
   private profileDirectory(profileId: string) {
@@ -301,9 +266,7 @@ export class ServerBrowserContexts {
   }
 
   async connectDesktopPage(endpoint: string) {
-    const { chromium } = loadPlaywright();
-    // Only a same-machine desktop backend gets the browser channel, so uploads can pass file paths.
-    const browser = await chromium.connectOverCDP(endpoint, { isLocal: true, timeout: 15_000 });
+    const browser = await connectOverCdp(endpoint, { timeout: 15_000 });
     const page = browser.contexts().flatMap((context) => context.pages())[0];
     if (!page) {
       await browser.close().catch(constVoid);

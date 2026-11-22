@@ -1,5 +1,5 @@
 import type { Action } from "expo-quick-actions";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { NavigationState } from "@react-navigation/native";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 

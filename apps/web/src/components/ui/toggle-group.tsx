@@ -1,6 +1,8 @@
-import type { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
-import { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group";
-import type { VariantProps } from "class-variance-authority";
+import {
+  type Toggle as TogglePrimitive,
+  ToggleGroup as ToggleGroupPrimitive,
+} from "~/ui-core/primitives";
+import type { VariantProps } from "@t3tools/shared/ui/twMerge";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";

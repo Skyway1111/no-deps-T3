@@ -25,7 +25,7 @@ import {
   isUsageLimitsCommand,
 } from "@t3tools/shared/usageLimits";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import { Keyboard, Platform, View } from "react-native";

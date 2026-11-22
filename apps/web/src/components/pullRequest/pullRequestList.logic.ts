@@ -1,5 +1,5 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { resolvePullRequestAuthorFilter } from "@t3tools/contracts";
 import type {

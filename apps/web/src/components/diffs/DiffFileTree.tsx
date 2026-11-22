@@ -1,7 +1,7 @@
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
-import { T, useGT } from "gt-react";
-import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "~/ui-core/icons";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";

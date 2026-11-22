@@ -1,4 +1,4 @@
-import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import { Tooltip as TooltipPrimitive } from "~/ui-core/popups";
 import {
   createContext,
   use,

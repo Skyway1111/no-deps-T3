@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { MarkedText, messageFromError, translatableMessage } from "../errors/translatable.ts";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";

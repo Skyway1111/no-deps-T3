@@ -1,4 +1,4 @@
-import { T, msg, useGT, useMessages } from "gt-react";
+import { T, msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { type MessageResolver } from "~/i18n/messages";
 import { type WorktreeSetupSnapshot, type WorktreeSetupStage } from "@t3tools/contracts";
 import { worktreeSetupStageLabel } from "@t3tools/client-runtime/contract-labels";
@@ -13,7 +13,7 @@ import {
   XIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";

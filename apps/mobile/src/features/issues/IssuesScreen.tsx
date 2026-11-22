@@ -19,7 +19,7 @@ import type {
   IssueListState,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { use, useRef, useState, type ReactNode } from "react";
 import { Keyboard, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

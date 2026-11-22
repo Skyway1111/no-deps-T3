@@ -1,62 +1,41 @@
-import { joinTextblockBackward, joinTextblockForward } from "@tiptap/pm/commands";
-import {
-  Fragment,
-  Mark,
-  type MarkType,
-  type Node as ProseMirrorNode,
-  type ResolvedPos,
-} from "@tiptap/pm/model";
-import {
-  Bold,
-  starInputRegex as boldStarInputRegex,
-  underscoreInputRegex as boldUnderscoreInputRegex,
-} from "@tiptap/extension-bold";
-import { Code } from "@tiptap/extension-code";
-import { Blockquote } from "@tiptap/extension-blockquote";
-import { CodeBlock } from "@tiptap/extension-code-block";
-import { Heading } from "@tiptap/extension-heading";
-import { HorizontalRule } from "@tiptap/extension-horizontal-rule";
-import { Italic, starInputRegex, starPasteRegex } from "@tiptap/extension-italic";
-import {
-  combineTransactionSteps,
-  getChangedRanges,
-  type Command,
-  type Editor,
-  InputRule,
-  markInputRule,
-  markPasteRule,
-  mergeAttributes,
-} from "@tiptap/core";
-import { isHistoryTransaction } from "@tiptap/pm/history";
-import { canJoin, findWrapping } from "@tiptap/pm/transform";
-import { BulletList, ListItem, OrderedList } from "@tiptap/extension-list";
-import { Strike, inputRegex as strikeInputRegex } from "@tiptap/extension-strike";
-import { TaskItem } from "@tiptap/extension-task-item";
-import { TaskList } from "@tiptap/extension-task-list";
-import {
-  type EditorState,
-  Plugin,
-  PluginKey,
-  Selection,
-  TextSelection,
-  type Transaction,
-} from "@tiptap/pm/state";
-import { ReplaceStep } from "@tiptap/pm/transform";
+import { composerMathRanges } from "@t3tools/shared/composerInlineTokens";
 
+import {
+  type ComposerBlock,
+  type ComposerChip,
+  type ComposerDoc,
+  type ComposerEditResult,
+  type ComposerEditorState,
+  type ComposerInline,
+  type LinePrefix,
+  MARK_ORDER,
+  collapsedSelection,
+  computeFlatBlockSpans,
+  deriveFlatBlockSpans,
+  inlineAfterOffset,
+  inlineBeforeOffset,
+  inlineFlatLength,
+  isChipInline,
+  isListPrefix,
+  isPlainParagraph,
+  isTrailingEmptyParagraphAfterRule,
+  normalizeInlines,
+  readChipSource,
+  resolveFlatOffset,
+  sameMarkSet,
+  selectionEmpty,
+  selectionFrom,
+  selectionTo,
+  sliceInlines,
+  sortMarks,
+} from "~/components/composer/types";
 import { splitPromptIntoComposerSegments } from "~/composer-editor-mentions";
 import { nextOrderedMarkerText } from "~/composer-list-continuation";
-import {
-  MARKDOWN_SOURCE_MARK,
-  parseInlineMarkdown,
-  RICH_TEXT_DELIMITERS,
-  type RichTextMark,
-} from "~/composer-rich-text";
+import { parseInlineMarkdown, RICH_TEXT_DELIMITERS, type RichTextMark } from "~/composer-rich-text";
 import { collectInlineContextIds } from "~/lib/composerContextReferences";
-import { composerMathRanges } from "@t3tools/shared/composerInlineTokens";
 import { markdownMathRanges } from "~/markdown/wordsHast";
 
 export type SkillMeta = { label: string; description: string | null };
-
 export type IsKnownModel = (instanceId: string, model: string) => boolean;
 
 interface ChipResolver {
@@ -65,573 +44,37 @@ interface ChipResolver {
 }
 
 const NO_MODELS: IsKnownModel = () => false;
-
-const MARK_NESTING_ORDER: RichTextMark[] = ["strike", "bold", "italic", "code"];
-
-const MARK_TO_TIPTAP: Record<RichTextMark, string> = {
-  bold: "bold",
-  italic: "italic",
-  strike: "strike",
-  code: "code",
-};
-
-const TIPTAP_TO_MARK: Record<string, RichTextMark> = {
-  bold: "bold",
-  italic: "italic",
-  strike: "strike",
-  code: "code",
-};
-
-type CodePair = { from: number; to: number };
-
-const codePairKey = new PluginKey<CodePair[]>("typedBacktickPairs");
-
-// Input rules only see text before the caret, so filling an already typed
-// pair needs a separate exit handler. Only typed pairs opt into that handler.
-function codePairCaretPlugin(type: MarkType) {
-  return new Plugin<CodePair[]>({
-    key: codePairKey,
-    state: {
-      init: () => [],
-      apply(tr, pairs) {
-        const mapped = pairs.flatMap((pair) => {
-          const from = tr.mapping.mapResult(pair.from, 1);
-          const to = tr.mapping.mapResult(pair.to, -1);
-          return from.deleted || to.deleted ? [] : [{ from: from.pos, to: to.pos }];
-        });
-        const typed = (tr.getMeta(codePairKey) as CodePair | undefined) ?? composedCodePair(tr);
-        return typed ? [...mapped, typed] : mapped;
-      },
-    },
-    props: {
-      handleTextInput(view, from, to, text, insert) {
-        if (view.composing || from !== to || text !== "`") return false;
-        const $from = view.state.doc.resolve(from);
-        if (!$from.parent.isTextblock || $from.parent.type.spec.code) return false;
-        if (touchesMarkdownSource(view.state, from, to)) return false;
-        const before = $from.nodeBefore?.text ?? "";
-        if (closesBacktickPair($from)) {
-          view.dispatch(insert().setMeta(codePairKey, { from: from - 1, to: from + 1 }));
-          return true;
-        }
-        if (before.endsWith("`")) return false;
-
-        // The opening tick can be typed after the closing one. Input rules
-        // cannot recognize that pair because they only read before the caret.
-        const after = $from.parent.textBetween(
-          $from.parentOffset,
-          $from.parent.content.size,
-          "\n",
-          "\n",
-        );
-        const match = /^([^`\n]+)`(?!`)/.exec(after);
-        if (!match) return false;
-        const end = from + match[1]!.length;
-        let plain = true;
-        view.state.doc.nodesBetween(from, end + 1, (node) => {
-          if (node.isInline && (!node.isText || node.marks.length > 0)) plain = false;
-        });
-        if (!plain) return false;
-        const tr = insert()
-          .delete(end + 1, end + 2)
-          .delete(from, from + 1);
-        tr.addMark(from, end, type.create());
-        tr.setSelection(TextSelection.create(tr.doc, from));
-        tr.addStoredMark(type.create());
-        view.dispatch(tr);
-        return true;
-      },
-    },
-    appendTransaction(transactions, oldState, state) {
-      if (!state.selection.empty || oldState.selection.from === state.selection.from) return null;
-      if (transactions.some((tr) => tr.docChanged)) return null;
-      const pair = codePairKey.getState(state)?.find(({ to }) => to === state.selection.from);
-      if (!pair) return null;
-      const $start = state.doc.resolve(pair.from);
-      const $end = state.selection.$from;
-      if (!$start.sameParent($end) || $start.parent.type.spec.code) return null;
-      if (
-        $start.nodeBefore?.text?.endsWith("`") ||
-        $end.nodeAfter?.text?.startsWith("`") ||
-        !/^`[^`]+`$/.test(state.doc.textBetween(pair.from, pair.to))
-      ) {
-        return null;
-      }
-      let plain = true;
-      state.doc.nodesBetween(pair.from, pair.to, (node) => {
-        if (node.isInline && (!node.isText || node.marks.length > 0)) plain = false;
-      });
-      if (!plain) return null;
-      const tr = state.tr.delete(pair.to - 1, pair.to).delete(pair.from, pair.from + 1);
-      tr.addMark(pair.from, pair.to - 2, type.create());
-      tr.setSelection(TextSelection.create(tr.doc, pair.to - 2));
-      tr.removeStoredMark(type);
-      return tr;
-    },
-  });
-}
-
-/**
- * Whether a backtick typed at `$pos` would complete an empty `` pair. The
- * backtick before `$pos` only opens one when earlier backticks are all paired.
- */
-function closesBacktickPair($pos: ResolvedPos): boolean {
-  return (
-    $pos.parent.isTextblock &&
-    !$pos.parent.type.spec.code &&
-    /(^|[^`])`$/.test($pos.nodeBefore?.text ?? "") &&
-    literalBackticksBefore($pos) % 2 === 1
-  );
-}
-
-/**
- * Layouts where backtick is a dead key type it through composition, and the
- * pair handler above skips composing input. Read the pair
- * from the composed insert instead; dispatching mid-composition would break it.
- */
-function composedCodePair(tr: Transaction): CodePair | undefined {
-  if (tr.getMeta("composition") === undefined || tr.steps.length !== 1) {
-    return undefined;
-  }
-
-  const step = tr.steps[0];
-  if (!(step instanceof ReplaceStep) || step.from !== step.to || step.slice.size !== 1) {
-    return undefined;
-  }
-
-  if (step.slice.content.firstChild?.text !== "`") {
-    return undefined;
-  }
-
-  if (!closesBacktickPair(tr.before.resolve(step.from))) {
-    return undefined;
-  }
-
-  return { from: step.from - 1, to: step.from + 1 };
-}
-
-/**
- * Tiptap's code mark excludes every other mark, which rejects the `bold+code`
- * spans markdown like `**\`x\`**` parses into and drops the whole insert.
- */
-export const ComposerCodeExtension = Code.extend({
-  excludes: "code",
-  // The forward arrow leaves code through the caret stops at styled edges, so
-  // the stock exit (inserting a space at the end of a line) is not needed.
-  exitable: false,
-  // Code reads left to right inside an Arabic or Hebrew line, and the isolate
-  // keeps its punctuation from trading places with the text around it.
-  addOptions() {
-    return { ...this.parent!(), HTMLAttributes: { dir: "ltr" } };
-  },
-  addProseMirrorPlugins() {
-    return [...(this.parent?.() ?? []), codePairCaretPlugin(this.type)];
-  },
-  // Tiptap's rule reads back from the caret, so after a literal `enabled` the
-  // next typed backtick would reuse its closing backtick and wrap ` and ` in
-  // code. Backticks pair left to right, so skip an opener that closes a pair.
-  addInputRules() {
-    return (this.parent?.() ?? []).map(
-      (rule) =>
-        new InputRule({
-          find: rule.find,
-          undoable: rule.undoable,
-          handler: (props) => {
-            if (
-              literalBackticksBefore(props.state.doc.resolve(props.range.from)) % 2 === 1 ||
-              touchesMarkdownSource(props.state, props.range.from, props.range.to)
-            ) {
-              return null;
-            }
-
-            return rule.handler(props);
-          },
-        }),
-    );
-  },
-});
-
-/** Counts backticks typed as plain text before `$pos` in its textblock; code text never pairs. */
-function literalBackticksBefore($pos: ResolvedPos): number {
-  let count = 0;
-  $pos.parent.forEach((node, offset) => {
-    if (offset >= $pos.parentOffset) return;
-    if (!node.isText) {
-      count = 0;
-      return;
-    }
-    if (node.marks.some((mark) => mark.type.spec.code)) return;
-
-    const text = node.text!.slice(0, $pos.parentOffset - offset);
-    count += [...text.matchAll(/(?<!`)`(?!`)/g)].length;
-  });
-  return count;
-}
-
-/**
- * Whether `from`-`to`, or the caret at `from`, is in shown Markdown source.
- * Typed delimiters there stay text until the caret leaves and the source is parsed.
- */
-function touchesMarkdownSource(state: EditorState, from: number, to: number): boolean {
-  const type = state.schema.marks[MARKDOWN_SOURCE_MARK];
-  if (!type) return false;
-  if (from < to) return state.doc.rangeHasMark(from, to, type);
-  const $pos = state.doc.resolve(from);
-  return [$pos.nodeBefore, $pos.nodeAfter].some((node) => node && type.isInSet(node.marks));
-}
-
-// Code permits nested emphasis, so Tiptap's exclusion check cannot protect literal delimiters.
-function markInputRuleOutsideCode(find: RegExp, type: MarkType) {
-  const rule = markInputRule({ find, type });
-  return new InputRule({
-    find,
-    handler: (props) => {
-      const { state, range, match } = props;
-      const code = state.schema.marks.code;
-      const content = match[match.length - 1] ?? "";
-      const textStart = range.from + match[0].indexOf(content);
-      const textEnd = textStart + content.length;
-      if (touchesMarkdownSource(state, range.from, range.to)) return null;
-      if (
-        code &&
-        (state.doc.rangeHasMark(range.from + match[0].search(/\S/), textStart, code) ||
-          state.doc.rangeHasMark(textEnd, state.selection.from, code))
-      ) {
-        return null;
-      }
-      return rule.handler(props);
-    },
-  });
-}
-
-const SURROUND_MARKS: Record<string, string> = { "`": "code", "*": "italic", _: "italic" };
-
-export function surroundSelectionWithMark(
-  state: EditorState,
-  from: number,
-  to: number,
-  marker: string,
-) {
-  const markType = state.schema.marks[SURROUND_MARKS[marker] ?? ""];
-  if (!markType || touchesMarkdownSource(state, from, to)) return null;
-  const $from = state.doc.resolve(from);
-  if (!$from.sameParent(state.doc.resolve(to)) || !$from.parent.type.allowsMarkType(markType)) {
-    return null;
-  }
-  // Inline markdown cannot span lines, so keep literal wrapping across hard breaks.
-  let crossesLine = false;
-  state.doc.nodesBetween(from, to, (node) => {
-    if (node.type.name === "hardBreak") crossesLine = true;
-    return !crossesLine;
-  });
-  if (crossesLine) return null;
-  const tr = state.tr.addMark(from, to, markType.create());
-  // Nearby delimiters can change how the saved span parses. Atoms are opaque
-  // to inline markdown, so use a placeholder instead of parsing their sources.
-  const children: ProseMirrorNode[] = [];
-  tr.doc.resolve(from).parent.forEach((node) => {
-    children.push(
-      node.isAtom && !node.isText && node.type.name !== "hardBreak"
-        ? state.schema.text("\uFFFC", node.marks)
-        : node,
-    );
-  });
-  const paragraph = state.schema.nodes.paragraph!.create(null, children);
-  const markdown = serializeEditorDoc(state.doc.type.create(null, paragraph)).value;
-  const rebuilt = buildTiptapContent(markdown, () => null, { blocks: false });
-  const restored = state.schema.nodeFromJSON({ type: "doc", content: rebuilt });
-  return paragraph.content.eq(restored.firstChild!.content) ? tr : null;
-}
-
-/**
- * The composer writes italic as `*text*`, so it keeps only the `*` shortcuts.
- * Tiptap's `_text_` rules fire on the `_` in names like `node_modules` and
- * italicize back to an earlier `_build`, even one inside a code span.
- */
-export const ComposerItalicExtension = Italic.extend({
-  addInputRules() {
-    return [markInputRuleOutsideCode(starInputRegex, this.type)];
-  },
-  addPasteRules() {
-    return [markPasteRule({ find: starPasteRegex, type: this.type })];
-  },
-});
-
-export const ComposerBoldExtension = Bold.extend({
-  addInputRules() {
-    return [
-      markInputRuleOutsideCode(boldStarInputRegex, this.type),
-      markInputRuleOutsideCode(boldUnderscoreInputRegex, this.type),
-    ];
-  },
-});
-
-export const ComposerStrikeExtension = Strike.extend({
-  addInputRules() {
-    return [markInputRuleOutsideCode(strikeInputRegex, this.type)];
-  },
-});
-
-/**
- * Tiptap's block chords can nest blocks inside quotes that the serializer cannot write,
- * silently dropping their text from stored drafts.
- */
-function withoutBlockChords<Shortcuts extends Record<string, unknown>>(
-  shortcuts: Shortcuts | undefined,
-  drop: readonly string[],
-): Shortcuts {
-  return Object.fromEntries(
-    Object.entries(shortcuts ?? {}).filter(([key]) => !drop.includes(key)),
-  ) as Shortcuts;
-}
-
-// Markdown supports one paragraph followed by nested lists per item.
-const LIST_ITEM_CONTENT = "paragraph list*";
-
-/** Task lists come from `- [ ]` alone; Mod-Shift-9 would nest one in a quote. */
-export const ComposerTaskListExtension = TaskList.extend({
-  addKeyboardShortcuts() {
-    return withoutBlockChords(this.parent?.(), ["Mod-Shift-9"]);
-  },
-});
-
-/** Tiptap's nesting shortcuts leave indent unchanged, so rebuilding the draft undoes them. */
-const LIST_NESTING_KEYS = ["Tab", "Shift-Tab"];
-
-export const ComposerTaskItemExtension = TaskItem.extend({
-  content: LIST_ITEM_CONTENT,
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      indent: { default: "" },
-      markerSpace: { default: " " },
-      contentSpace: { default: null },
-    };
-  },
-  addKeyboardShortcuts() {
-    return withoutBlockChords(this.parent?.(), LIST_NESTING_KEYS);
-  },
-}).configure({ nested: true });
-
-export const ComposerCodeBlockExtension = CodeBlock.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      language: { default: "" },
-      fence: { default: "```" },
-      close: { default: "\n```" },
-    };
-  },
-  addKeyboardShortcuts() {
-    return {
-      ...withoutBlockChords(this.parent?.(), ["Mod-Alt-c"]),
-      Backspace: () => unwrapCodeBlockAtStart(this.editor),
-    };
-  },
-});
-
-// Joining with the previous line would lose the fence and leave stray code lines.
-function unwrapCodeBlockAtStart(editor: Editor): boolean {
-  const { $from, empty } = editor.state.selection;
-  if (!empty || $from.parent.type.name !== "codeBlock" || $from.parentOffset !== 0) return false;
-  const { schema } = editor.state;
-  const paragraphs = $from.parent.textContent
-    .split("\n")
-    .map((line) => schema.nodes.paragraph!.create(null, line ? schema.text(line) : null));
-  const start = $from.before();
-  const tr = editor.state.tr.replaceWith(start, $from.after(), paragraphs);
-  editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, start + 1)));
-  return true;
-}
-
-function codeBlockSource(
-  node: ProseMirrorNode,
-  followed: boolean,
-): {
-  open: string;
-  content: string;
-  close: string;
-} {
-  const attrs = node.attrs as Record<string, unknown>;
-  let fence = typeof attrs.fence === "string" && attrs.fence ? attrs.fence : "```";
-  const language = typeof attrs.language === "string" ? attrs.language : "";
-  let close = typeof attrs.close === "string" ? attrs.close : "";
-  const content = node.textContent;
-  // Use a longer fence when code contains a closing fence.
-  const longest = Math.max(
-    0,
-    ...content
-      .split("\n")
-      .filter((line) => isClosingFence(line, fence))
-      .map((line) => /^[`~]+/.exec(line)![0].length),
-  );
-  if (longest > 0) {
-    fence = fence[0]!.repeat(longest + 1);
-    if (close) close = `\n${fence}`;
-  }
-  // Close before a following block so rebuilding does not absorb it as code.
-  if (!close && followed) close = `\n${fence}`;
-  return { open: `${fence}${language}${content ? "\n" : ""}`, content, close };
-}
-
-const ComposerListItemExtension = ListItem.extend({
-  content: LIST_ITEM_CONTENT,
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      indent: { default: "" },
-      marker: { default: "-" },
-      space: { default: " " },
-    };
-  },
-  addKeyboardShortcuts() {
-    return {
-      ...withoutBlockChords(this.parent?.(), LIST_NESTING_KEYS),
-      // Replacing Tiptap's Backspace drops its undoInputRule, which keeps a just-typed "+ " literal.
-      Backspace: () => this.editor.commands.undoInputRule() || backspaceAcrossList(this.editor),
-      Delete: () => deleteAcrossList(this.editor),
-    };
-  },
-  // ProseMirror can reuse the parent list when only an item's marker changes.
-  // Item metadata lets CSS resize its gutter through CommonMark's nine-digit limit.
-  renderHTML({ node, HTMLAttributes }) {
-    const marker = String(node.attrs.marker);
-    return [
-      "li",
-      mergeAttributes(HTMLAttributes, {
-        "data-marker": marker,
-        "data-marker-width": Math.min(marker.length, 10),
-      }),
-      0,
-    ];
-  },
-});
-
-export const ComposerListExtensions = [
-  BulletList.extend({
-    addProseMirrorPlugins() {
-      return [
-        ...(this.parent?.() ?? []),
-        listNormalizationPlugin(() => this.editor.view.composing),
-      ];
-    },
-    addKeyboardShortcuts() {
-      return withoutBlockChords(this.parent?.(), ["Mod-Shift-8"]);
-    },
-  }),
-  OrderedList.extend({
-    addKeyboardShortcuts() {
-      return withoutBlockChords(this.parent?.(), ["Mod-Shift-7"]);
-    },
-  }),
-  ComposerListItemExtension,
-];
-
-const ComposerBlockquoteExtension = Blockquote.extend({
-  content: "paragraph+",
-  addAttributes() {
-    return { ...this.parent?.(), prefix: { default: "> " } };
-  },
-  addKeyboardShortcuts() {
-    return withoutBlockChords(this.parent?.(), ["Mod-Shift-b"]);
-  },
-});
-
-const ComposerHorizontalRuleExtension = HorizontalRule.extend({
-  addAttributes() {
-    return { ...this.parent?.(), source: { default: "---" } };
-  },
-  addProseMirrorPlugins() {
-    return [
-      ...(this.parent?.() ?? []),
-      new Plugin({
-        appendTransaction: (transactions, _, state) => {
-          if (!transactions.some((tr) => tr.docChanged)) return null;
-          if (state.doc.lastChild?.type.name !== "horizontalRule") return null;
-          return state.tr.insert(state.doc.content.size, state.schema.nodes.paragraph!.create());
-        },
-      }),
-    ];
-  },
-});
-
-function isTrailingLineAfterRule(doc: ProseMirrorNode, index: number): boolean {
-  const block = doc.child(index);
-  return (
-    index === doc.childCount - 1 &&
-    index > 0 &&
-    block.type.name === "paragraph" &&
-    block.content.size === 0 &&
-    doc.child(index - 1).type.name === "horizontalRule"
-  );
-}
-
-const ComposerHeadingExtension = Heading.extend({
-  addAttributes() {
-    return { ...this.parent?.(), space: { default: " " } };
-  },
-  addKeyboardShortcuts() {
-    return {};
-  },
-});
-
-export const ComposerBlockExtensions = [
-  ComposerBlockquoteExtension,
-  ComposerHorizontalRuleExtension,
-  ComposerHeadingExtension,
-];
-
-function randomNodeKey(): string {
-  return `tiptap-${Math.random().toString(36).slice(2)}`;
-}
-
-interface TaskLinePrefix {
-  indent: string;
-  checked: boolean;
-  markerSpace: string;
-  contentSpace: string;
-}
-
-function parseTaskPrefix(head: string): { prefix: TaskLinePrefix; markerLength: number } | null {
-  const match = head.match(/^([ \t]*)-([ \t]+)\[([ xX])\]([ \t]*)/);
-  if (!match) return null;
-  const after = head.slice(match[0].length);
-  if (after.length > 0 && !match[4]) return null;
-  return {
-    prefix: {
-      indent: match[1] ?? "",
-      checked: (match[3] ?? " ").toLowerCase() === "x",
-      markerSpace: match[2]!,
-      contentSpace: match[4]!,
-    },
-    markerLength: match[0].length,
-  };
-}
+const randomCiteKey = () => `cite-${Math.random().toString(36).slice(2)}`;
 
 export function parseOpeningFence(line: string): { fence: string; language: string } | null {
-  // Unlike `.`, `[^\n]` accepts the stored \r in CRLF lines.
   const match = /^(`{3,}|~{3,})([^\n]*)$/.exec(line);
   if (!match) return null;
-  const fence = match[1]!;
-  const language = match[2]!;
-  if (fence.startsWith("`") && language.includes("`")) return null;
-  return { fence, language };
+  const [, fence, language] = match;
+  if (fence!.startsWith("`") && language!.includes("`")) return null;
+  return { fence: fence!, language: language! };
 }
 
 export function isClosingFence(line: string, fence: string): boolean {
   const match = /^(`{3,}|~{3,})[ \t]*\r?$/.exec(line);
-  if (!match) return false;
-  const run = match[1]!;
-  return run[0] === fence[0] && run.length >= fence.length;
+  return match !== null && match[1]![0] === fence[0] && match[1]!.length >= fence.length;
 }
 
-type ListLinePrefix =
-  | ({ kind: "task" } & TaskLinePrefix)
-  | { kind: "bullet" | "ordered"; indent: string; marker: string; space: string };
-
-function parseListPrefix(line: string): { prefix: ListLinePrefix; markerLength: number } | null {
-  const task = parseTaskPrefix(line);
-  if (task) return { prefix: { kind: "task", ...task.prefix }, markerLength: task.markerLength };
+export function parseListPrefix(
+  line: string,
+): { prefix: Extract<LinePrefix, { kind: "bullet" | "ordered" | "task" }>; markerLength: number } | null {
+  const task = /^([ \t]*)-([ \t]+)\[([ xX])\]([ \t]*)/.exec(line);
+  if (task && (line.length === task[0].length || task[4])) {
+    return {
+      prefix: {
+        kind: "task",
+        indent: task[1]!,
+        checked: task[3]!.toLowerCase() === "x",
+        markerSpace: task[2]!,
+        contentSpace: task[4]!,
+      },
+      markerLength: task[0].length,
+    };
+  }
   const ordered = /^([ \t]*)(\d+[.)])((?:[ \t]+)|$)/.exec(line);
   if (ordered) {
     return {
@@ -649,544 +92,199 @@ function parseListPrefix(line: string): { prefix: ListLinePrefix; markerLength: 
   return null;
 }
 
-/** Only changed top-level paragraphs can acquire a literal list prefix outside an input rule. */
-function listNormalizationPlugin(isComposing: () => boolean) {
-  let pending = new Set<number>();
-  const key = new PluginKey("composerListNormalization");
-  return new Plugin({
-    key,
-    props: {
-      handleDOMEvents: {
-        // ProseMirror tags the DOM flush after compositionend as composition, so nothing else would normalize.
-        compositionend(view) {
-          setTimeout(() => {
-            if (!view.isDestroyed && !view.composing && pending.size > 0) {
-              view.dispatch(view.state.tr);
-            }
-          });
-          return false;
-        },
-      },
-    },
-    appendTransaction(transactions, oldState, state) {
-      // Tiptap's undoInputRule (Backspace right after a rule) restores the typed text on purpose.
-      const undoesInputRule = oldState.plugins.some(
-        (plugin) => plugin.spec.isInputRules && plugin.getState(oldState),
-      );
-      if (undoesInputRule || transactions.some(isHistoryTransaction)) {
-        pending.clear();
-        return null;
-      }
-      if (pending.size === 0 && !transactions.some((tr) => tr.docChanged)) return null;
-      const changes = combineTransactionSteps(oldState.doc, [...transactions]);
-      pending = new Set(
-        [...pending].flatMap((pos) => {
-          const mapped = changes.mapping.mapResult(pos, 1);
-          return mapped.deleted ? [] : [mapped.pos];
-        }),
-      );
-      for (const { newRange } of getChangedRanges(changes)) {
-        state.doc.nodesBetween(newRange.from, newRange.to, (node, pos) => {
-          if (node.type.name !== "paragraph") return false;
-          const parsed = parseListPrefix(paragraphText(node));
-          // Typing after a marker left literal keeps it literal; only an edit reaching the marker converts.
-          if (parsed && newRange.from <= pos + 1 + parsed.markerLength) pending.add(pos);
-          return false;
-        });
-      }
-      // The next non-composition transaction can normalize after the browser finishes its DOM edits.
-      if (isComposing() || transactions.some((tr) => tr.getMeta("composition") != null))
-        return null;
-
-      const tr = state.tr;
-      for (const pos of [...pending].sort((a, b) => b - a)) {
-        pending.delete(pos);
-        if (state.doc.resolve(pos).depth !== 0) continue;
-        const node = state.doc.nodeAt(pos);
-        if (node?.type.name !== "paragraph") continue;
-        const text = paragraphText(node);
-        const parsed = parseListPrefix(text);
-        // Input rules only introduce unindented top-level lists; keep the same boundary here.
-        if (!parsed || parsed.prefix.indent) continue;
-        const { prefix, markerLength } = parsed;
-        if (
-          Object.values(state.schema.marks).some((mark) => node.rangeHasMark(0, markerLength, mark))
-        )
-          continue;
-        const active = state.selection.$from.depth === 1 && state.selection.$from.before(1) === pos;
-        const content = text.slice(markerLength);
-        // Keep `- ` and unfinished task markers literal while the user is entering the gesture.
-        if (
-          active &&
-          (prefix.kind === "task"
-            ? !prefix.contentSpace
-            : prefix.kind === "bullet" &&
-              prefix.marker === "-" &&
-              (!content || /^\[(?:[ xX]\]?)?$/.test(content)))
-        ) {
-          pending.add(pos);
-          continue;
-        }
-        if (prefix.kind !== "task" && !prefix.space) continue;
-        const listType =
-          state.schema.nodes[
-            prefix.kind === "task"
-              ? "taskList"
-              : prefix.kind === "ordered"
-                ? "orderedList"
-                : "bulletList"
-          ];
-        if (!listType) continue;
-        const attrs =
-          prefix.kind === "ordered" ? { start: Number.parseInt(prefix.marker, 10) || 1 } : {};
-        const $from = tr.doc.resolve(pos + 1);
-        const range = $from.blockRange();
-        const wrapping = range && findWrapping(range, listType, attrs);
-        if (!range || !wrapping) continue;
-        tr.wrap(range, wrapping);
-        tr.setNodeMarkup(
-          pos + 1,
-          undefined,
-          prefix.kind === "task"
-            ? {
-                checked: prefix.checked,
-                indent: prefix.indent,
-                markerSpace: prefix.markerSpace,
-                contentSpace: prefix.contentSpace,
-              }
-            : { indent: prefix.indent, marker: prefix.marker, space: prefix.space },
-        );
-        tr.delete(pos + 3, pos + 3 + markerLength);
-        joinCompatibleLists(tr, pos + tr.doc.nodeAt(pos)!.nodeSize);
-        joinCompatibleLists(tr, pos);
-      }
-      pending = new Set([...pending].map((pos) => tr.mapping.map(pos, 1)));
-      return tr.docChanged ? tr : null;
-    },
-  });
-}
-
-function paragraphText(node: ProseMirrorNode): string {
-  return node.textBetween(0, node.content.size, undefined, "\ufffc");
-}
-
-/** Rebuilding from Markdown merges adjacent lists of one type whose markers share a delimiter. */
-function joinCompatibleLists(tr: Transaction, pos: number): void {
-  const $pos = tr.doc.resolve(pos);
-  const before = $pos.nodeBefore;
-  const after = $pos.nodeAfter;
-  const delimiter = (list: ProseMirrorNode) =>
-    String(list.firstChild?.attrs.marker ?? "").slice(-1);
-  if (
-    before &&
-    after &&
-    before.type === after.type &&
-    delimiter(before) === delimiter(after) &&
-    canJoin(tr.doc, pos)
-  ) {
-    tr.join(pos);
-  }
-}
-
-function listKey(prefix: ListLinePrefix): string {
-  if (prefix.kind === "task") return "task";
-  if (prefix.kind === "ordered") return `ordered:${prefix.marker.slice(-1)}`;
-  return `bullet:${prefix.marker}`;
-}
-
-type InlineJson = Record<string, unknown>;
-type AtomJson = { type: string; attrs: Record<string, unknown> };
-
-interface DocLine {
-  list: ListLinePrefix | null;
-  inline: InlineJson[];
-}
-
-/** Null for a `$name` or `model:` reference the resolver does not know: it stays editable text. */
-function atomJsonForSegment(
+function chipForSegment(
   segment: Exclude<ReturnType<typeof splitPromptIntoComposerSegments>[number], { type: "text" }>,
   chips: ChipResolver,
-): AtomJson | null {
-  if (segment.type === "mention") {
-    return {
-      type: "composer-mention",
-      attrs: { path: segment.path, source: segment.source },
-    };
-  }
+): ComposerChip | null {
+  if (segment.type === "mention") return { kind: "composer-mention", path: segment.path, source: segment.source };
   if (segment.type === "skill") {
     const meta = chips.skill(segment.name);
-    if (!meta) return null;
-    return {
-      type: "composer-skill",
-      attrs: {
-        skillName: segment.name,
-        skillLabel: meta.label,
-        skillDescription: meta.description,
-      },
-    };
+    return meta ? { kind: "composer-skill", skillName: segment.name, skillLabel: meta.label, skillDescription: meta.description } : null;
   }
   if (segment.type === "model") {
-    if (!chips.model(segment.instanceId, segment.model)) return null;
-    return {
-      type: "composer-model",
-      attrs: { instanceId: segment.instanceId, model: segment.model, source: segment.source },
-    };
+    return chips.model(segment.instanceId, segment.model)
+      ? { kind: "composer-model", instanceId: segment.instanceId, model: segment.model, source: segment.source }
+      : null;
   }
   if (segment.type === "citation") {
-    return {
-      type: "composer-citation",
-      attrs: { citation: segment.citation, source: segment.source, citeKey: randomNodeKey() },
-    };
+    return { kind: "composer-citation", citation: segment.citation, source: segment.source, citeKey: randomCiteKey() };
   }
   return {
-    type: "composer-context-reference",
-    attrs: {
-      kind: segment.kind,
-      contextId: segment.contextId,
-      label: segment.label,
-      source: segment.source,
-    },
+    kind: "composer-context-reference",
+    refKind: segment.kind,
+    contextId: segment.contextId,
+    label: segment.label,
+    source: segment.source,
   };
 }
 
-interface PendingItem {
-  prefix: ListLinePrefix;
-  content: InlineJson[];
-  children: PendingList[];
-}
-
-interface PendingList {
-  key: string;
-  items: PendingItem[];
-}
-
-function listJson(list: PendingList): InlineJson {
-  const first = list.items[0]!.prefix;
-  const items = list.items.map((item) => {
-    const content = [
-      { type: "paragraph", content: item.content },
-      ...item.children.map((child) => listJson(child)),
-    ];
-    if (item.prefix.kind === "task") {
-      return {
-        type: "taskItem",
-        attrs: {
-          checked: item.prefix.checked,
-          indent: item.prefix.indent,
-          markerSpace: item.prefix.markerSpace,
-          contentSpace: item.prefix.contentSpace,
-        },
-        content,
-      };
-    }
-    return {
-      type: "listItem",
-      attrs: { indent: item.prefix.indent, marker: item.prefix.marker, space: item.prefix.space },
-      content,
-    };
-  });
-  if (first.kind === "task") return { type: "taskList", content: items };
-  if (first.kind === "ordered") {
-    return {
-      type: "orderedList",
-      attrs: { start: Number.parseInt(first.marker, 10) || 1 },
-      content: items,
-    };
-  }
-  return { type: "bulletList", content: items };
-}
-
-function textJsonForSpan(text: string, marks: RichTextMark[]): Record<string, unknown> {
-  const json: Record<string, unknown> = { type: "text", text };
-  if (marks.length > 0) {
-    json.marks = [...marks]
-      .sort((a, b) => MARK_NESTING_ORDER.indexOf(a) - MARK_NESTING_ORDER.indexOf(b))
-      .map((mark) => ({ type: MARK_TO_TIPTAP[mark] }));
-  }
-  return json;
-}
-
 /** Keeps literalLength leading characters unstyled so path queries reach file search unchanged. */
-export function buildTiptapContent(
+export function buildComposerBlocks(
   value: string,
   skillLabelFor: (name: string) => SkillMeta | null,
-  options?: {
-    styling?: boolean;
-    blocks?: boolean;
-    literalText?: boolean;
-    literalLength?: number;
-    isKnownModel?: IsKnownModel;
-  },
-): Record<string, unknown>[] {
-  const chips = { skill: skillLabelFor, model: options?.isKnownModel ?? NO_MODELS };
+  options?: { styling?: boolean; blocks?: boolean; literalText?: boolean; literalLength?: number; isKnownModel?: IsKnownModel },
+): ComposerBlock[] {
   if (options?.literalText) {
     return value.split("\n").map((line) => ({
-      type: "paragraph",
-      ...(line ? { content: [{ type: "text", text: line }] } : {}),
+      kind: "line",
+      prefix: null,
+      inlines: line ? [{ kind: "text", text: line, marks: [] }] : [],
     }));
   }
+  const chips: ChipResolver = { skill: skillLabelFor, model: options?.isKnownModel ?? NO_MODELS };
   const styling = options?.styling ?? true;
   const blockSyntax = styling && (options?.blocks ?? true);
+
   let sentinel = "\uFFFC";
-  for (let codePoint = 0xe000; value.includes(sentinel); codePoint += 1) {
-    sentinel = String.fromCodePoint(codePoint);
-  }
-  const atoms: InlineJson[] = [];
+  for (let cp = 0xe000; value.includes(sentinel); cp += 1) sentinel = String.fromCodePoint(cp);
+
+  const atoms: ComposerInline[] = [];
   const atomSources: string[] = [];
   const literal = value.slice(0, options?.literalLength ?? 0);
   const remainder = value.slice(literal.length);
   const formulas = composerMathRanges(remainder, markdownMathRanges);
-  let offset = 0;
-  const chunks: Array<{ text: string } | { source: string }> = [];
-  for (const formula of formulas) {
-    chunks.push({ text: remainder.slice(offset, formula.start) }, { source: formula.source });
-    offset = formula.end;
-  }
-  chunks.push({ text: remainder.slice(offset) });
-  // Math stays editable source. Shield its commands and Markdown-like markers
-  // from styling and context-chip parsing, then restore ordinary text nodes.
-  const text = chunks
-    .map((chunk) => {
-      if ("source" in chunk) {
-        atoms.push(textJsonForSpan(chunk.source, []));
-        atomSources.push(chunk.source);
-        return sentinel;
-      }
-      return splitPromptIntoComposerSegments(chunk.text)
-        .map((segment) => {
-          if (segment.type === "text") return segment.text;
-          const atom = atomJsonForSegment(segment, chips);
-          if (!atom) return segment.source;
-          atoms.push(atom);
-          atomSources.push(segment.source);
-          return sentinel;
-        })
-        .join("");
-    })
-    .join("");
-  let atomIndex = 0;
-  const buildInline = (content: string): InlineJson[] => {
-    const spans = styling ? parseInlineMarkdown(content) : [{ text: content, marks: [] }];
-    const inline: InlineJson[] = [];
-    for (const span of spans) {
-      span.text.split(sentinel).forEach((piece, index) => {
-        if (index > 0) {
-          const atom = atoms[atomIndex++]!;
-          inline.push({ ...atom, marks: textJsonForSpan("", span.marks).marks });
+  let cursor = 0;
+  let masked = "";
+  const pushChunk = (slice: string) => {
+    for (const seg of splitPromptIntoComposerSegments(slice)) {
+      if (seg.type === "text") {
+        masked += seg.text;
+      } else {
+        const chip = chipForSegment(seg, chips);
+        if (!chip) masked += seg.source;
+        else {
+          atoms.push(chip);
+          atomSources.push(seg.source);
+          masked += sentinel;
         }
-        if (piece) inline.push(textJsonForSpan(piece, span.marks));
+      }
+    }
+  };
+  for (const f of formulas) {
+    pushChunk(remainder.slice(cursor, f.start));
+    atoms.push({ kind: "text", text: f.source, marks: [] });
+    atomSources.push(f.source);
+    masked += sentinel;
+    cursor = f.end;
+  }
+  pushChunk(remainder.slice(cursor));
+
+  let atomIndex = 0;
+  const buildInline = (content: string): ComposerInline[] => {
+    const spans = styling ? parseInlineMarkdown(content) : [{ text: content, marks: [] }];
+    const out: ComposerInline[] = [];
+    for (const span of spans) {
+      const marks = sortMarks(span.marks);
+      span.text.split(sentinel).forEach((piece, idx) => {
+        if (idx > 0) {
+          const atom = atoms[atomIndex++]!;
+          out.push(atom.kind === "text" ? { ...atom, marks } : marks.length ? { ...atom, marks } : atom);
+        }
+        if (piece) out.push({ kind: "text", text: piece, marks });
       });
     }
-    return inline;
-  };
-  const buildDocLine = (line: string): DocLine => {
-    const parsed = blockSyntax ? parseListPrefix(line) : null;
-    const content = parsed ? line.slice(parsed.markerLength) : line;
-    return { list: parsed?.prefix ?? null, inline: buildInline(content) };
+    return normalizeInlines(out);
   };
 
-  const sourceLines = text.split("\n");
-  const entries: (
-    | { code: Record<string, unknown> }
-    | { rule: string }
-    | { heading: { level: number; space: string; inline: InlineJson[] } }
-    | { quote: { prefix: string; inline: InlineJson[] } }
-    | { line: DocLine }
-  )[] = [];
   const restoreSources = (line: string) =>
-    line.split(sentinel).reduce((joined, piece, index) => {
-      if (index === 0) return piece;
-      atomIndex += 1;
-      return joined + atomSources[atomIndex - 1]! + piece;
-    }, "");
+    line.split(sentinel).reduce((acc, piece, idx) => (idx === 0 ? piece : acc + atomSources[atomIndex++]! + piece), "");
 
-  for (let index = 0; index < sourceLines.length; index += 1) {
-    const line = sourceLines[index]!;
-    if (index === 0 && literal) {
-      entries.push({
-        line: { list: null, inline: [textJsonForSpan(literal, []), ...buildInline(line)] },
+  const sourceLines = masked.split("\n");
+  const rawBlocks: ComposerBlock[] = [];
+  for (let i = 0; i < sourceLines.length; i += 1) {
+    const line = sourceLines[i]!;
+    if (i === 0 && literal) {
+      rawBlocks.push({
+        kind: "line",
+        prefix: null,
+        inlines: normalizeInlines([{ kind: "text", text: literal, marks: [] }, ...buildInline(line)]),
       });
       continue;
     }
     const opening = blockSyntax ? parseOpeningFence(line) : null;
-    if (!opening) {
-      if (blockSyntax && /^([-*_])(?:[ \t]*\1){2,}[ \t]*\r?$/.test(line)) {
-        entries.push({ rule: line });
-        continue;
+    if (opening) {
+      const language = restoreSources(opening.language);
+      const body: string[] = [];
+      let j = i + 1;
+      let close = "";
+      while (j < sourceLines.length) {
+        if (isClosingFence(sourceLines[j]!, opening.fence)) {
+          close = `\n${sourceLines[j]!}`;
+          break;
+        }
+        body.push(restoreSources(sourceLines[j]!));
+        j += 1;
       }
-      const heading = blockSyntax ? /^(#{1,6})([ \t]+)([^\n]*)$/.exec(line) : null;
-      if (heading) {
-        entries.push({
-          heading: {
-            level: heading[1]!.length,
-            space: heading[2]!,
-            inline: buildInline(heading[3]!),
-          },
-        });
-        continue;
-      }
-      const quote = blockSyntax ? /^(>[ \t]*)([^\n]*)$/.exec(line) : null;
-      if (quote) entries.push({ quote: { prefix: quote[1]!, inline: buildInline(quote[2]!) } });
-      else entries.push({ line: buildDocLine(line) });
+      rawBlocks.push({ kind: "codeBlock", language, fence: opening.fence, close, code: body.join("\n") });
+      i = j < sourceLines.length ? j : sourceLines.length;
       continue;
     }
-    const language = restoreSources(opening.language);
-    const body: string[] = [];
-    let cursor = index + 1;
-    let close = "";
-    while (cursor < sourceLines.length) {
-      const candidate = sourceLines[cursor]!;
-      if (isClosingFence(candidate, opening.fence)) {
-        close = `\n${candidate}`;
-        break;
-      }
-      body.push(restoreSources(candidate));
-      cursor += 1;
-    }
-    const closed = cursor < sourceLines.length;
-    const content = body.join("\n");
-    entries.push({
-      code: {
-        type: "codeBlock",
-        attrs: { language, fence: opening.fence, close },
-        ...(content ? { content: [{ type: "text", text: content }] } : {}),
-      },
-    });
-    index = closed ? cursor : sourceLines.length;
-  }
-
-  const blocks: Record<string, unknown>[] = [];
-  let rootLists: PendingList[] = [];
-  let stack: { indent: string; list: PendingList; container: PendingList[] }[] = [];
-  const flushLists = () => {
-    for (const list of rootLists) blocks.push(listJson(list));
-    rootLists = [];
-    stack = [];
-  };
-  const openList = (container: PendingList[], key: string): PendingList => {
-    const list = { key, items: [] };
-    container.push(list);
-    return list;
-  };
-  let openQuote: { prefix: string; content: InlineJson[][] } | null = null;
-  const flushQuote = () => {
-    if (!openQuote) return;
-    blocks.push({
-      type: "blockquote",
-      attrs: { prefix: openQuote.prefix },
-      content: openQuote.content.map((inline) => ({ type: "paragraph", content: inline })),
-    });
-    openQuote = null;
-  };
-  const isProseLine = (entry: (typeof entries)[number] | undefined, empty: boolean) =>
-    entry !== undefined &&
-    "line" in entry &&
-    !entry.line.list &&
-    (entry.line.inline.length === 0) === empty;
-  for (const [entryIndex, entry] of entries.entries()) {
-    if ("quote" in entry) {
-      flushLists();
-      if (openQuote && openQuote.prefix !== entry.quote.prefix) flushQuote();
-      openQuote ??= { prefix: entry.quote.prefix, content: [] };
-      openQuote.content.push(entry.quote.inline);
+    if (blockSyntax && /^([-*_])(?:[ \t]*\1){2,}[ \t]*\r?$/.test(line)) {
+      rawBlocks.push({ kind: "horizontalRule", source: line });
       continue;
     }
-    // The serializer separates a quote or list from the prose after it with one blank line; it is not an empty paragraph.
-    // After a list it precedes any empty paragraphs the user left, so those survive.
-    let proseIndex = entryIndex + 1;
-    if (openQuote === null && rootLists.length > 0 && isProseLine(entry, true)) {
-      while (isProseLine(entries[proseIndex], true)) proseIndex += 1;
-    }
-    const blockSeparator =
-      (openQuote !== null || rootLists.length > 0) &&
-      isProseLine(entry, true) &&
-      isProseLine(entries[proseIndex], false);
-    flushQuote();
-    if (blockSeparator) {
-      flushLists();
-      continue;
-    }
-    if ("code" in entry) {
-      flushLists();
-      blocks.push(entry.code);
-      continue;
-    }
-    if ("rule" in entry) {
-      flushLists();
-      blocks.push({ type: "horizontalRule", attrs: { source: entry.rule } });
-      continue;
-    }
-    if ("heading" in entry) {
-      flushLists();
-      blocks.push({
-        type: "heading",
-        attrs: { level: entry.heading.level, space: entry.heading.space },
-        content: entry.heading.inline,
+    const heading = blockSyntax ? /^(#{1,6})([ \t]+)([^\n]*)$/.exec(line) : null;
+    if (heading) {
+      rawBlocks.push({
+        kind: "line",
+        prefix: { kind: "heading", level: heading[1]!.length, space: heading[2]! },
+        inlines: buildInline(heading[3]!),
       });
       continue;
     }
-    const line = entry.line;
-    if (!line.list) {
-      flushLists();
-      blocks.push({ type: "paragraph", content: line.inline });
+    const quote = blockSyntax ? /^(>[ \t]*)([^\n]*)$/.exec(line) : null;
+    if (quote) {
+      rawBlocks.push({ kind: "line", prefix: { kind: "quote", prefix: quote[1]! }, inlines: buildInline(quote[2]!) });
       continue;
     }
-    const item: PendingItem = { prefix: line.list, content: line.inline, children: [] };
-    const key = listKey(line.list);
-    const indent = line.list.indent;
-    for (;;) {
-      const top = stack[stack.length - 1];
-      if (!top) {
-        stack.push({ indent, list: openList(rootLists, key), container: rootLists });
-        continue;
-      }
-      if (top.indent === indent) {
-        if (top.list.key !== key) top.list = openList(top.container, key);
-        top.list.items.push(item);
-        break;
-      }
-      if (top.indent !== "" && !indent.startsWith(top.indent)) {
-        if (stack.length > 1) {
-          stack.pop();
-          continue;
-        }
-        top.indent = indent;
-        if (top.list.key !== key) top.list = openList(top.container, key);
-        top.list.items.push(item);
-        break;
-      }
-      const parent = top.list.items[top.list.items.length - 1];
-      if (!parent) {
-        top.list.items.push(item);
-        break;
-      }
-      const list = openList(parent.children, key);
-      stack.push({ indent, list, container: parent.children });
-      list.items.push(item);
-      break;
+    const list = blockSyntax ? parseListPrefix(line) : null;
+    if (list) {
+      rawBlocks.push({ kind: "line", prefix: list.prefix, inlines: buildInline(line.slice(list.markerLength)) });
+      continue;
     }
+    rawBlocks.push({ kind: "line", prefix: null, inlines: buildInline(line) });
   }
-  flushQuote();
-  flushLists();
+
+  // Strip the single blank-line separator the serializer places between a quote/list and prose.
+  const blocks: ComposerBlock[] = [];
+  for (let i = 0; i < rawBlocks.length; i += 1) {
+    const curr = rawBlocks[i]!;
+    const prev = blocks.at(-1);
+    const prevIsQuote = prev?.kind === "line" && prev.prefix?.kind === "quote";
+    const prevIsList = prev?.kind === "line" && isListPrefix(prev.prefix);
+    if ((prevIsQuote || prevIsList) && isPlainParagraph(curr) && curr.inlines.length === 0) {
+      let nextIdx = i + 1;
+      if (prevIsList) {
+        while (isPlainParagraph(rawBlocks[nextIdx]) && (rawBlocks[nextIdx] as Extract<ComposerBlock, { kind: "line" }>).inlines.length === 0) {
+          nextIdx += 1;
+        }
+      }
+      const after = rawBlocks[nextIdx];
+      if (isPlainParagraph(after) && after.inlines.length > 0) continue;
+    }
+    blocks.push(curr);
+  }
   return blocks;
 }
 
-export function buildDocJson(
+export function buildComposerDoc(
   value: string,
   skillLabelFor: (name: string) => SkillMeta | null,
   options?: { styling?: boolean; literalText?: boolean; isKnownModel?: IsKnownModel },
-) {
-  const content = buildTiptapContent(value, skillLabelFor, options);
-  if (content.at(-1)?.type === "horizontalRule") content.push({ type: "paragraph" });
-  return { type: "doc", content };
+): ComposerDoc {
+  const blocks = buildComposerBlocks(value, skillLabelFor, options);
+  if (blocks.length === 0) blocks.push({ kind: "line", prefix: null, inlines: [] });
+  if (blocks.at(-1)?.kind === "horizontalRule") blocks.push({ kind: "line", prefix: null, inlines: [] });
+  return { blocks };
 }
+
+export const buildTiptapContent = buildComposerBlocks;
+export const buildDocJson = buildComposerDoc;
 
 export interface RichRun {
   kind: "text" | "token" | "break" | "prefix";
-  /** Flat document offset (atoms count 1, markers excluded). */
   flatStart: number;
   docLen: number;
-  /** Markdown length (tokens expand to their source). */
   mdLen: number;
   openLen: number;
   closeLen: number;
@@ -1195,767 +293,600 @@ export interface RichRun {
   nodeName?: string;
 }
 
-// Shared by every caller that serializes the same doc, so it must not be mutated.
-export interface RichDocMap {
-  readonly value: string;
-  readonly runs: ReadonlyArray<Readonly<RichRun>>;
-  readonly docLength: number;
-  readonly contextIds: ReadonlyArray<string>;
-}
+/** A block plus its leading separator, serialized with runs relative to the part start; cached per block object. */
+interface RichPart { readonly value: string; readonly runs: readonly RichRun[]; readonly flat: number; readonly md: number; readonly contextIds: readonly string[]; readonly variant: number }
 
-function readAtomSource(node: ProseMirrorNode): string {
-  const attrs = node.attrs as Record<string, unknown>;
-  switch (node.type.name) {
-    case "composer-mention":
-    case "composer-model":
-    case "composer-citation":
-    case "composer-context-reference":
-      return typeof attrs.source === "string" ? attrs.source : "";
-    case "composer-skill": {
-      const name = typeof attrs.skillName === "string" ? attrs.skillName : "";
-      return name ? `$${name}` : "";
-    }
-    default:
-      return "";
-  }
-}
+interface RichAcc { runs: RichRun[]; value: string; flat: number; md: number }
+const newAcc = (): RichAcc => ({ runs: [], value: "", flat: 0, md: 0 });
+const toPart = ({ value, runs, flat, md }: RichAcc, variant: number): RichPart => ({ value, runs, flat, md, variant, contextIds: collectInlineContextIds(value) });
 
-interface RichAccumulator {
-  runs: RichRun[];
-  value: string;
-  flat: number;
-  md: number;
-}
-
-function pushBreakRun(acc: RichAccumulator, position?: number): void {
-  const previous = acc.runs[acc.runs.length - 1];
-  const pmPos = position ?? (previous ? previous.pmPos + previous.docLen : 1);
-  acc.runs.push({
-    kind: "break",
-    flatStart: acc.flat,
-    docLen: 1,
-    mdLen: 1,
-    openLen: 0,
-    closeLen: 0,
-    pmPos,
-    mdStart: acc.md,
-  });
+const pushBreak = (acc: RichAcc) => {
+  acc.runs.push({ kind: "break", flatStart: acc.flat, docLen: 1, mdLen: 1, openLen: 0, closeLen: 0, pmPos: acc.flat, mdStart: acc.md });
   acc.value += "\n";
   acc.flat += 1;
   acc.md += 1;
-}
+};
 
-function horizontalRuleSource(block: ProseMirrorNode): string {
-  const source = (block.attrs as Record<string, unknown>).source;
-  return typeof source === "string" && source ? source : "---";
-}
+const pushPrefix = (acc: RichAcc, text: string) => {
+  acc.runs.push({ kind: "prefix", flatStart: acc.flat, docLen: 0, mdLen: text.length, openLen: 0, closeLen: 0, pmPos: acc.flat, mdStart: acc.md });
+  acc.value += text;
+  acc.md += text.length;
+};
 
-// A blank line keeps prose out of a quote or list (lazy continuation) and a dash rule from
-// underlining the line above into a setext heading; an empty paragraph already separates them.
-function needsBlankLineBetween(blocks: readonly ProseMirrorNode[], index: number): boolean {
-  const previous = blocks[index - 1]!;
-  const block = blocks[index]!;
-  const isEmptyParagraph = (node: ProseMirrorNode | undefined) =>
-    node?.type.name === "paragraph" && node.content.size === 0;
-  if (LIST_NODE_NAMES.has(previous.type.name)) {
-    let next = index;
-    while (isEmptyParagraph(blocks[next])) next += 1;
-    return blocks[next]?.type.name === "paragraph";
+function linePrefixText(prefix: LinePrefix, empty: boolean): string {
+  if (prefix.kind === "heading") return `${"#".repeat(prefix.level)}${prefix.space}`;
+  if (prefix.kind === "quote") return prefix.prefix;
+  if (prefix.kind === "task") {
+    const cs = typeof prefix.contentSpace === "string" ? prefix.contentSpace || (empty ? "" : " ") : empty ? "" : " ";
+    return `${prefix.indent}-${prefix.markerSpace || " "}[${prefix.checked ? "x" : " "}]${cs}`;
   }
-  if (previous.type.name === "blockquote") {
-    return block.type.name === "paragraph" && block.content.size > 0;
+  return `${prefix.indent}${prefix.marker || "-"}${prefix.space || (empty ? "" : " ")}`;
+}
+
+function codeBlockSource(block: Extract<ComposerBlock, { kind: "codeBlock" }>, followed: boolean) {
+  let fence = block.fence || "```";
+  let close = block.close;
+  const longest = Math.max(
+    0,
+    ...block.code.split("\n").filter((l) => isClosingFence(l, fence)).map((l) => /^[`~]+/.exec(l)![0].length),
+  );
+  if (longest > 0) {
+    fence = fence[0]!.repeat(longest + 1);
+    if (close) close = `\n${fence}`;
+  }
+  if (!close && followed) close = `\n${fence}`;
+  return { open: `${fence}${block.language}${block.code ? "\n" : ""}`, content: block.code, close };
+}
+
+function pushInlineRun(acc: RichAcc, p: ComposerInline, open: string, close: string): void {
+  const isText = p.kind === "text";
+  const source = isText ? p.text : readChipSource(p);
+  const docLen = isText ? source.length : 1;
+  const mdLen = open.length + source.length + close.length;
+  const run: RichRun = { kind: isText ? "text" : "token", flatStart: acc.flat, docLen, mdLen, openLen: open.length, closeLen: close.length, pmPos: acc.flat, mdStart: acc.md };
+  if (!isText) run.nodeName = p.kind;
+  acc.runs.push(run);
+  acc.value += open + source + close;
+  acc.flat += docLen;
+  acc.md += mdLen;
+}
+
+function needsBlankLineBetween(blocks: readonly ComposerBlock[], index: number): boolean {
+  const prev = blocks[index - 1]!;
+  const curr = blocks[index]!;
+  if (prev.kind === "line" && isListPrefix(prev.prefix) && !(curr.kind === "line" && isListPrefix(curr.prefix))) {
+    let next = index;
+    while (isPlainParagraph(blocks[next]) && (blocks[next] as Extract<ComposerBlock, { kind: "line" }>).inlines.length === 0) {
+      next += 1;
+    }
+    return isPlainParagraph(blocks[next]);
+  }
+  if (prev.kind === "line" && prev.prefix?.kind === "quote" && !(curr.kind === "line" && curr.prefix?.kind === "quote")) {
+    return isPlainParagraph(curr) && curr.inlines.length > 0;
   }
   return (
-    block.type.name === "horizontalRule" &&
-    previous.type.name === "paragraph" &&
-    previous.content.size > 0 &&
-    /^-+[ \t]*\r?$/.test(horizontalRuleSource(block))
+    curr.kind === "horizontalRule" &&
+    isPlainParagraph(prev) &&
+    prev.inlines.length > 0 &&
+    /^-+[ \t]*\r?$/.test(curr.source || "---")
   );
 }
 
-// Blank-line runs own no document characters; offsets clamp to the start of the next block.
-function pushBlankLineRun(acc: RichAccumulator, pmPos: number): void {
-  acc.runs.push({
-    kind: "prefix",
-    flatStart: acc.flat,
-    docLen: 0,
-    mdLen: 1,
-    openLen: 0,
-    closeLen: 0,
-    pmPos,
-    mdStart: acc.md,
-  });
-  acc.value += "\n";
-  acc.md += 1;
-}
+const isUnmarked = (i: ComposerInline) => (i.kind === "text" ? i.isMarkdownSource || i.marks.length === 0 : !i.marks?.length);
 
-// Moves an offset into a parsed `value` past the blank lines its serialization inserted,
-// treating other differences (`__` written as `**`) as same-length rewrites. When the two
-// strings do not align that way end to end, the offset is returned unmapped.
-export function serializedMarkdownOffset(
-  value: string,
-  serialized: string,
-  offset: number,
-): number {
-  if (value === serialized) return offset;
-  let index = 0;
-  let mapped = 0;
-  let target = -1;
-  while (index < value.length && mapped < serialized.length) {
-    if (index === offset && target < 0) target = mapped;
-    if (value[index] === serialized[mapped] || serialized[mapped] !== "\n") index += 1;
-    mapped += 1;
+// Unmarked inlines reset all delimiter state, so only the marked islands between them need the full pass.
+function appendInlineRuns(inlines: readonly ComposerInline[], acc: RichAcc): void {
+  if (inlines.length === 0) {
+    acc.runs.push({ kind: "text", flatStart: acc.flat, docLen: 0, mdLen: 0, openLen: 0, closeLen: 0, pmPos: acc.flat, mdStart: acc.md });
+    return;
   }
-  if (index !== value.length || mapped !== serialized.length) return offset;
-  return target < 0 ? mapped + (offset - index) : target;
+  for (let i = 0; i < inlines.length; ) {
+    if (isUnmarked(inlines[i]!)) {
+      pushInlineRun(acc, inlines[i++]!, "", "");
+      continue;
+    }
+    let j = i + 1;
+    while (j < inlines.length && !isUnmarked(inlines[j]!)) j += 1;
+    const island = markedIsland(inlines, i, j);
+    for (const r of island.runs) acc.runs.push({ ...r, flatStart: r.flatStart + acc.flat, pmPos: r.pmPos + acc.flat, mdStart: r.mdStart + acc.md });
+    acc.value += island.value;
+    acc.flat += island.flat;
+    acc.md += island.md;
+    i = j;
+  }
 }
 
-function appendInlineRuns(
-  container: ProseMirrorNode,
-  contentStart: number,
-  acc: RichAccumulator,
-): void {
-  const children: ProseMirrorNode[] = [];
-  container.forEach((child) => {
-    if (!child.isText || child.marks.some((mark) => mark.type.name === "code")) {
-      children.push(child);
-      return;
+// Keyed by the island's first inline; edits elsewhere in the line keep these inline objects.
+const islandCache = new WeakMap<ComposerInline, { readonly items: readonly ComposerInline[]; readonly acc: RichAcc }>();
+
+function markedIsland(inlines: readonly ComposerInline[], from: number, to: number): RichAcc {
+  const hit = islandCache.get(inlines[from]!);
+  if (hit && hit.items.length === to - from && hit.items.every((item, k) => item === inlines[from + k])) return hit.acc;
+  const items = inlines.slice(from, to);
+  const acc = newAcc();
+  appendMarkedIsland(items, acc);
+  islandCache.set(items[0]!, { items, acc });
+  return acc;
+}
+
+function appendMarkedIsland(inlines: readonly ComposerInline[], acc: RichAcc): void {
+  const pieces: ComposerInline[] = [];
+  for (const item of inlines) {
+    if (item.kind !== "text" || item.isMarkdownSource || item.marks.includes("code") || item.marks.length === 0) {
+      pieces.push(item);
+      continue;
     }
-    const text = child.text!;
-    const start = text.length - text.trimStart().length;
-    const end = Math.max(start, text.trimEnd().length);
-    let offset = 0;
-    for (const boundary of [start, end, text.length]) {
-      if (boundary > offset) children.push(child.cut(offset, boundary));
-      offset = boundary;
+    const start = item.text.length - item.text.trimStart().length;
+    const end = Math.max(start, item.text.trimEnd().length);
+    let off = 0;
+    for (const b of [start, end, item.text.length]) {
+      if (b > off) pieces.push({ ...item, text: item.text.slice(off, b) });
+      off = b;
     }
-  });
-  for (const mark of MARK_NESTING_ORDER) {
+  }
+  for (const mark of MARK_ORDER) {
     if (mark === "code") continue;
-    for (const direction of [1, -1]) {
+    for (const dir of [1, -1]) {
       let hasContent = false;
-      for (
-        let index = direction === 1 ? 0 : children.length - 1;
-        index >= 0 && index < children.length;
-        index += direction
-      ) {
-        const child = children[index]!;
-        if (
-          child.type.name === "hardBreak" ||
-          !child.marks.some((item) => item.type.name === mark)
-        ) {
-          hasContent = false;
-        } else if (
-          child.isText &&
-          !child.marks.some((item) => item.type.name === "code") &&
-          /^\s+$/.test(child.text!)
-        ) {
-          if (!hasContent)
-            children[index] = child.mark(child.marks.filter((item) => item.type.name !== mark));
-        } else {
-          hasContent = true;
-        }
+      for (let i = dir === 1 ? 0 : pieces.length - 1; i >= 0 && i < pieces.length; i += dir) {
+        const p = pieces[i]!;
+        const marks = p.marks ?? [];
+        if (!marks.includes(mark) || (p.kind === "text" && p.isMarkdownSource)) hasContent = false;
+        else if (p.kind === "text" && !marks.includes("code") && /^\s+$/.test(p.text)) {
+          if (!hasContent) pieces[i] = { ...p, marks: marks.filter((m) => m !== mark) };
+        } else hasContent = true;
       }
     }
   }
   const markEnds = new Map<RichTextMark, number>();
-  const orderedMarks: RichTextMark[][] = [];
-  for (let index = children.length - 1; index >= 0; index -= 1) {
-    const child = children[index]!;
-    const marks =
-      child.type.name === "hardBreak"
-        ? []
-        : child.marks
-            .map((mark) => TIPTAP_TO_MARK[mark.type.name])
-            .filter((mark): mark is RichTextMark => Boolean(mark));
-    for (const mark of MARK_NESTING_ORDER) {
+  const ordered: RichTextMark[][] = [];
+  for (let i = pieces.length - 1; i >= 0; i -= 1) {
+    const p = pieces[i]!;
+    const marks = p.kind === "text" && p.isMarkdownSource ? [] : [...(p.marks ?? [])];
+    for (const mark of MARK_ORDER) {
       if (!marks.includes(mark)) markEnds.delete(mark);
-      else if (!markEnds.has(mark)) markEnds.set(mark, index);
+      else if (!markEnds.has(mark)) markEnds.set(mark, i);
     }
-    orderedMarks[index] = marks.sort(
-      (a, b) =>
-        markEnds.get(b)! - markEnds.get(a)! ||
-        MARK_NESTING_ORDER.indexOf(a) - MARK_NESTING_ORDER.indexOf(b),
-    );
+    ordered[i] = marks.sort((a, b) => markEnds.get(b)! - markEnds.get(a)! || MARK_ORDER.indexOf(a) - MARK_ORDER.indexOf(b));
   }
-  for (let index = 1; index < orderedMarks.length; index += 1) {
-    const marks = orderedMarks[index]!;
-    const retained: RichTextMark[] = [];
-    for (const mark of orderedMarks[index - 1]!) {
-      if (!marks.includes(mark)) break;
-      retained.push(mark);
+  for (let i = 1; i < ordered.length; i += 1) {
+    const marks = ordered[i]!;
+    const kept: RichTextMark[] = [];
+    for (const m of ordered[i - 1]!) {
+      if (!marks.includes(m)) break;
+      kept.push(m);
     }
-    orderedMarks[index] = [...retained, ...marks.filter((mark) => !retained.includes(mark))];
+    ordered[i] = [...kept, ...marks.filter((m) => !kept.includes(m))];
   }
-  const commonLength = (left: RichTextMark[], right: RichTextMark[]) => {
-    let index = 0;
-    while (index < left.length && left[index] === right[index]) index += 1;
-    return index;
+  const common = (l: RichTextMark[], r: RichTextMark[]) => {
+    let i = 0;
+    while (i < l.length && l[i] === r[i]) i += 1;
+    return i;
   };
-  let inlineOffset = 0;
-  children.forEach((child, index) => {
-    const pmPos = contentStart + inlineOffset;
-    inlineOffset += child.nodeSize;
-    if (child.type.name === "hardBreak") {
-      pushBreakRun(acc, pmPos);
-      return;
-    }
-    const marks = orderedMarks[index]!;
-    const open = marks
-      .slice(commonLength(marks, orderedMarks[index - 1] ?? []))
-      .map((mark) => RICH_TEXT_DELIMITERS[mark])
-      .join("");
-    const close = marks
-      .slice(commonLength(marks, orderedMarks[index + 1] ?? []))
-      .toReversed()
-      .map((mark) => RICH_TEXT_DELIMITERS[mark])
-      .join("");
-    const source = child.isText ? child.text! : readAtomSource(child);
-    const docLen = child.isText ? source.length : 1;
-    const mdText = open + source + close;
-    acc.runs.push({
-      kind: child.isText ? "text" : "token",
-      flatStart: acc.flat,
-      docLen,
-      mdLen: mdText.length,
-      openLen: open.length,
-      closeLen: close.length,
-      pmPos,
-      mdStart: acc.md,
-      ...(child.isText ? {} : { nodeName: child.type.name }),
-    });
-    acc.value += mdText;
-    acc.flat += docLen;
-    acc.md += mdText.length;
-  });
-  if (children.length === 0) {
-    acc.runs.push({
-      kind: "text",
-      flatStart: acc.flat,
-      docLen: 0,
-      mdLen: 0,
-      openLen: 0,
-      closeLen: 0,
-      pmPos: contentStart,
-      mdStart: acc.md,
-    });
+  for (let i = 0; i < pieces.length; i += 1) {
+    const p = pieces[i]!;
+    const marks = ordered[i]!;
+    const open = marks.slice(common(marks, ordered[i - 1] ?? [])).map((m) => RICH_TEXT_DELIMITERS[m]).join("");
+    const close = marks.slice(common(marks, ordered[i + 1] ?? [])).toReversed().map((m) => RICH_TEXT_DELIMITERS[m]).join("");
+    pushInlineRun(acc, p, open, close);
   }
 }
 
-const LIST_NODE_NAMES = new Set(["taskList", "bulletList", "orderedList"]);
-const LIST_ITEM_NODE_NAMES = new Set(["taskItem", "listItem"]);
+// Variant index: bit 0 = leading break, bit 1 = blank line, bit 2 = code block followed by another block.
+const blockParts = new WeakMap<ComposerBlock, RichPart[]>();
 
-// Tiptap leaves indent and marker attributes unchanged when moving items; rebuilding would undo the move.
-function alignListItemWithSiblings(tr: Transaction, itemType: string): void {
-  const $pos = tr.selection.$from;
-  if ($pos.depth < 3 || $pos.node(-1).type.name !== itemType) return;
-  const item = $pos.node(-1);
-  const list = $pos.node(-2);
-  const index = $pos.index(-2);
-  const sibling =
-    index > 0 ? list.child(index - 1) : index + 1 < list.childCount ? list.child(index + 1) : null;
-  if (!sibling) return;
-  const attrs: Record<string, unknown> = { ...item.attrs, indent: sibling.attrs.indent };
-  if (item.type.name === "taskItem") {
-    attrs.markerSpace = sibling.attrs.markerSpace;
+function blockPart(block: ComposerBlock, variant: number): RichPart {
+  let variants = blockParts.get(block);
+  const cached = variants?.[variant];
+  if (cached) return cached;
+  const part = buildPart(block, variant);
+  if (!variants) blockParts.set(block, (variants = []));
+  variants[variant] = part;
+  return part;
+}
+
+function buildPart(block: ComposerBlock, variant: number): RichPart {
+  const acc = newAcc();
+  if (variant & 1) pushBreak(acc);
+  if (variant & 2) pushPrefix(acc, "\n");
+  if (block.kind === "codeBlock") {
+    const { open, content, close } = codeBlockSource(block, (variant & 4) !== 0);
+    const mdLen = open.length + content.length + close.length;
+    acc.runs.push({ kind: "text", flatStart: acc.flat, docLen: content.length, mdLen, openLen: open.length, closeLen: close.length, pmPos: acc.flat, mdStart: acc.md, nodeName: "codeBlock" });
+    acc.flat += content.length;
+    acc.md += mdLen;
+    acc.value += open + content + close;
+  } else if (block.kind === "horizontalRule") {
+    pushPrefix(acc, block.source || "---");
   } else {
-    const marker = typeof sibling.attrs.marker === "string" ? sibling.attrs.marker : "-";
-    attrs.marker = index > 0 && /^\d+[.)]$/.test(marker) ? nextOrderedMarkerText(marker) : marker;
+    if (block.prefix) pushPrefix(acc, linePrefixText(block.prefix, block.inlines.length === 0));
+    appendInlineRuns(block.inlines, acc);
   }
-  tr.setNodeMarkup($pos.before(-1), undefined, attrs);
-  if (typeof attrs.marker === "string" && /^\d+[.)]$/.test(attrs.marker)) {
-    renumberFollowingItems(tr, $pos.before(-2), index, attrs.marker);
-  }
+  return toPart(acc, variant);
 }
 
-function renumberFollowingItems(
-  tr: Transaction,
-  listPos: number,
-  index: number,
-  marker: string,
-): void {
-  const list = tr.doc.nodeAt(listPos);
-  if (!list) return;
-  let pos = listPos + 1;
-  let previous = marker;
-  list.forEach((child, _, childIndex) => {
-    if (childIndex > index) {
-      previous = nextOrderedMarkerText(previous);
-      if (child.attrs.marker !== previous) {
-        tr.setNodeMarkup(pos, undefined, { ...child.attrs, marker: previous });
-      }
-    }
-    pos += child.nodeSize;
-  });
-}
-
-/** `prepare` runs first in the same transaction, which the split then reads. */
-export function splitOrLiftListItem(editor: Editor, prepare: Command): boolean {
-  const $from = editor.state.selection.$from;
-  const itemType = listItemTypeAt($from);
-  if (!itemType) return false;
-  const empty = $from.parent.content.size === 0;
-  const move: Command = ({ commands, tr }) => {
-    const moved =
-      commands.splitListItem(
-        itemType,
-        itemType === "taskItem" ? { checked: false } : { space: " " },
-      ) ||
-      (empty && commands.liftListItem(itemType));
-    if (moved) alignListItemWithSiblings(tr, itemType);
-    return moved;
-  };
-  return editor.can().command(move) && editor.chain().command(prepare).command(move).run();
-}
-
-export function convertBulletItemToTask(
-  tr: Transaction,
-  from: number,
-  to: number,
-  checked: boolean,
-): void {
-  tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  const item = $pos.node(-1);
-  const list = $pos.node(-2);
-  const index = $pos.index(-2);
-  const { schema } = tr.doc.type;
-  const before: ProseMirrorNode[] = [];
-  const after: ProseMirrorNode[] = [];
-  list.forEach((child, _, childIndex) => {
-    if (childIndex < index) before.push(child);
-    else if (childIndex > index) after.push(child);
-  });
-  const markerSpace =
-    typeof item.attrs.space === "string" && item.attrs.space ? item.attrs.space : " ";
-  const task = schema.nodes.taskItem!.create(
-    { checked, indent: item.attrs.indent, markerSpace },
-    item.content,
-  );
-  const lists = [
-    ...(before.length > 0 ? [list.copy(Fragment.from(before))] : []),
-    schema.nodes.taskList!.create(null, task),
-    ...(after.length > 0 ? [list.copy(Fragment.from(after))] : []),
-  ];
-  const listStart = $pos.before(-2);
-  tr.replaceWith(listStart, listStart + list.nodeSize, lists);
-  const caret = listStart + (before.length > 0 ? lists[0]!.nodeSize : 0) + 3;
-  tr.setSelection(TextSelection.create(tr.doc, caret));
-}
-
-function listItemTypeAt($pos: ResolvedPos): "listItem" | "taskItem" | null {
-  const name = $pos.depth > 1 ? $pos.node(-1).type.name : null;
-  return name === "listItem" || name === "taskItem" ? name : null;
-}
+interface PendingLineEdit { readonly prev: RichDocMap; readonly index: number }
+// A doc maps to its serialization, or to the single-line edit it can be derived from.
+const serializedDocs = new WeakMap<ComposerDoc, RichDocMap | PendingLineEdit>();
+const NO_IDS: readonly string[] = [];
 
 /**
- * Tiptap's list keymap, which StarterKit loads, does both by moving nodes
- * without touching their indent or marker, so the composer turns it off.
+ * `doc` with line `index` replaced by `block`: same prefix, non-empty before and after, `delta` flat chars longer.
+ * Those invariants keep every separator unchanged, so spans and serialization derive from `doc`'s in O(1) amortized.
  */
-function backspaceAcrossList(editor: Editor): boolean {
-  const { state } = editor;
-  const { $from, empty } = state.selection;
-  if (!empty || $from.parentOffset !== 0) return false;
-  const itemType = listItemTypeAt($from);
-  if (itemType && $from.index(-1) === 0) {
-    const lift: Command = ({ commands, tr }) => {
-      const moved = commands.liftListItem(itemType);
-      if (moved) alignListItemWithSiblings(tr, itemType);
-      return moved;
-    };
-    // can() skips the schema check and can accept tasks with no parent list to lift into.
-    // Those join the line above; joinBackward would re-nest them or select the parent line.
-    return editor.chain().command(lift).run() || joinTextblockBackward(state, editor.view.dispatch);
+export function withLineBlock(doc: ComposerDoc, index: number, block: ComposerBlock, delta: number): ComposerDoc {
+  const blocks = doc.blocks.slice();
+  blocks[index] = block;
+  const next: ComposerDoc = { blocks };
+  deriveFlatBlockSpans(doc, next, index, delta);
+  const prev = serializedDocs.get(doc);
+  if (prev instanceof RichDocMap) serializedDocs.set(next, { prev, index });
+  return next;
+}
+
+function deriveSerialization(doc: ComposerDoc, { prev, index }: PendingLineEdit): RichDocMap | null {
+  const old = prev.parts[index]!;
+  // Uncached: the next keystroke replaces this block, and later full passes rebuild it once if needed.
+  const part = buildPart(doc.blocks[index]!, old.variant);
+  if (old.contextIds.length > 0 || part.contextIds.length > 0) return null;
+  const parts = prev.parts.slice();
+  parts[index] = part;
+  const flats = prev.flats.slice();
+  const mds = prev.mds.slice();
+  const dFlat = part.flat - old.flat;
+  const dMd = part.md - old.md;
+  for (let i = index + 1; i < flats.length; i += 1) {
+    flats[i]! += dFlat;
+    mds[i]! += dMd;
   }
-  const before = $from.depth === 1 ? $from.node(0).maybeChild($from.index(0) - 1) : null;
-  if (before && LIST_NODE_NAMES.has(before.type.name) && $from.parent.type.name !== "codeBlock") {
-    return joinTextblockBackward(state, editor.view.dispatch);
+  return new RichDocMap(prev.value.slice(0, prev.mds[index]) + part.value + prev.value.slice(prev.mds[index + 1]), parts, flats, mds, prev.contextIds);
+}
+
+export function serializeEditorDoc(doc: ComposerDoc): RichDocMap {
+  const entry = serializedDocs.get(doc);
+  if (entry instanceof RichDocMap) return entry;
+  const derived = entry && deriveSerialization(doc, entry);
+  if (derived) {
+    serializedDocs.set(doc, derived);
+    return derived;
   }
-  return false;
-}
-
-/**
- * Tiptap's default would instead nest the next item, or a whole list, under
- * this one at its old indent.
- */
-function deleteAcrossList(editor: Editor): boolean {
-  const { state } = editor;
-  const { $from, empty } = state.selection;
-  if (!empty || !$from.parent.isTextblock || $from.depth === 0) return false;
-  if ($from.parentOffset !== $from.parent.content.size) return false;
-  const next = Selection.findFrom(state.doc.resolve($from.after()), 1, true);
-  if (!next) return false;
-  if (next.$from.parent.type.name === "codeBlock") return $from.parent.type.name !== "codeBlock";
-  if (!listItemTypeAt($from) && !listItemTypeAt(next.$from)) return false;
-  return joinTextblockForward(state, editor.view.dispatch);
-}
-
-function listItemPrefix(item: ProseMirrorNode, empty: boolean): string {
-  const attrs = item.attrs as Record<string, unknown>;
-  const indent = typeof attrs.indent === "string" ? attrs.indent : "";
-  if (item.type.name === "taskItem") {
-    const markerSpace = typeof attrs.markerSpace === "string" ? attrs.markerSpace : " ";
-    const contentSpace =
-      typeof attrs.contentSpace === "string"
-        ? attrs.contentSpace || (empty ? "" : " ")
-        : empty
-          ? ""
-          : " ";
-    return `${indent}-${markerSpace}[${attrs.checked === true ? "x" : " "}]${contentSpace}`;
+  const n = doc.blocks.length;
+  const parts = new Array<RichPart>(n);
+  const flats: number[] = [0];
+  const mds: number[] = [0];
+  let value = "";
+  let ids: string[] | null = null;
+  for (let i = 0; i < n; i += 1) {
+    const block = doc.blocks[i]!;
+    const variant =
+      (i > 0 && !isTrailingEmptyParagraphAfterRule(doc, i) ? 1 : 0) |
+      (i > 0 && needsBlankLineBetween(doc.blocks, i) ? 2 : 0) |
+      (block.kind === "codeBlock" && i < n - 1 ? 4 : 0);
+    const part = (parts[i] = blockPart(block, variant));
+    value += part.value;
+    flats.push(flats[i]! + part.flat);
+    mds.push(mds[i]! + part.md);
+    if (part.contextIds.length > 0) (ids ??= []).push(...part.contextIds);
   }
-  const marker = typeof attrs.marker === "string" && attrs.marker ? attrs.marker : "-";
-  const space =
-    typeof attrs.space === "string" ? attrs.space || (empty ? "" : " ") : empty ? "" : " ";
-  return `${indent}${marker}${space}`;
-}
-
-function walkList(list: ProseMirrorNode, listStart: number, acc: RichAccumulator): void {
-  let itemPos = listStart + 1;
-  let firstItem = true;
-  list.content.forEach((item) => {
-    if (!firstItem) pushBreakRun(acc);
-    firstItem = false;
-    const itemContentStart = itemPos + 1;
-    const first = item.firstChild;
-    const empty = first?.type.name === "paragraph" && first.content.childCount === 0;
-    const prefix = listItemPrefix(item, empty);
-    acc.runs.push({
-      kind: "prefix",
-      flatStart: acc.flat,
-      docLen: 0,
-      mdLen: prefix.length,
-      openLen: 0,
-      closeLen: 0,
-      pmPos: itemContentStart + 1,
-      mdStart: acc.md,
-    });
-    acc.value += prefix;
-    acc.md += prefix.length;
-    let childPos = itemContentStart;
-    let firstBlock = true;
-    item.content.forEach((child) => {
-      if (!firstBlock) pushBreakRun(acc);
-      firstBlock = false;
-      if (LIST_NODE_NAMES.has(child.type.name)) {
-        walkList(child, childPos, acc);
-      } else if (child.type.name === "paragraph") {
-        appendInlineRuns(child, childPos + 1, acc);
-      }
-      childPos += child.nodeSize;
-    });
-    itemPos += item.nodeSize;
-  });
-}
-
-function appendCodeBlockRun(
-  block: ProseMirrorNode,
-  pmPos: number,
-  followed: boolean,
-  acc: RichAccumulator,
-): void {
-  const { open, content, close } = codeBlockSource(block, followed);
-  const mdLen = open.length + content.length + close.length;
-  acc.runs.push({
-    kind: "text",
-    flatStart: acc.flat,
-    docLen: content.length,
-    mdLen,
-    openLen: open.length,
-    closeLen: close.length,
-    pmPos,
-    mdStart: acc.md,
-    nodeName: "codeBlock",
-  });
-  acc.flat += content.length;
-  acc.md += mdLen;
-  acc.value += open + content + close;
-}
-
-function walkBlockquote(quote: ProseMirrorNode, quoteStart: number, acc: RichAccumulator): void {
-  const attrs = quote.attrs as Record<string, unknown>;
-  const prefix = typeof attrs.prefix === "string" ? attrs.prefix : "> ";
-  let childPos = quoteStart + 1;
-  let firstLine = true;
-  quote.content.forEach((child) => {
-    if (!firstLine) pushBreakRun(acc);
-    firstLine = false;
-    acc.runs.push({
-      kind: "prefix",
-      flatStart: acc.flat,
-      docLen: 0,
-      mdLen: prefix.length,
-      openLen: 0,
-      closeLen: 0,
-      pmPos: childPos + 1,
-      mdStart: acc.md,
-    });
-    acc.value += prefix;
-    acc.md += prefix.length;
-    if (child.type.name === "paragraph") appendInlineRuns(child, childPos + 1, acc);
-    childPos += child.nodeSize;
-  });
-}
-
-/** Restores list and quote markers omitted by slices that contain only shared-block content. */
-export function serializeSelection(doc: ProseMirrorNode, from: number, to: number): string {
-  const slice = doc.slice(from, to);
-  const $from = doc.resolve(from);
-  let depth = $from.sharedDepth(to);
-  let content: Fragment | ProseMirrorNode = slice.content;
-  if (slice.content.firstChild?.isInline) {
-    content = doc.type.schema.nodes.paragraph!.create(null, slice.content);
-  } else {
-    while (depth > 0) {
-      const shared = $from.node(depth);
-      content = shared.copy(Fragment.from(content));
-      if (!LIST_ITEM_NODE_NAMES.has(shared.type.name)) break;
-      depth -= 1;
-    }
-  }
-  return serializeEditorDoc(doc.type.create(null, content)).value;
-}
-
-// Docs are immutable, and one keystroke serializes the same doc from the marker
-// plugin, onUpdate, and onSelectionUpdate.
-const serializedDocs = new WeakMap<ProseMirrorNode, RichDocMap>();
-
-export function serializeEditorDoc(doc: ProseMirrorNode): RichDocMap {
-  let map = serializedDocs.get(doc);
-  if (!map) {
-    map = serializeDoc(doc);
-    serializedDocs.set(doc, map);
-  }
+  const map = new RichDocMap(value, parts, flats, mds, ids ? Array.from(new Set<string>(ids)) : NO_IDS);
+  serializedDocs.set(doc, map);
   return map;
 }
 
-function serializeDoc(doc: ProseMirrorNode): RichDocMap {
-  const acc: RichAccumulator = { runs: [], value: "", flat: 0, md: 0 };
-  const blocks: ProseMirrorNode[] = [];
-  doc.content.forEach((node) => {
-    blocks.push(node);
-  });
-
-  let pmBlockStart = 0;
-  blocks.forEach((block, blockIndex) => {
-    if (blockIndex > 0 && !isTrailingLineAfterRule(doc, blockIndex)) pushBreakRun(acc);
-    if (blockIndex > 0 && needsBlankLineBetween(blocks, blockIndex)) {
-      pushBlankLineRun(acc, pmBlockStart + 1);
-    }
-    if (LIST_NODE_NAMES.has(block.type.name)) {
-      walkList(block, pmBlockStart, acc);
-    } else if (block.type.name === "codeBlock") {
-      appendCodeBlockRun(block, pmBlockStart + 1, blockIndex < blocks.length - 1, acc);
-    } else if (block.type.name === "blockquote") {
-      walkBlockquote(block, pmBlockStart, acc);
-    } else if (block.type.name === "heading") {
-      const attrs = block.attrs as Record<string, unknown>;
-      const level = typeof attrs.level === "number" ? attrs.level : 1;
-      const space = typeof attrs.space === "string" ? attrs.space : " ";
-      const prefix = `${"#".repeat(level)}${space}`;
-      acc.runs.push({
-        kind: "prefix",
-        flatStart: acc.flat,
-        docLen: 0,
-        mdLen: prefix.length,
-        openLen: 0,
-        closeLen: 0,
-        pmPos: pmBlockStart + 1,
-        mdStart: acc.md,
-      });
-      acc.value += prefix;
-      acc.md += prefix.length;
-      appendInlineRuns(block, pmBlockStart + 1, acc);
-    } else if (block.type.name === "horizontalRule") {
-      const source = horizontalRuleSource(block);
-      acc.runs.push({
-        kind: "prefix",
-        flatStart: acc.flat,
-        docLen: 0,
-        mdLen: source.length,
-        openLen: 0,
-        closeLen: 0,
-        pmPos: pmBlockStart + block.nodeSize,
-        mdStart: acc.md,
-      });
-      acc.value += source;
-      acc.md += source.length;
-    } else if (block.type.name === "paragraph") {
-      appendInlineRuns(block, pmBlockStart + 1, acc);
-    }
-    pmBlockStart += block.nodeSize;
-  });
-
-  return {
-    value: acc.value,
-    runs: acc.runs,
-    docLength: acc.flat,
-    contextIds: Array.from(new Set(collectInlineContextIds(acc.value))),
-  };
-}
-
-export interface SkillChipReplacement {
-  from: number;
-  to: number;
-  node: ProseMirrorNode;
-}
-
-function isStaleChip(node: ProseMirrorNode, chips: ChipResolver): boolean {
-  const { skillName, instanceId, model } = node.attrs as Record<string, unknown>;
-  if (node.type.name === "composer-skill") {
-    return typeof skillName === "string" && skillName !== "" && !chips.skill(skillName);
+export class RichDocMap {
+  readonly value: string;
+  readonly contextIds: readonly string[];
+  /** Per-block parts with their absolute flat/markdown starts (`length + 1` prefix sums). */
+  readonly parts: readonly RichPart[];
+  readonly flats: readonly number[];
+  readonly mds: readonly number[];
+  #runs: RichRun[] | undefined;
+  constructor(value: string, parts: readonly RichPart[], flats: readonly number[], mds: readonly number[], contextIds: readonly string[]) {
+    this.value = value;
+    this.parts = parts;
+    this.flats = flats;
+    this.mds = mds;
+    this.contextIds = contextIds;
   }
-  if (node.type.name === "composer-model") return !chips.model(String(instanceId), String(model));
-  return false;
-}
-
-/**
- * Use the same Markdown token boundaries as draft restoration. Apply edits
- * last-first so positions stay valid and unrelated citation nodes keep their keys.
- */
-export function skillChipReplacements(
-  doc: ProseMirrorNode,
-  skillLabelFor: (name: string) => SkillMeta | null,
-  isKnownModel: IsKnownModel = NO_MODELS,
-): SkillChipReplacement[] {
-  const chips = { skill: skillLabelFor, model: isKnownModel };
-  const schema = doc.type.schema;
-  const replacements: SkillChipReplacement[] = [];
-  doc.descendants((node, pos) => {
-    if (!isStaleChip(node, chips)) return;
-    replacements.push({
-      from: pos,
-      to: pos + node.nodeSize,
-      node: schema.text(readAtomSource(node), node.marks),
-    });
-  });
-  const map = serializeEditorDoc(doc);
-  let end = 0;
-  for (const segment of splitPromptIntoComposerSegments(map.value)) {
-    const start = end;
-    end += segment.type === "text" ? segment.text.length : segment.source.length;
-    if (segment.type !== "skill" && segment.type !== "model") continue;
-    const atom = atomJsonForSegment(segment, chips);
-    const type = atom && schema.nodes[atom.type];
-    if (!atom || !type) continue;
-    // Only text needs converting; an existing chip is a token run.
-    const run = map.runs.find(
-      (candidate) =>
-        candidate.kind === "text" &&
-        candidate.nodeName !== "codeBlock" &&
-        start >= candidate.mdStart + candidate.openLen &&
-        end <= candidate.mdStart + candidate.openLen + candidate.docLen,
-    );
-    if (!run) continue;
-    const from = run.pmPos + (start - run.mdStart - run.openLen);
-    replacements.push({
-      from,
-      to: from + segment.source.length,
-      node: type.create(atom.attrs, null, doc.nodeAt(from)?.marks),
-    });
+  get docLength(): number {
+    return this.flats[this.parts.length]!;
   }
-  return replacements.sort((left, right) => right.from - left.from);
+  /** Absolute runs, built on first access; hot paths use `visitRuns` instead. */
+  get runs(): readonly RichRun[] {
+    return (this.#runs ??= this.parts.flatMap((p, i) => {
+      const flat = this.flats[i]!;
+      const md = this.mds[i]!;
+      return p.runs.map((r) => ({ ...r, flatStart: r.flatStart + flat, pmPos: r.pmPos + flat, mdStart: r.mdStart + md }));
+    }));
+  }
 }
 
-// Run ends belong to the next run, except code ends must stay inside their closing fence.
-function runOwnsOffset(run: RichRun, flatOffset: number): boolean {
-  const end = run.flatStart + run.docLen;
-  return flatOffset < end || (flatOffset === end && run.nodeName === "codeBlock");
+/** First part index whose end in `ends` (prefix sums) satisfies `ok`, which must be monotonic. */
+function firstPart(ends: readonly number[], count: number, ok: (end: number) => boolean): number {
+  let lo = 0;
+  let hi = count;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (ok(ends[mid + 1]!)) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/** Visits runs (with absolute bases) of blocks overlapping flat [from, to]; stops when `visit` returns true. */
+export function visitRuns(
+  map: RichDocMap,
+  visit: (run: Readonly<RichRun>, flatBase: number, mdBase: number) => boolean | void,
+  from = 0,
+  to = Infinity,
+): void {
+  const { parts, flats, mds } = map;
+  for (let i = firstPart(flats, parts.length, (end) => end >= from); i < parts.length && flats[i]! <= to; i += 1) {
+    for (const run of parts[i]!.runs) if (visit(run, flats[i]!, mds[i]!)) return;
+  }
+}
+
+export function serializeSelection(doc: ComposerDoc, from: number, to: number): string {
+  const start = Math.min(from, to);
+  const end = Math.max(from, to);
+  if (start === end) return "";
+  const selected: ComposerBlock[] = [];
+  for (const span of computeFlatBlockSpans(doc)) {
+    if (span.end < start || span.start > end) continue;
+    const b = span.block;
+    if (b.kind === "horizontalRule") {
+      if (span.start > start && span.end < end) selected.push(b);
+    } else if (b.kind === "codeBlock") {
+      if (start <= span.start && end >= span.end) selected.push(b);
+      else {
+        const text = b.code.slice(Math.max(0, start - span.start), Math.min(b.code.length, end - span.start));
+        selected.push({ kind: "line", prefix: null, inlines: text ? [{ kind: "text", text, marks: [] }] : [] });
+      }
+    } else {
+      const inlines = sliceInlines(b.inlines, Math.max(0, start - span.start), Math.min(span.end - span.start, end - span.start));
+      selected.push({ kind: "line", prefix: start <= span.start ? b.prefix : null, inlines });
+    }
+  }
+  return selected.length > 0 ? serializeEditorDoc({ blocks: selected }).value : "";
+}
+
+export function serializedMarkdownOffset(value: string, serialized: string, offset: number): number {
+  if (value === serialized) return offset;
+  let i = 0;
+  let mapped = 0;
+  let target = -1;
+  while (i < value.length && mapped < serialized.length) {
+    if (i === offset && target < 0) target = mapped;
+    if (value[i] === serialized[mapped] || serialized[mapped] !== "\n") i += 1;
+    mapped += 1;
+  }
+  if (i !== value.length || mapped !== serialized.length) return offset;
+  return target < 0 ? mapped + (offset - i) : target;
 }
 
 export function flatToMarkdown(map: RichDocMap, flatOffset: number): number {
   const bounded = Math.max(0, Math.min(flatOffset, map.docLength));
-  for (const run of map.runs) {
-    if (runOwnsOffset(run, bounded)) {
-      if (run.kind === "text" || run.kind === "token") {
-        return run.mdStart + run.openLen + (bounded - run.flatStart);
-      }
-      return run.mdStart + (bounded - run.flatStart);
+  let result = map.value.length;
+  visitRuns(map, (run, flat, md) => {
+    const start = flat + run.flatStart;
+    const end = start + run.docLen;
+    if (bounded < end || (bounded === end && run.nodeName === "codeBlock")) {
+      result = md + run.mdStart + (run.kind === "text" || run.kind === "token" ? run.openLen : 0) + (bounded - start);
+      return true;
     }
-  }
-  const last = map.runs[map.runs.length - 1];
-  return last ? last.mdStart + last.mdLen : 0;
+  }, bounded);
+  return result;
 }
 
 export function markdownToFlat(map: RichDocMap, markdownOffset: number): number {
-  for (const run of map.runs) {
-    if (markdownOffset < run.mdStart + run.mdLen) {
-      if (run.kind === "prefix") return run.flatStart;
+  const { parts, flats, mds } = map;
+  for (let i = firstPart(mds, parts.length, (end) => end > markdownOffset); i < parts.length; i += 1) {
+    for (const run of parts[i]!.runs) {
+      const mdStart = mds[i]! + run.mdStart;
+      if (markdownOffset >= mdStart + run.mdLen) continue;
+      const flatStart = flats[i]! + run.flatStart;
+      if (run.kind === "prefix") return flatStart;
       if (run.kind === "text" || run.kind === "token") {
-        const within = markdownOffset - run.mdStart;
-        if (within <= run.openLen) return run.flatStart;
-        // A chip is one document position however long its source is.
-        if (run.kind === "token" || within >= run.openLen + run.docLen) {
-          return run.flatStart + run.docLen;
-        }
-        return run.flatStart + (within - run.openLen);
+        const within = markdownOffset - mdStart;
+        if (within <= run.openLen) return flatStart;
+        if (run.kind === "token" || within >= run.openLen + run.docLen) return flatStart + run.docLen;
+        return flatStart + (within - run.openLen);
       }
-      return run.flatStart + (markdownOffset - run.mdStart);
+      return flatStart + (markdownOffset - mdStart);
     }
   }
   return map.docLength;
 }
 
-export function flatToPm(map: RichDocMap, flatOffset: number): number {
-  const bounded = Math.max(0, Math.min(flatOffset, map.docLength));
-  for (const run of map.runs) {
-    if (bounded < run.flatStart + run.docLen) {
-      return run.pmPos + (bounded - run.flatStart);
-    }
-  }
-  const last = map.runs[map.runs.length - 1];
-  if (!last) return 1;
-  return last.pmPos + last.docLen;
-}
+export const flatToPm = (map: RichDocMap, flatOffset: number): number => Math.max(0, Math.min(flatOffset, map.docLength));
+export const pmToFlat = (map: RichDocMap, pmPos: number): number => Math.max(0, Math.min(pmPos, map.docLength));
 
-export function pmToFlat(map: RichDocMap, pmPos: number): number {
-  for (const run of map.runs) {
-    if (pmPos >= run.pmPos && pmPos <= run.pmPos + run.docLen) {
-      if (run.kind === "token" && pmPos === run.pmPos + run.docLen) {
-        return run.flatStart + run.docLen;
+export interface SkillChipReplacement { readonly from: number; readonly to: number; readonly inline: ComposerInline }
+
+export function skillChipReplacements(
+  doc: ComposerDoc,
+  skillLabelFor: (name: string) => SkillMeta | null,
+  isKnownModel: IsKnownModel = NO_MODELS,
+): SkillChipReplacement[] {
+  const chips: ChipResolver = { skill: skillLabelFor, model: isKnownModel };
+  const replacements: SkillChipReplacement[] = [];
+  for (const span of computeFlatBlockSpans(doc)) {
+    if (span.block.kind !== "line") continue;
+    let pos = span.start;
+    for (const item of span.block.inlines) {
+      if (
+        (item.kind === "composer-skill" && item.skillName !== "" && !chips.skill(item.skillName)) ||
+        (item.kind === "composer-model" && !chips.model(item.instanceId, item.model))
+      ) {
+        replacements.push({ from: pos, to: pos + 1, inline: { kind: "text", text: readChipSource(item), marks: item.marks ?? [] } });
       }
-      return run.flatStart + Math.min(pmPos - run.pmPos, run.docLen);
+      pos += inlineFlatLength(item);
     }
   }
-  let best = 0;
-  for (const run of map.runs) {
-    if (run.pmPos <= pmPos) best = run.flatStart + run.docLen;
+  const map = serializeEditorDoc(doc);
+  let end = 0;
+  for (const seg of splitPromptIntoComposerSegments(map.value)) {
+    const start = end;
+    end += seg.type === "text" ? seg.text.length : seg.source.length;
+    if (seg.type !== "skill" && seg.type !== "model") continue;
+    const chip = chipForSegment(seg, chips);
+    if (!chip) continue;
+    const run = map.runs.find(
+      (r) => r.kind === "text" && r.nodeName !== "codeBlock" && start >= r.mdStart + r.openLen && end <= r.mdStart + r.openLen + r.docLen,
+    );
+    if (!run) continue;
+    const from = run.flatStart + (start - run.mdStart - run.openLen);
+    const res = resolveFlatOffset(doc, from);
+    const marks = res.block.kind === "line" ? inlineAfterOffset(res.block.inlines, res.offsetInBlock)?.marks ?? [] : [];
+    replacements.push({ from, to: from + seg.source.length, inline: marks.length ? { ...chip, marks } : chip });
   }
-  return Math.max(0, Math.min(best, map.docLength));
+  return replacements.sort((a, b) => b.from - a.from);
 }
 
-// Styled boundaries need two caret stops at one position, one for each side's marks.
-
-// Shown Markdown source has real characters at its edges, so it needs no extra stop.
-function styleMarks(marks: readonly Mark[]): readonly Mark[] {
-  return marks.filter((mark) => mark.type.name !== MARKDOWN_SOURCE_MARK);
+export function applySkillChipReplacements(doc: ComposerDoc, replacements: readonly SkillChipReplacement[]): ComposerDoc {
+  let current = doc;
+  for (const { from, to, inline } of replacements) {
+    const res = resolveFlatOffset(current, from);
+    if (res.block.kind !== "line") continue;
+    const nextInlines = normalizeInlines([
+      ...sliceInlines(res.block.inlines, 0, from - res.start),
+      inline,
+      ...sliceInlines(res.block.inlines, to - res.start, res.end - res.start),
+    ]);
+    current = { blocks: current.blocks.map((b, i) => (i === res.blockIndex ? { ...res.block, inlines: nextInlines } : b)) };
+  }
+  return current;
 }
 
-function styledEdge(state: EditorState) {
-  const { selection } = state;
-  if (!selection.empty) return null;
-  const { $from } = selection;
-  if (!$from.parent.inlineContent) return null;
-  const before = styleMarks($from.nodeBefore?.marks ?? Mark.none);
-  const after = styleMarks($from.nodeAfter?.marks ?? Mark.none);
-  if (Mark.sameSet(before, after)) return null;
-  return { before, after, current: styleMarks(state.storedMarks ?? $from.marks()) };
-}
+const SURROUND_MARKS: Record<string, RichTextMark> = { "`": "code", "*": "italic", _: "italic" };
 
-export function caretTakesMarksBefore(state: EditorState): boolean {
-  const edge = styledEdge(state);
-  return edge !== null && Mark.sameSet(edge.current, edge.before);
-}
-
-export function stepCaretAcrossStyledEdge(
-  state: EditorState,
-  direction: -1 | 1,
-): Transaction | null {
-  const edge = styledEdge(state);
-  if (!edge) return null;
-  if (!Mark.sameSet(edge.current, edge.before) && !Mark.sameSet(edge.current, edge.after)) {
+export function surroundSelectionWithMark(
+  state: ComposerEditorState,
+  from: number,
+  to: number,
+  marker: string,
+): ComposerEditResult | null {
+  const mark = SURROUND_MARKS[marker];
+  if (!mark || from >= to) return null;
+  const startRes = resolveFlatOffset(state.doc, from);
+  const endRes = resolveFlatOffset(state.doc, to);
+  if (startRes.blockIndex !== endRes.blockIndex || startRes.block.kind !== "line") return null;
+  const selected = sliceInlines(startRes.block.inlines, from - startRes.start, to - startRes.start);
+  if (selected.some((i) => i.kind === "text" && i.isMarkdownSource)) return null;
+  const marked = selected.map((i) => ({ ...i, marks: sortMarks([...(i.marks ?? []), mark].filter((v, idx, arr) => arr.indexOf(v) === idx)) }));
+  const nextInlines = normalizeInlines([
+    ...sliceInlines(startRes.block.inlines, 0, from - startRes.start),
+    ...marked,
+    ...sliceInlines(startRes.block.inlines, to - startRes.start, startRes.end - startRes.start),
+  ]);
+  const testLine: ComposerBlock = {
+    kind: "line",
+    prefix: null,
+    inlines: normalizeInlines(nextInlines.map((i) => (isChipInline(i) ? { kind: "text", text: "\uFFFC", marks: i.marks ?? [] } : i))),
+  };
+  const restored = buildComposerBlocks(serializeEditorDoc({ blocks: [testLine] }).value, () => null, { blocks: false })[0];
+  if (
+    !restored ||
+    restored.kind !== "line" ||
+    restored.inlines.length !== testLine.inlines.length ||
+    !testLine.inlines.every((a, i) => {
+      const b = restored.inlines[i]!;
+      return a.kind === "text" && b.kind === "text" && a.text === b.text && sameMarkSet(a.marks, b.marks);
+    })
+  ) {
     return null;
   }
+  return {
+    doc: { blocks: state.doc.blocks.map((b, i) => (i === startRes.blockIndex ? { ...startRes.block, inlines: nextInlines } : b)) },
+    selection: { anchor: from, head: to },
+    changeKind: "other",
+  };
+}
+
+export function splitOrLiftListItem(state: ComposerEditorState): ComposerEditResult | null {
+  const from = selectionFrom(state.selection);
+  const to = selectionTo(state.selection);
+  const startRes = resolveFlatOffset(state.doc, from);
+  const endRes = resolveFlatOffset(state.doc, to);
+  if (startRes.blockIndex !== endRes.blockIndex || startRes.block.kind !== "line" || !isListPrefix(startRes.block.prefix)) {
+    return null;
+  }
+  const { prefix, inlines } = startRes.block;
+  if (inlines.length === 0) {
+    return {
+      doc: { blocks: state.doc.blocks.map((b, i) => (i === startRes.blockIndex ? { kind: "line", prefix: null, inlines: [] } : b)) },
+      selection: collapsedSelection(startRes.start),
+      changeKind: "other",
+    };
+  }
+  const before = sliceInlines(inlines, 0, from - startRes.start);
+  const after = sliceInlines(inlines, to - startRes.start, startRes.end - startRes.start);
+  const nextPrefix: LinePrefix =
+    prefix.kind === "task"
+      ? { ...prefix, checked: false, contentSpace: " " }
+      : prefix.kind === "ordered"
+        ? { ...prefix, marker: nextOrderedMarkerText(prefix.marker), space: " " }
+        : { ...prefix, space: " " };
+  const blocks = [...state.doc.blocks];
+  blocks.splice(startRes.blockIndex, 1, { kind: "line", prefix, inlines: before }, { kind: "line", prefix: nextPrefix, inlines: after });
+  if (nextPrefix.kind === "ordered") {
+    const delim = nextPrefix.marker.slice(-1);
+    let prevMarker = nextPrefix.marker;
+    for (let i = startRes.blockIndex + 2; i < blocks.length; i += 1) {
+      const sib = blocks[i]!;
+      if (sib.kind !== "line" || !isListPrefix(sib.prefix) || sib.prefix.indent.length < nextPrefix.indent.length) break;
+      if (sib.prefix.indent !== nextPrefix.indent) continue;
+      if (sib.prefix.kind !== "ordered" || sib.prefix.marker.slice(-1) !== delim) break;
+      prevMarker = nextOrderedMarkerText(prevMarker);
+      blocks[i] = { ...sib, prefix: { ...sib.prefix, marker: prevMarker } };
+    }
+  }
+  return { doc: { blocks }, selection: collapsedSelection(from + 1), changeKind: "insert" };
+}
+
+export function convertBulletItemToTask(
+  state: ComposerEditorState,
+  checked: boolean,
+  stripPrefixLength = 0,
+): ComposerEditResult | null {
+  const from = selectionFrom(state.selection);
+  const res = resolveFlatOffset(state.doc, from);
+  if (res.block.kind !== "line" || res.block.prefix?.kind !== "bullet") return null;
+  const p = res.block.prefix;
+  const nextInlines = stripPrefixLength > 0 ? sliceInlines(res.block.inlines, stripPrefixLength, res.end - res.start) : res.block.inlines;
+  const task: ComposerBlock = {
+    kind: "line",
+    prefix: { kind: "task", indent: p.indent, checked, markerSpace: p.space || " ", contentSpace: " " },
+    inlines: nextInlines,
+  };
+  return {
+    doc: { blocks: state.doc.blocks.map((b, i) => (i === res.blockIndex ? task : b)) },
+    selection: collapsedSelection(Math.max(res.start, from - stripPrefixLength)),
+    changeKind: "other",
+  };
+}
+
+function styledEdge(state: ComposerEditorState) {
+  if (!selectionEmpty(state.selection)) return null;
+  const res = resolveFlatOffset(state.doc, state.selection.head);
+  if (res.block.kind !== "line") return null;
+  const beforeItem = inlineBeforeOffset(res.block.inlines, res.offsetInBlock);
+  const afterItem = inlineAfterOffset(res.block.inlines, res.offsetInBlock);
+  const before = beforeItem && !(beforeItem.kind === "text" && beforeItem.isMarkdownSource) ? beforeItem.marks ?? [] : [];
+  const after = afterItem && !(afterItem.kind === "text" && afterItem.isMarkdownSource) ? afterItem.marks ?? [] : [];
+  if (sameMarkSet(before, after)) return null;
+  return { before, after, current: state.selection.storedMarks ?? before };
+}
+
+export function caretTakesMarksBefore(state: ComposerEditorState): boolean {
+  const edge = styledEdge(state);
+  return edge !== null && sameMarkSet(edge.current, edge.before);
+}
+
+export function stepCaretAcrossStyledEdge(state: ComposerEditorState, direction: -1 | 1): ComposerEditResult | null {
+  const edge = styledEdge(state);
+  if (!edge || (!sameMarkSet(edge.current, edge.before) && !sameMarkSet(edge.current, edge.after))) return null;
   const target = direction === -1 ? edge.before : edge.after;
-  if (Mark.sameSet(edge.current, target)) return null;
-  return state.tr.setStoredMarks(target);
+  if (sameMarkSet(edge.current, target)) return null;
+  return { doc: state.doc, selection: { ...state.selection, storedMarks: [...target] } };
 }

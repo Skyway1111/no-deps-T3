@@ -1,4 +1,4 @@
-import { useLocale, useMessages } from "gt-react";
+import { useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import {
   deriveTimelineEntriesFromVisibleTurnItemsWithState,

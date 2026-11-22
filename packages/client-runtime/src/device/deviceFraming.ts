@@ -1,4 +1,4 @@
-import { Box3, Vector3 } from "three";
+import { Box3, Vector3 } from "./webglEngine.ts";
 
 export function createDeviceFraming() {
   const center = new Vector3();

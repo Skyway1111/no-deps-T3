@@ -2,8 +2,8 @@ import {
   codexFeedbackNotice,
   type CodexFeedbackSubmission,
 } from "@t3tools/client-runtime/state/threads";
-import { msg } from "gt-react";
-import { MessageSquareIcon } from "lucide-react";
+import { msg } from "@t3tools/shared/i18n/react";
+import { MessageSquareIcon } from "~/ui-core/icons";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { m, type MessageResolver } from "../../i18n/messages";

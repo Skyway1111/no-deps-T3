@@ -2,7 +2,7 @@ import { copySnapshot as copySnapshotToClipboard } from "./copySnapshot";
 import { InlineAudioPreview } from "../files/InlineAudioPreview";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
 import type { MarkdownExtensions } from "~/markdown/wordsHast";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { findRevealRef } from "./markdownFindContext";
 import {
   type EnvironmentId,
@@ -13,7 +13,7 @@ import {
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
-import { Link } from "@tanstack/react-router";
+import { Link } from "~/ui-core/router";
 import { useQuietThreadShell } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
@@ -36,12 +36,12 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   EyeIcon,
-  type LucideIcon,
+  type IconComponent,
   MessagesSquareIcon,
   Redo2Icon,
   PencilIcon,
   LinkIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { Button, InlineButton } from "../ui/button";
 import { FreshSessionRow, ModelSwitchRow } from "./V2LifecycleRow";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
@@ -401,7 +401,7 @@ export function useScheduledTaskTitle(
 }
 
 export function FoldedMessageHeader(props: {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   /** A generic label (not a thread title) never truncates, whatever its length in the UI language. */
   fitLabel?: boolean;

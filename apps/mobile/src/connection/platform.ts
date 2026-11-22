@@ -7,7 +7,7 @@ import {
 } from "@t3tools/client-runtime/connection";
 import { managedRelayAccountChanges, managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
 import * as Clock from "effect/Clock";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

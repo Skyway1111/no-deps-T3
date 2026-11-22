@@ -22,7 +22,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import * as Option from "effect/Option";
 import {
   AuthOrchestrationOperateScope,

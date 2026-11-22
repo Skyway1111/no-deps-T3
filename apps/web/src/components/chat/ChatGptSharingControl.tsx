@@ -1,6 +1,6 @@
 import { usesChatGptSharing } from "@t3tools/shared/usageLimits";
 import type { ServerProvider } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useId } from "react";
 import { OpenAI } from "../Icons";
 import { ChatGptUsageButton } from "../settings/ChatGptUsageButton";

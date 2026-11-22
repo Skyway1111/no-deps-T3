@@ -1,5 +1,5 @@
-import { T, useGT } from "gt-react";
-import { CircleCheckIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { CircleCheckIcon } from "~/ui-core/icons";
 import type { ComponentProps, ReactNode } from "react";
 import { Button } from "../ui/button";
 

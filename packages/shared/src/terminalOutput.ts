@@ -1,4 +1,4 @@
-import { eastAsianWidth } from "get-east-asian-width";
+import { eastAsianWidth } from "./parsers/eastAsianWidth.ts";
 
 /** Server/client folds must agree: only the last LIVE_LINES are cursor-addressable, with no wrapping.
  * SGR resets at line boundaries for safe tail cuts; unfinished escapes carry through pending. */

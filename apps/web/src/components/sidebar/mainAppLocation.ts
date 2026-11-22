@@ -1,4 +1,4 @@
-import { useNavigate, useRouter, type AnyRouter } from "@tanstack/react-router";
+import { useNavigate, useRouter, type AnyRouter } from "~/ui-core/router";
 
 import { GUEST_PAGE_PATH } from "../../guestPage";
 import { withoutAssistantCitationHash } from "../../lib/assistantCitationNavigation";

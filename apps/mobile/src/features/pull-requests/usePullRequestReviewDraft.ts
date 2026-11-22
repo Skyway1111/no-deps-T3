@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import * as Atom from "effect/reactivity/Atom";

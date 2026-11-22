@@ -1,4 +1,4 @@
-import type { LegendListRef } from "@legendapp/list/react";
+import type { VirtualListRef } from "~/ui-core/virtualList";
 import type { MessagesTimelineRow } from "./MessagesTimeline.logic";
 import type { RememberedTimelinePosition } from "./timelineScrollAnchoring";
 import type { TimelineViewport } from "./timelineViewport";
@@ -14,7 +14,7 @@ const SETTLE_MAX_FRAMES = 60;
  * or the target disappears.
  */
 export function settleListScroll(
-  list: Pick<LegendListRef, "getScrollableNode" | "scrollToOffset">,
+  list: Pick<VirtualListRef, "getScrollableNode" | "scrollToOffset">,
   target: (element: HTMLElement) => number | undefined,
   isCancelled: () => boolean,
 ): Promise<void> {
@@ -61,7 +61,7 @@ export function startTimelinePositionRestore({
   releaseForFind,
   onPositioned,
 }: {
-  readonly list: LegendListRef;
+  readonly list: VirtualListRef;
   readonly viewport: TimelineViewport;
   readonly listIdentityKey: string;
   /** The identity the mounted list opened on, until it shows another; see nextListOpening. */

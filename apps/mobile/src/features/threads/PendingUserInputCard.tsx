@@ -8,7 +8,7 @@ import {
   type TextDirection,
 } from "@t3tools/shared/textDirection";
 import { useNavigation } from "@react-navigation/native";
-import { Plural, T, useGT, Var } from "gt-react-native";
+import { Plural, T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useRef } from "react";
 import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import Animated, {

@@ -1,4 +1,4 @@
-import type { LegendListRef } from "@legendapp/list/react";
+import type { VirtualListRef } from "~/ui-core/virtualList";
 import {
   deriveRunlessWorkStartedAt,
   deriveThreadActivityRun,
@@ -56,7 +56,7 @@ export function ReadOnlyThreadTimeline(props: {
   readonly children: (controls: { readonly scrollToEnd: () => void }) => ReactNode;
 }) {
   const { threadKey, projection } = props;
-  const listRef = useRef<LegendListRef | null>(null);
+  const listRef = useRef<VirtualListRef | null>(null);
   const { resolvedTheme } = useTheme();
   // The rest is what ChatView derives from the same projection.
   const [projectQuestionHistory] = useState(() => createQuestionHistoryProjector());

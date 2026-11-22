@@ -10,7 +10,7 @@ import type {
   PullRequestDetail,
   PullRequestUpdateMethod,
 } from "@t3tools/contracts";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 import { composerPullRequests } from "../../state/pull-requests";
 import { useAtomCommand } from "../../state/use-atom-command";

@@ -1,4 +1,4 @@
-import type { ToastManagerAddOptions } from "@base-ui/react/toast";
+import type { ToastManagerAddOptions } from "~/ui-core/toast";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import type { ThreadToastData } from "./toast";

@@ -537,9 +537,9 @@ it.each(EXPANDED_WORD_ROLES)(
   "keeps the body and omits expanded %s from the prepared document",
   async (role) => {
     const file = await expandedWordFixture(role);
-    const { SaxesParser } = await import("saxes");
+    const { XmlStreamParser } = await import("@t3tools/shared/parsers/xml");
     const { prepareOffice } = await import("./officeArchive");
-    const parse = vi.spyOn(SaxesParser.prototype, "write");
+    const parse = vi.spyOn(XmlStreamParser.prototype, "write");
     try {
       const prepared = await prepareOffice(await file.arrayBuffer(), "docx");
       expect(prepared.truncated).toBe(true);

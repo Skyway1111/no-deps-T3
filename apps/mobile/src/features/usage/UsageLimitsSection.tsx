@@ -19,7 +19,7 @@ import {
   resetCountdown,
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice, resetCreditChoices } from "@t3tools/shared/usageLimitsCopy";
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useContext, useRef, useState } from "react";
 import { Atom } from "effect/reactivity";
 import { Pressable, View } from "react-native";

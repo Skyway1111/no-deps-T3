@@ -3,7 +3,7 @@ import {
   type LinkableMachine,
   linkDestination,
 } from "@t3tools/client-runtime/link-request";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useId } from "react";
 
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";

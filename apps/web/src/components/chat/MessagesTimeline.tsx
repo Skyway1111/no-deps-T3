@@ -1,4 +1,4 @@
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import { threadErrorText } from "@t3tools/client-runtime/state/threads";
 import { threadEnvironment } from "../../state/threads";
@@ -49,10 +49,10 @@ import {
   type SyntheticEvent,
 } from "react";
 import {
-  LegendList,
-  type LegendListRef,
+  VirtualList,
+  type VirtualListRef,
   type MaintainScrollAtEndOptions,
-} from "@legendapp/list/react";
+} from "~/ui-core/virtualList";
 import { type PendingApproval, type TimelineEntry } from "../../session-logic";
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
 import { type ChatFileAttachment, type TurnDiffSummary } from "../../types";
@@ -64,7 +64,7 @@ import {
   Minimize2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { Skeleton } from "../ui/skeleton";
 import { ExpandedImagePreview } from "./ExpandedImagePreview";
 import {
@@ -254,7 +254,7 @@ interface MessagesTimelineProps {
   awaitingRequestId?: string | null;
   footer?: ReactNode;
 
-  listRef: React.RefObject<LegendListRef | null>;
+  listRef: React.RefObject<VirtualListRef | null>;
   timelineEntries: ReadonlyArray<TimelineEntry>;
   latestRun: TimelineLatestRun | null;
   /** The run the screen reader announcer follows; see announcedRun. */
@@ -317,7 +317,7 @@ interface MessagesTimelineProps {
   onAnchorSizeChanged: (messageId: MessageId, size: number) => void;
   contentInsetEndAdjustment: number;
   onIsAtEndChange: (isAtEnd: boolean) => void;
-  /** Disable while reading history to prevent LegendList re-pinning near the bottom. */
+  /** Disable while reading history to prevent VirtualList re-pinning near the bottom. */
   liveFollowEnabled: boolean;
   /** Receives the list's viewport when it mounts; the returned cleanup runs when it goes away. */
   onViewportAttach?: (viewport: TimelineViewport) => () => void;
@@ -803,12 +803,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const viewportRef = useRef<TimelineViewport | null>(null);
   const navigateTimeline = () => viewportRef.current?.navigate({ releasesFollow: true });
   const restoreReady = restoringThreadPosition && rows.length > 0;
-  // Z: syncs LegendList's scroll position with which thread it shows. The list
+  // Z: syncs VirtualList's scroll position with which thread it shows. The list
   // is not keyed per thread and reports no "new data" event, and the restore
-  // must land before paint, after LegendList's own layout effects applied the
+  // must land before paint, after VirtualList's own layout effects applied the
   // new data. A citation request that arrives mid-restore takes over.
   const { findOpenAtOpening } = identityChanged ? { findOpenAtOpening: findOpen } : listState;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restores LegendList's scroll position for the shown thread before paint, after the list's own layout
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restores VirtualList's scroll position for the shown thread before paint, after the list's own layout
   useLayoutEffect(() => {
     const list = listRef.current;
     const viewport = viewportRef.current;
@@ -983,7 +983,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const minimapRefreshFrameRef = useRef<number | null>(null);
   const scheduleMinimapRefresh = useStableCallback(() => {
     if (minimapRefreshFrameRef.current !== null) return;
-    // LegendList recycles row containers before React commits their positions.
+    // VirtualList recycles row containers before React commits their positions.
     minimapRefreshFrameRef.current = requestAnimationFrame(() => {
       minimapRefreshFrameRef.current = null;
       refreshMinimap();
@@ -1253,7 +1253,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const canvas = useChatCanvas();
   const registerTimeline = canvas?.registerTimeline;
   // Stable so the list attaches once per mount, not on every render.
-  const setTimelineList = useStableCallback((list: LegendListRef | null) => {
+  const setTimelineList = useStableCallback((list: VirtualListRef | null) => {
     listRef.current = list;
     const scrollNode: HTMLElement | null = list?.getScrollableNode() ?? null;
     registerTimeline?.(scrollNode);
@@ -1273,7 +1273,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       disclosureRevealRef.current = null;
     });
     let contentSizeFrame: number | null = null;
-    // LegendList lays rows out from layout effects; the next frame sees them settled.
+    // VirtualList lays rows out from layout effects; the next frame sees them settled.
     let scheduledData: unknown = null;
     const scheduleContentSizeChanged = () => {
       if (!list) return;
@@ -1344,7 +1344,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     contentInsetEndAdjustment,
   });
 
-  // LegendList moves rows one commit late; per-row providers prevent thread context leaks.
+  // VirtualList moves rows one commit late; per-row providers prevent thread context leaks.
   const onAudioPlaybackChange = (rowId: string, event: SyntheticEvent) => {
     const audio = event.target;
     if (!(audio instanceof HTMLAudioElement)) return;
@@ -1454,7 +1454,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 onCite={onCiteAssistantText}
               />
             ) : null}
-            <LegendList<MessagesTimelineRow>
+            <VirtualList<MessagesTimelineRow>
               ref={setTimelineList}
               data={rows}
               extraData={listExtraData}
@@ -1565,7 +1565,7 @@ function isMessageRow(row: MessagesTimelineRow) {
   return row.kind === "message" && row.message.role !== "system";
 }
 
-// LegendList recycles a row's container once it leaves the draw buffer, which
+// VirtualList recycles a row's container once it leaves the draw buffer, which
 // moves a native selection's ends onto other rows. Pin the selected rows.
 function useSelectedTimelineRowIds(viewport: HTMLElement | null) {
   const [rowIds, setRowIds] = useState<ReadonlyArray<string>>([]);
@@ -1615,7 +1615,7 @@ function keyExtractor(item: MessagesTimelineRow) {
   return item.id;
 }
 
-// LegendList estimates unmeasured rows from their type's average. Long messages of equal length
+// VirtualList estimates unmeasured rows from their type's average. Long messages of equal length
 // can differ in height by orders of magnitude, so each gets its own type to avoid nested-update loops.
 function getItemType(item: MessagesTimelineRow) {
   if (item.kind !== "message") return item.kind;

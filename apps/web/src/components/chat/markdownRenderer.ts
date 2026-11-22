@@ -1,25 +1,31 @@
-import type { Element, Nodes, Root } from "hast";
-import { toJsxRuntime, type Components } from "hast-util-to-jsx-runtime";
-import { urlAttributes } from "html-url-attributes";
+import {
+  elToReact,
+  URL_ATTRIBUTES,
+  type ElElement,
+  type ElNode,
+  type ElRoot,
+} from "@t3tools/shared/markdownHast";
 import type { ReactElement } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
 import { wordsHast, type WordsHastOptions } from "../../markdown/wordsHast";
 
-export type MarkdownUrlTransform = (url: string, key: string, node: Element) => string;
+export type MarkdownUrlTransform = (url: string, key: string, node: ElElement) => string;
+
+type MarkdownComponentMap = Readonly<Record<string, unknown>>;
 
 interface MarkdownRendererOptions {
   readonly markdown: WordsHastOptions;
-  readonly components: Partial<Components>;
+  readonly components: MarkdownComponentMap;
   readonly urlTransform: MarkdownUrlTransform;
 }
 
 // Elements are immutable, so a remount (a thread switch, a row scrolled back into view)
 // reuses one instead of parsing again. Parsing is most of the cost of rendering markdown.
-// An element and the hast it keeps hold about 20 bytes per source character, so ~10 MB.
+// An element and the tree it keeps hold about 20 bytes per source character, so ~10 MB.
 const MAX_CACHED_CHARS = 500_000;
 interface Rendered {
-  readonly tree: Root;
+  readonly tree: ElRoot;
   element?: ReactElement;
 }
 const rendered = new Map<string, Rendered>();
@@ -42,7 +48,9 @@ function remember(key: string, entry: Rendered) {
   }
 }
 
-/** Renders markdown with Words, keeping one parse cache per option set. */
+const jsxRuntime = { Fragment, jsx, jsxs };
+
+/** Renders markdown with the unified parser, keeping one parse cache per option set. */
 export function createMarkdownRenderer({
   markdown,
   components,
@@ -50,15 +58,14 @@ export function createMarkdownRenderer({
 }: MarkdownRendererOptions) {
   const keyPrefix = `${nextRendererId++}\u0000`;
 
-  // URL attributes, as react-markdown transformed them.
-  const prepare = (node: Nodes) => {
+  const prepare = (node: ElNode) => {
     if (!("children" in node)) return;
     for (const child of node.children) {
       if (child.type !== "element") continue;
       const { properties } = child;
       for (const key in properties) {
-        if (!Object.hasOwn(urlAttributes, key)) continue;
-        const tags = urlAttributes[key];
+        if (!Object.hasOwn(URL_ATTRIBUTES, key)) continue;
+        const tags = URL_ATTRIBUTES[key];
         if (tags === null || tags?.includes(child.tagName)) {
           properties[key] = urlTransform(String(properties[key] || ""), key, child);
         }
@@ -85,13 +92,8 @@ export function createMarkdownRenderer({
     /** A cached entry, or a fresh one that `remember` can keep. Cached trees are shared, so callers must not change them. */
     parse,
     element: (entry: Rendered): ReactElement =>
-      (entry.element ??= toJsxRuntime(entry.tree, {
-        Fragment,
+      (entry.element ??= elToReact<ReactElement>(entry.tree, jsxRuntime, {
         components,
-        ignoreInvalidStyle: true,
-        jsx,
-        jsxs,
-        passKeys: true,
         passNode: true,
       })),
     remember(text: string, entry: Rendered) {

@@ -2,7 +2,7 @@ import {
   type SideThreadOpenIntent,
   sideThreadOpenIntentOf,
 } from "@t3tools/client-runtime/side-thread";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { createContext, use, type KeyboardEvent, type MouseEvent } from "react";
 
 import { contextMenuSourceOf } from "../contextMenuSource";

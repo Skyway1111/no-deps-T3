@@ -1,4 +1,4 @@
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useId, useState, type KeyboardEvent } from "react";
 
 import { Button } from "../ui/button";

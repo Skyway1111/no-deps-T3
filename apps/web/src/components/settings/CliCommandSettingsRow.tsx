@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { msg, T, useMessages } from "gt-react";
+import { msg, T, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import {

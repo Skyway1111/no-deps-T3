@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "~/ui-core/icons";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,

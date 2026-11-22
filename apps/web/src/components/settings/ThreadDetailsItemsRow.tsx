@@ -1,5 +1,5 @@
-import { T, useGT, Var } from "gt-react";
-import { ChevronDownIcon } from "lucide-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { ChevronDownIcon } from "~/ui-core/icons";
 
 import { updateClientSettings, useClientSettings } from "../../hooks/useSettings";
 import { ThreadDetailsItemsMenuItems } from "../chat/ThreadDetailsItemsMenu";

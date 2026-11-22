@@ -1,4 +1,4 @@
-import { Debouncer } from "@tanstack/react-pacer";
+import { Debouncer } from "~/ui-core/pacer";
 
 export interface StateStorage<R = unknown> {
   getItem: (name: string) => string | null | Promise<string | null>;
@@ -62,8 +62,6 @@ export function createDeferredStorage<TValue>(
     },
     removeItem: (name) => {
       debouncedSetItem.cancel();
-      // cancel() leaves the captured value in Pacer's lastArgs.
-      debouncedSetItem.reset();
       resolvedStorage.removeItem(name);
     },
     flush: () => {

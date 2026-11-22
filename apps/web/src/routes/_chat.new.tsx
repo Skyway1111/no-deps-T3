@@ -1,6 +1,6 @@
 import { parseNewThreadLink } from "@t3tools/shared/promptLinksCopy";
-import { createFileRoute, useLocation } from "@tanstack/react-router";
-import { T, useMessages } from "gt-react";
+import { createFileRoute, useLocation } from "~/ui-core/router";
+import { T, useMessages } from "@t3tools/shared/i18n/react";
 import { NewThreadLinkView } from "../components/promptLinks/NewThreadLinkView";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
 import { SidebarInset } from "../components/ui/sidebar";

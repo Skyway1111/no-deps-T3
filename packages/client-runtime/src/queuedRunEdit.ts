@@ -1,5 +1,4 @@
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 /**
  * A queued-message edit ends on save, cancel, or when its run leaves the queue.
  * The store owns one watcher per edit, so "run left the queue" is handled exactly

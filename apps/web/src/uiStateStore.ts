@@ -1,7 +1,7 @@
-import { Debouncer } from "@tanstack/react-pacer";
+import { Debouncer } from "~/ui-core/pacer";
 import { PullRequestMergeMethod } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 import { normalizeProjectPathForComparison } from "@t3tools/client-runtime/state/projects";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";

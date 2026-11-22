@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { expect, it, vi } from "vite-plus/test";
-import { createStore, type StoreApi, useStore } from "zustand";
+import { createStore, type StoreApi, useStore } from "@t3tools/shared/core/react";
 
 import { act, render } from "../../../test/render";
 import {

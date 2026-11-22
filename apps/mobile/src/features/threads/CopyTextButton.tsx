@@ -1,6 +1,6 @@
 import * as Dialog from "../../components/ui/Dialog";
 import { SymbolView } from "../../components/ui/AppSymbol";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { memo, useState } from "react";
 import { Pressable, type ColorValue } from "react-native";
 

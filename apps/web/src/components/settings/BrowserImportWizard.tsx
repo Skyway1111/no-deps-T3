@@ -2,9 +2,9 @@ import { PermissionChecklist, PermissionContinueButton } from "../permissions/Pe
 import { usePermissionStatus } from "../permissions/usePermissionStatus";
 import { browserImportFailureMessage } from "@t3tools/client-runtime/contract-labels";
 import type { BROWSER_IMPORT_FAILURE_COPY, BrowserImportSource } from "@t3tools/contracts";
-import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "~/ui-core/icons";
 import { useRef, useState } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { MessageResolver } from "~/i18n/messages";
 
 import { cn, randomUUID } from "~/lib/utils";

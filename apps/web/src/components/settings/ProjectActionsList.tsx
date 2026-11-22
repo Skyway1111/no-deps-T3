@@ -1,6 +1,6 @@
 import type { ProjectScript, ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
-import { SettingsIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { SettingsIcon } from "~/ui-core/icons";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { commandForProjectScript } from "../../projectScripts";
 import { ScriptIcon } from "../projectScriptEditor";

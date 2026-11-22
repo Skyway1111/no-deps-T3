@@ -8,7 +8,7 @@ import type {
 } from "@t3tools/contracts";
 import { rewindFileRestore } from "@t3tools/client-runtime/state/thread-repositories";
 import { useAtomValue } from "@effect/atom-react";
-import { T, Var } from "gt-react";
+import { T, Var } from "@t3tools/shared/i18n/react";
 import { Atom } from "effect/reactivity";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";

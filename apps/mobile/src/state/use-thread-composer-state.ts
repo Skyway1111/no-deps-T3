@@ -126,7 +126,7 @@ import {
   startQueuedRunEditSave,
   useQueuedRunEdit,
 } from "./queued-run-edit";
-import { msg, useLocale, useMessages } from "gt-react-native";
+import { msg, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import { setPendingConnectionError } from "./use-remote-environment-registry";
 import { clearThreadComposerError, setThreadComposerError } from "./thread-composer-error";

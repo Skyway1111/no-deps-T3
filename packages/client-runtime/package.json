@@ -15,6 +15,10 @@
       "types": "./src/zip/boundedZip.ts",
       "default": "./src/zip/boundedZip.ts"
     },
+    "./zip/native-zip": {
+      "types": "./src/zip/nativeZip.ts",
+      "default": "./src/zip/nativeZip.ts"
+    },
     "./zip/directory": {
       "types": "./src/zip/zipDirectory.ts",
       "default": "./src/zip/zipDirectory.ts"
@@ -681,16 +685,11 @@
     "@t3tools/shared": "workspace:*",
     "@t3tools/source-control-core": "workspace:*",
     "@t3tools/source-control-definitions": "workspace:*",
-    "effect": "catalog:",
-    "gt-i18n": "1.0.40",
-    "jszip": "3.10.1",
-    "three": "0.180.0",
-    "unbash": "^5.0.0"
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@types/mdast": "^4.0.4",
-    "@types/three": "0.180.0",
     "remark-gfm": "catalog:",
     "remark-parse": "catalog:",
     "unified": "catalog:",

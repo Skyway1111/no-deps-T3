@@ -1,5 +1,5 @@
 import { ASSISTANT_CITATION_MAX_COMMENT_LENGTH, type AssistantCitation } from "@t3tools/contracts";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { use, useEffect, useRef, useState, type RefObject } from "react";
 
 import { TextFieldSpeechControls, useTextFieldSpeech } from "~/speech/useTextFieldSpeech";

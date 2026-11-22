@@ -7,8 +7,7 @@ import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
 import { hostedThreadLink } from "@t3tools/shared/threadLinks";
 
 import { resolveThreadCurrentPullRequestLink } from "./threadPullRequests.ts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 export interface ThreadReferenceCopyTarget {
   readonly kind: "pull-request" | "thread";

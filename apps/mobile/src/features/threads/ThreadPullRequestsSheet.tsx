@@ -1,6 +1,6 @@
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { LegendList } from "@legendapp/list/react-native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 import { useMemo } from "react";
 import { View } from "react-native";

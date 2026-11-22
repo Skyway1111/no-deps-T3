@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs";
 import {
   squashAtomCommandFailure,

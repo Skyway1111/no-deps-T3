@@ -3,7 +3,7 @@ import { splitFilePathPosition } from "@t3tools/shared/fileLinks";
 import { isMacPlatform, isWindowsPlatform } from "./lib/utils";
 import { useAtomValue } from "@effect/atom-react";
 import { AuthOrchestrationOperateScope, type EnvironmentId } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { DragEvent } from "react";
 
 import { hostEnvironmentIdAtom } from "./state/primaryEnvironment";

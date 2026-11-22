@@ -13,9 +13,9 @@ import {
   type ProviderInstanceId,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
-import { Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "~/ui-core/icons";
 
 import { ensureLocalApi } from "../../localApi";
 import { useEnvironmentQuery } from "../../state/query";

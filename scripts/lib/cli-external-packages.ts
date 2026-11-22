@@ -21,7 +21,7 @@ const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   "utf-8-validate",
 ] as const;
 
-// Match Cursor dependency boundaries so zod does not externalize zod-to-json-schema.
+// Match Cursor dependency boundaries for runtime external packages.
 const CURSOR_RUNTIME_DEPENDENCIES = [
   "@bufbuild/protobuf",
   "@connectrpc/connect",
@@ -29,7 +29,6 @@ const CURSOR_RUNTIME_DEPENDENCIES = [
   "@connectrpc/connect-web",
   "@statsig/js-client",
   "@statsig/client-core",
-  "zod",
   "undici",
   "@fastify/busboy",
 ] as const;

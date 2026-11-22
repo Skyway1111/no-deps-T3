@@ -16,7 +16,7 @@ import type {
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { useNavigation } from "@react-navigation/native";
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 import { tryOpenExternalUrl } from "../../../lib/openExternalUrl";

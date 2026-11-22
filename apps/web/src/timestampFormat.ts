@@ -1,5 +1,5 @@
 import { type TimestampFormat } from "@t3tools/contracts/settings";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { DEFAULT_LOCALE } from "./i18n/locales";
 import { getActiveLocale, m, type MessageResolver } from "./i18n/messages";

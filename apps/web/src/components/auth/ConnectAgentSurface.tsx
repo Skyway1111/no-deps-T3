@@ -8,13 +8,13 @@ import {
   parseMcpApprovalCode,
 } from "@t3tools/contracts";
 import { managedRuntimeModeCeilingMessage } from "@t3tools/client-runtime/contract-labels";
-import { Radio as RadioPrimitive } from "@base-ui/react/radio";
+import { Radio as RadioPrimitive } from "~/ui-core/primitives";
 import { isLoopbackHost } from "@t3tools/shared/preview";
-import { EyeIcon, type LucideIcon } from "lucide-react";
+import { EyeIcon, type IconComponent } from "~/ui-core/icons";
 import type * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
@@ -37,7 +37,7 @@ import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 
 export const accessConfig: Record<
   AuthMcpClientAccess,
-  { readonly label: string; readonly description: string; readonly icon: LucideIcon }
+  { readonly label: string; readonly description: string; readonly icon: IconComponent }
 > = {
   "read-only": {
     label: msg("Read only"),

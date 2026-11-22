@@ -59,7 +59,7 @@ vi.mock("react", () => ({
   useMemo: (factory: () => unknown) => factory(),
   useRef: (current: unknown) => ({ current }),
 }));
-vi.mock("@tanstack/react-router", () => ({
+vi.mock("~/ui-core/router", () => ({
   useRouter: () => ({
     state: { location: { href: "/" }, matches: [] },
     history: { subscribe: () => () => {} },

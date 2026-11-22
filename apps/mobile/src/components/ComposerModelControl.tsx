@@ -1,5 +1,5 @@
 import type { ModelSelection, ProviderDriverKind } from "@t3tools/contracts";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   buildTraitsTriggerDisplay,
   getPromptControlledTraits,

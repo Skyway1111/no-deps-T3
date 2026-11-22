@@ -1,5 +1,5 @@
 // @effect-diagnostics globalTimers:off - imperative WebSocket callbacks own and clear their response deadline.
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { translatableError } from "../errors/translatable.ts";
 import {
   SPEECH_STREAM_MAX_CHUNK_BYTES,

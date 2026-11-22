@@ -4,8 +4,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { msg } from "gt-react";
-import { create } from "zustand";
+import { msg } from "@t3tools/shared/i18n/react";
+import { create } from "@t3tools/shared/core/react";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { m, type MessageResolver } from "../i18n/messages";

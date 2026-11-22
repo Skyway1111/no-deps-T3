@@ -20,7 +20,7 @@ const state = vi.hoisted(() => ({
 
 // One connected primary environment that can read pull requests. Its project list and
 // discovery flag start empty so a test can deliver links before they arrive.
-vi.mock(import("@tanstack/react-router"), async (original) => ({
+vi.mock(import("~/ui-core/router"), async (original) => ({
   ...(await original()),
   useNavigate: (() => state.navigate) as never,
   useRouter: (() => ({

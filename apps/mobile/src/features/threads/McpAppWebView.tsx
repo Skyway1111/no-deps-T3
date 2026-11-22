@@ -23,7 +23,7 @@ import {
 import * as Predicate from "effect/Predicate";
 import { AsyncResult } from "effect/reactivity";
 import Constants from "expo-constants";
-import { msg, T, useGT, Var } from "gt-react-native";
+import { msg, T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useNavigation } from "@react-navigation/native";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Platform, View } from "react-native";

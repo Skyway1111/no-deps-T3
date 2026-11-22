@@ -15,7 +15,7 @@ import { safeDecodeURIComponent } from "@t3tools/shared/markdownLinks";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "./hooks/useLocalStorage";
 import { m } from "./i18n/messages";
 import { shellEnvironment } from "./state/shell";

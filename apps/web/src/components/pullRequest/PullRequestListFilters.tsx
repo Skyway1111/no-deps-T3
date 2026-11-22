@@ -20,8 +20,8 @@ import {
   SearchIcon,
   TagIcon,
   UserRoundIcon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { type ElementType, useState } from "react";
 
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";

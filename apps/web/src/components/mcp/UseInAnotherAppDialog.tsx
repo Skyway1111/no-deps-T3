@@ -15,12 +15,12 @@ import {
   mcpClientScopes,
   sessionGrantsScope,
 } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { useNavigate } from "~/ui-core/router";
+import { CheckIcon, CopyIcon } from "~/ui-core/icons";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
 import * as Result from "effect/Result";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
 import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
 

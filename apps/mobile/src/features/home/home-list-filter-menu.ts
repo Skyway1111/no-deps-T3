@@ -2,7 +2,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
 import { m, type MessageResolver } from "../../i18n/messages";

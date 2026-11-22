@@ -3,7 +3,7 @@ import * as Dialog from "./Dialog";
 import { requireNativeModule } from "expo";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useId } from "react";
 
 import { m } from "../../i18n/messages";

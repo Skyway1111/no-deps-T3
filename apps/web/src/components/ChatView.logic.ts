@@ -1,5 +1,5 @@
 import { toServerClock } from "@t3tools/client-runtime/clock";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { type OrchestrationV2ProviderTurn, type RunAttemptId } from "@t3tools/contracts";
 import {
@@ -345,7 +345,7 @@ export function resolveDraftHeroState(input: {
   );
 }
 
-/** Remounting or initially emptying LegendList flashes the chat pane, even for cached threads. */
+/** Remounting or initially emptying VirtualList flashes the chat pane, even for cached threads. */
 export type HeldThreadTimeline<T extends readonly unknown[]> = {
   threadKey: string | null;
   entries: T;

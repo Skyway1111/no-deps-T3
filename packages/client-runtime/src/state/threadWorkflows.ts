@@ -5,8 +5,7 @@ import {
   type OrchestrationV2ProviderCapabilities,
 } from "@t3tools/contracts";
 import { copySorted } from "@t3tools/shared/Array";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 import type { ThreadStructure } from "./models.ts";
 

@@ -1,6 +1,6 @@
 // RFC 9449 DPoP proofs for relay requests. Platforms supply the key: web keeps a
 // non-extractable WebCrypto key, mobile signs with the platform's P-256 through a native module.
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { MarkedText, translatableMessage } from "../errors/translatable.ts";
 import { normalizeDpopHtu, type DpopPublicJwk } from "@t3tools/shared/dpopCommon";
 import * as Cache from "effect/Cache";

@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useRef } from "react";
 
 import { Textarea } from "../ui/textarea";

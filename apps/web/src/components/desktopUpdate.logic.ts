@@ -1,7 +1,7 @@
 import { desktopTrackMismatchText } from "@t3tools/client-runtime/state/server";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../i18n/messages";
 import { channelSwitchLabel } from "./sidebar/updateEverything.logic";

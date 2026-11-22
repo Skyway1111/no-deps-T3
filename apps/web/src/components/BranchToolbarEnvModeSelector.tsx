@@ -1,8 +1,8 @@
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
-import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
+import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "~/ui-core/icons";
 import { memo, type MouseEvent as ReactMouseEvent } from "react";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import {
   resolveCurrentWorkspaceLabel,

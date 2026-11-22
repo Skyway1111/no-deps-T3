@@ -1,8 +1,8 @@
 import { useAuth } from "@clerk/react";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { Link } from "@tanstack/react-router";
-import { T } from "gt-react";
-import { CheckIcon } from "lucide-react";
+import { Link } from "~/ui-core/router";
+import { T } from "@t3tools/shared/i18n/react";
+import { CheckIcon } from "~/ui-core/icons";
 import { type ReactNode, useState } from "react";
 
 import { APP_DISPLAY_NAME, DESKTOP_DOWNLOAD_URL } from "~/branding";

@@ -1,593 +1,333 @@
-import { type Command, Extension, Mark as TiptapMark } from "@tiptap/core";
 import {
-  closeHistory,
-  isHistoryTransaction,
-  redo,
-  redoDepth,
-  undo,
-  undoDepth,
-} from "@tiptap/pm/history";
-import type { MarkType, Node as ProseMirrorNode } from "@tiptap/pm/model";
-import {
-  AllSelection,
-  type EditorState,
-  NodeSelection,
-  Plugin,
-  PluginKey,
-  type Selection,
-  TextSelection,
-  type Transaction,
-} from "@tiptap/pm/state";
-import { type Mapping, StepMap } from "@tiptap/pm/transform";
-import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
+  type ComposerBlock,
+  type ComposerDoc,
+  type ComposerEditorState,
+  type ComposerInline,
+  type ComposerSelection,
+  computeFlatBlockSpans,
+  inlineAfterOffset,
+  inlineBeforeOffset,
+  inlineFlatLength,
+  inlinesFlatLength,
+  inlinesPlainText,
+  isChipInline,
+  normalizeInlines,
+  resolveFlatOffset,
+  selectionEmpty,
+  selectionFrom,
+  selectionTo,
+  sliceInlines,
+} from "~/components/composer/types";
+import { inlineMarkdownUnitMarks, type RichTextMark } from "~/composer-rich-text";
+import { caretTakesMarksBefore, serializeEditorDoc, visitRuns } from "~/composer-rich-text-doc";
 
-import {
-  inlineMarkdownUnitMarks,
-  MARKDOWN_SOURCE_MARK,
-  type RichTextMark,
-} from "~/composer-rich-text";
-import { caretTakesMarksBefore, serializeEditorDoc } from "~/composer-rich-text-doc";
-
-// Styled text the selection touches becomes source text with the source mark,
-// parsed back once the selection leaves. History steps only replay on the shape
-// they were recorded in, so the history records both rewrites. Recording would
-// clear redo after undo or redo, so until the next edit see `normalizeDetached`.
-
-const STYLE_MARKS: RichTextMark[] = ["bold", "italic", "strike", "code"];
-const PREVIEW_TAGS: Record<Exclude<RichTextMark, "code">, string> = {
-  bold: "strong",
-  italic: "em",
-  strike: "s",
-};
-const ATOM_TEXT = "￼";
+const ATOM = "\uFFFC";
 const DELIMITER = /[*_~`]/;
 
-type TextRange = { from: number; to: number };
-
-type StyledRange = TextRange & {
+export interface TextRange { from: number; to: number }
+export interface StyledRange extends TextRange {
   escapedOpener: boolean;
   markers: { at: number; closing: boolean; text: string }[];
-};
-
-function collectStyledRanges(doc: ProseMirrorNode): StyledRange[] {
-  const ranges: StyledRange[] = [];
-  const map = serializeEditorDoc(doc);
-  let range: StyledRange | null = null;
-  let openLength = 0;
-  for (const run of map.runs) {
-    if (run.nodeName === "codeBlock") continue;
-    if (run.openLen > 0) {
-      let backslashes = 0;
-      while (map.value[run.mdStart - backslashes - 1] === "\\") backslashes += 1;
-      range ??= {
-        from: run.pmPos,
-        to: run.pmPos,
-        escapedOpener: backslashes % 2 !== 0,
-        markers: [],
-      };
-      range.markers.push({
-        at: run.pmPos,
-        closing: false,
-        text: map.value.slice(run.mdStart, run.mdStart + run.openLen),
-      });
-    }
-    if (range === null) continue;
-    range.to = run.pmPos + run.docLen;
-    if (run.closeLen > 0) {
-      const end = run.mdStart + run.mdLen;
-      range.markers.push({
-        at: range.to,
-        closing: true,
-        text: map.value.slice(end - run.closeLen, end),
-      });
-    }
-    openLength += run.openLen - run.closeLen;
-    if (openLength === 0) {
-      ranges.push(range);
-      range = null;
-    }
-  }
-  return ranges;
+}
+export interface MarkdownSourcePreviewSegment {
+  readonly text: string;
+  readonly marks: readonly RichTextMark[];
+  readonly isMarker: boolean;
+  readonly hidden?: boolean;
 }
 
-/** Whether the Markdown that reveal shows for `range` parses back to the same styles. */
-function revealsFaithfully(doc: ProseMirrorNode, range: StyledRange): boolean {
-  if (range.escapedOpener) return false;
-  const adjacent = withAdjacentDelimiters(doc, range);
-  if (adjacent.from !== range.from || adjacent.to !== range.to) return false;
-  // Parsing keeps escapes as text, so styled `path\` or `2*3` stays styled, unshown.
-  const markers = range.markers.toSorted(
-    (left, right) => left.at - right.at || Number(right.closing) - Number(left.closing),
-  );
-  const expected: Array<RichTextMark[] | null> = [];
-  let text = "";
-  let next = 0;
-  const addMarkers = (pos: number) => {
-    for (; next < markers.length && markers[next]!.at <= pos; next++) {
-      text += markers[next]!.text;
-      expected.push(...markers[next]!.text.split("").map(() => null));
-    }
-  };
-  doc.nodesBetween(range.from, range.to, (node, pos) => {
-    if (!node.isInline) return true;
-    const marks = STYLE_MARKS.filter((name) => node.marks.some((mark) => mark.type.name === name));
-    const from = Math.max(pos, range.from);
-    const content = node.isText ? node.text!.slice(from - pos, range.to - pos) : ATOM_TEXT;
-    for (let index = 0; index < content.length; index++) {
-      addMarkers(from + index);
-      text += content[index];
-      expected.push(marks);
-    }
-    return false;
-  });
-  addMarkers(range.to);
-  return inlineMarkdownUnitMarks(text).every((marks, index) => sameMarks(marks, expected[index]!));
-}
+const sameMarks = (l: readonly RichTextMark[] | null, r: readonly RichTextMark[] | null) =>
+  l === null || r === null ? l === r : l.length === r.length && l.every((m) => r.includes(m));
 
-function touches(selection: Selection, { from, to }: TextRange): boolean {
-  return selection.empty
-    ? selection.from >= from && selection.from <= to
-    : selection.from < to && selection.to > from;
-}
-
-function sourceRegions(doc: ProseMirrorNode, type: MarkType): TextRange[] {
-  const regions: TextRange[] = [];
-  doc.descendants((node, pos) => {
-    if (!node.isTextblock) return true;
-    let current: TextRange | null = null;
-    node.forEach((child, offset) => {
-      const start = pos + 1 + offset;
-      if (!type.isInSet(child.marks)) {
-        current = null;
-      } else if (current) {
-        current.to = start + child.nodeSize;
-      } else {
-        current = { from: start, to: start + child.nodeSize };
-        regions.push(current);
-      }
-    });
-    return false;
-  });
-  return regions;
-}
-
-/** Takes in delimiters typed beside the source, like a closing `**` retyped after its text. */
-function withAdjacentDelimiters(doc: ProseMirrorNode, region: TextRange): TextRange {
-  const before = doc.resolve(region.from).nodeBefore;
-  const after = doc.resolve(region.to).nodeAfter;
-  let from = region.from;
-  let to = region.to;
-  if (before?.isText && before.marks.length === 0) {
-    const text = before.text!;
-    let count = 0;
-    while (count < text.length && DELIMITER.test(text[text.length - 1 - count]!)) count += 1;
-    // Only an odd backslash run escapes the first adjacent delimiter.
-    let backslashes = 0;
-    while (text[text.length - 1 - count - backslashes] === "\\") backslashes += 1;
-    if (count > 0 && backslashes % 2 === 1) count -= 1;
-    from -= count;
-  }
-  if (after?.isText && after.marks.length === 0) {
-    const text = after.text!;
-    let count = 0;
-    while (count < text.length && DELIMITER.test(text[count]!)) count += 1;
-    to += count;
-  }
-  return { from, to };
-}
-
-function sameMarks(left: RichTextMark[] | null, right: RichTextMark[] | null): boolean {
-  if (left === null || right === null) return left === right;
-  return left.length === right.length && left.every((mark) => right.includes(mark));
-}
-
-/** Calls `visit` for each run of units that parse the same way. */
 function forEachUnitRun(
   units: ReadonlyArray<RichTextMark[] | null>,
   visit: (start: number, end: number, marks: RichTextMark[] | null) => void,
 ): void {
-  let start = 0;
-  while (start < units.length) {
-    let end = start + 1;
-    while (end < units.length && sameMarks(units[end]!, units[start]!)) end += 1;
-    visit(start, end, units[start]!);
-    start = end;
+  for (let s = 0; s < units.length; ) {
+    let e = s + 1;
+    while (e < units.length && sameMarks(units[e]!, units[s]!)) e += 1;
+    visit(s, e, units[s]!);
+    s = e;
   }
 }
 
-function regionUnits(doc: ProseMirrorNode, { from, to }: TextRange) {
-  const text = doc.textBetween(from, to, undefined, ATOM_TEXT);
-  return { text, units: inlineMarkdownUnitMarks(text) };
+export function touchesRange(sel: ComposerSelection, { from, to }: TextRange): boolean {
+  const s = selectionFrom(sel);
+  const e = selectionTo(sel);
+  return s === e ? s >= from && s <= to : s < to && e > from;
 }
 
-function collapseRegion(tr: Transaction, region: TextRange, type: MarkType): void {
-  const { schema } = tr.doc.type;
-  const { units } = regionUnits(tr.doc, region);
-  tr.removeMark(region.from, region.to, type);
-  forEachUnitRun(units, (start, end, marks) => {
-    for (const name of marks ?? []) {
-      const markType = schema.marks[name];
-      if (markType) tr.addMark(region.from + start, region.from + end, markType.create());
+export function touchesMarkdownSource(state: ComposerEditorState, from: number, to: number): boolean {
+  const s = resolveFlatOffset(state.doc, from);
+  if (s.block.kind !== "line") return false;
+  if (from < to) {
+    if (s.blockIndex !== resolveFlatOffset(state.doc, to).blockIndex) return false;
+    return sliceInlines(s.block.inlines, from - s.start, to - s.start).some((i) => i.kind === "text" && i.isMarkdownSource);
+  }
+  const before = inlineBeforeOffset(s.block.inlines, s.offsetInBlock);
+  const after = inlineAfterOffset(s.block.inlines, s.offsetInBlock);
+  return Boolean((before?.kind === "text" && before.isMarkdownSource) || (after?.kind === "text" && after.isMarkdownSource));
+}
+
+/** Styled ranges never cross blocks, so `within` limits the walk to blocks touching it. */
+export function collectStyledRanges(doc: ComposerDoc, within?: TextRange): StyledRange[] {
+  const ranges: StyledRange[] = [];
+  const map = serializeEditorDoc(doc);
+  let range: StyledRange | null = null;
+  let openLen = 0;
+  visitRuns(map, (run, flat, md) => {
+    if (run.nodeName === "codeBlock") return;
+    const flatStart = flat + run.flatStart;
+    const mdStart = md + run.mdStart;
+    if (run.openLen > 0) {
+      let slashes = 0;
+      while (map.value[mdStart - slashes - 1] === "\\") slashes += 1;
+      range ??= { from: flatStart, to: flatStart, escapedOpener: slashes % 2 !== 0, markers: [] };
+      range.markers.push({ at: flatStart, closing: false, text: map.value.slice(mdStart, mdStart + run.openLen) });
     }
-  });
-  const deletions: TextRange[] = [];
-  forEachUnitRun(units, (start, end, marks) => {
-    if (marks === null) deletions.push({ from: region.from + start, to: region.from + end });
-  });
-  for (const { from, to } of deletions.toReversed()) tr.delete(from, to);
+    if (!range) return;
+    range.to = flatStart + run.docLen;
+    if (run.closeLen > 0) {
+      const end = mdStart + run.mdLen;
+      range.markers.push({ at: range.to, closing: true, text: map.value.slice(end - run.closeLen, end) });
+    }
+    openLen += run.openLen - run.closeLen;
+    if (openLen === 0) {
+      ranges.push(range);
+      range = null;
+    }
+  }, within?.from, within?.to);
+  return ranges;
 }
 
-/** Parses source the selection does not touch back into marks, in place. */
-function collapseMarkdownSource(
-  tr: Transaction,
-  keep: (region: TextRange) => boolean = () => false,
-): TextRange[] {
-  const type = tr.doc.type.schema.marks[MARKDOWN_SOURCE_MARK];
-  if (!type) return [];
-  const regions: TextRange[] = [];
-  for (const region of sourceRegions(tr.doc, type)) {
-    const extended = withAdjacentDelimiters(tr.doc, region);
-    const previous = regions.at(-1);
-    if (previous && extended.from <= previous.to) previous.to = Math.max(previous.to, extended.to);
-    else regions.push(extended);
+function withAdjacentDelimiters(inlines: readonly ComposerInline[], lineStart: number, region: TextRange): TextRange {
+  const lf = region.from - lineStart;
+  const lt = region.to - lineStart;
+  let { from, to } = region;
+  const before = inlineBeforeOffset(inlines, lf);
+  if (before?.kind === "text" && before.marks.length === 0 && !before.isMarkdownSource) {
+    const pre = inlinesPlainText(sliceInlines(inlines, 0, lf), ATOM);
+    let c = 0;
+    while (c < pre.length && DELIMITER.test(pre[pre.length - 1 - c]!)) c += 1;
+    let slashes = 0;
+    while (pre[pre.length - 1 - c - slashes] === "\\") slashes += 1;
+    if (c > 0 && slashes % 2 === 1) c -= 1;
+    from -= c;
   }
-  for (const region of regions.toReversed()) {
-    if (keep(region)) tr.addMark(region.from, region.to, type.create());
-    else collapseRegion(tr, region, type);
+  const after = inlineAfterOffset(inlines, lt);
+  if (after?.kind === "text" && after.marks.length === 0 && !after.isMarkdownSource) {
+    const suf = inlinesPlainText(sliceInlines(inlines, lt, inlinesFlatLength(inlines)), ATOM);
+    let c = 0;
+    while (c < suf.length && DELIMITER.test(suf[c]!)) c += 1;
+    to += c;
+  }
+  return { from, to };
+}
+
+export function revealsFaithfully(doc: ComposerDoc, range: StyledRange): boolean {
+  if (range.escapedOpener) return false;
+  const res = resolveFlatOffset(doc, range.from);
+  if (res.block.kind !== "line") return false;
+  const adj = withAdjacentDelimiters(res.block.inlines, res.start, range);
+  if (adj.from !== range.from || adj.to !== range.to) return false;
+  const markers = range.markers.toSorted((a, b) => a.at - b.at || Number(b.closing) - Number(a.closing));
+  const expected: Array<RichTextMark[] | null> = [];
+  let text = "";
+  let next = 0;
+  const addMarkers = (pos: number) => {
+    while (next < markers.length && markers[next]!.at <= pos) {
+      const m = markers[next++]!.text;
+      text += m;
+      expected.push(...m.split("").map(() => null));
+    }
+  };
+  let pos = range.from;
+  for (const item of sliceInlines(res.block.inlines, range.from - res.start, range.to - res.start)) {
+    const content = item.kind === "text" ? item.text : ATOM;
+    const marks = [...(item.marks ?? [])];
+    for (let i = 0; i < content.length; i += 1) {
+      addMarkers(pos + i);
+      text += content[i];
+      expected.push(marks);
+    }
+    pos += content.length;
+  }
+  addMarkers(range.to);
+  const parsed = inlineMarkdownUnitMarks(text);
+  return parsed.length === expected.length && parsed.every((m, i) => sameMarks(m, expected[i]!));
+}
+
+const sourceFreeBlocks = new WeakSet<ComposerBlock>();
+
+function collectSourceRegions(doc: ComposerDoc) {
+  const regions: Array<{ blockIndex: number; lineStart: number; from: number; to: number }> = [];
+  for (const span of computeFlatBlockSpans(doc)) {
+    if (span.block.kind !== "line" || sourceFreeBlocks.has(span.block)) continue;
+    if (!span.block.inlines.some((i) => i.kind === "text" && i.isMarkdownSource)) {
+      sourceFreeBlocks.add(span.block);
+      continue;
+    }
+    let pos = span.start;
+    let cur: (typeof regions)[number] | null = null;
+    for (const item of span.block.inlines) {
+      const len = inlineFlatLength(item);
+      if (item.kind === "text" && item.isMarkdownSource) {
+        if (cur) cur.to = pos + len;
+        else regions.push((cur = { blockIndex: span.blockIndex, lineStart: span.start, from: pos, to: pos + len }));
+      } else cur = null;
+      pos += len;
+    }
   }
   return regions;
 }
 
-function mapSelection(tr: Transaction, selection: Selection, map: (pos: number) => number) {
-  if (selection instanceof AllSelection) return new AllSelection(tr.doc);
-  if (selection instanceof NodeSelection) {
-    const pos = map(selection.from);
-    if (tr.doc.nodeAt(pos)) return NodeSelection.create(tr.doc, pos);
+export function collapseShownMarkdownSource(
+  state: ComposerEditorState,
+  keep: (region: TextRange) => boolean = () => false,
+): { readonly doc: ComposerDoc; readonly selection: ComposerSelection; readonly collapsed: boolean } {
+  const raw = collectSourceRegions(state.doc);
+  if (raw.length === 0) return { doc: state.doc, selection: state.selection, collapsed: false };
+  let doc = state.doc;
+  const deletions: TextRange[] = [];
+  let collapsed = false;
+  let caretAtEnd = false;
+  const selFrom = selectionFrom(state.selection);
+
+  for (const region of raw.toReversed()) {
+    const block = doc.blocks[region.blockIndex]!;
+    if (block.kind !== "line") continue;
+    const ext = withAdjacentDelimiters(block.inlines, region.lineStart, region);
+    const len = inlinesFlatLength(block.inlines);
+    const lf = ext.from - region.lineStart;
+    const lt = ext.to - region.lineStart;
+    if (keep(ext)) {
+      if (ext.from !== region.from || ext.to !== region.to) {
+        const mid = sliceInlines(block.inlines, lf, lt).map((i) =>
+          i.kind === "text" ? { ...i, marks: [] as RichTextMark[], isMarkdownSource: true } : i,
+        );
+        doc = {
+          blocks: doc.blocks.map((b, i) =>
+            i === region.blockIndex ? { ...block, inlines: normalizeInlines([...sliceInlines(block.inlines, 0, lf), ...mid, ...sliceInlines(block.inlines, lt, len)]) } : b,
+          ),
+        };
+        collapsed = true;
+      }
+      continue;
+    }
+    collapsed = true;
+    if (selectionEmpty(state.selection) && ext.to === selFrom) caretAtEnd = true;
+    const mid = sliceInlines(block.inlines, lf, lt);
+    const units = inlineMarkdownUnitMarks(inlinesPlainText(mid, ATOM));
+    const rebuilt: ComposerInline[] = [];
+    let u = 0;
+    for (const item of mid) {
+      if (isChipInline(item)) {
+        const m = units[u];
+        if (m !== null) {
+          if (m?.length) rebuilt.push({ ...item, marks: m });
+          else {
+            const { marks: _dropped, ...rest } = item;
+            rebuilt.push(rest);
+          }
+        }
+        else deletions.push({ from: ext.from + u, to: ext.from + u + 1 });
+        u += 1;
+      } else {
+        forEachUnitRun(units.slice(u, u + item.text.length), (s, e, m) => {
+          if (m === null) deletions.push({ from: ext.from + u + s, to: ext.from + u + e });
+          else rebuilt.push({ kind: "text", text: item.text.slice(s, e), marks: m });
+        });
+        u += item.text.length;
+      }
+    }
+    doc = {
+      blocks: doc.blocks.map((b, i) =>
+        i === region.blockIndex
+          ? { ...block, inlines: normalizeInlines([...sliceInlines(block.inlines, 0, lf), ...rebuilt, ...sliceInlines(block.inlines, lt, len)]) }
+          : b,
+      ),
+    };
   }
-  return TextSelection.create(tr.doc, map(selection.anchor), map(selection.head));
+
+  if (!collapsed) return { doc: state.doc, selection: state.selection, collapsed: false };
+  const mapOff = (o: number) =>
+    Math.max(0, deletions.reduce((n, d) => (d.to <= o ? n - (d.to - d.from) : d.from < o ? n - (o - d.from) : n), o));
+  return {
+    doc,
+    selection: { anchor: mapOff(state.selection.anchor), head: mapOff(state.selection.head), ...(caretAtEnd ? { storedMarks: [] } : {}) },
+    collapsed: true,
+  };
 }
 
-/** Parses all shown source first, so a command that splits it keeps its styles. */
-export const collapseShownMarkdownSource: Command = ({ tr }) => {
-  const { selection } = tr;
-  const type = tr.doc.type.schema.marks[MARKDOWN_SOURCE_MARK];
-  const marks = tr.storedMarks ?? selection.$from.marks();
-  const regions = collapseMarkdownSource(tr);
-  // A caret after the closing markers is outside the styles, though parsed text there is inclusive.
-  if (type && selection.empty && regions.some(({ to }) => to === selection.from)) {
-    tr.setStoredMarks(type.removeFromSet(marks));
-  }
-  return true;
-};
+export function normalizeMarkdownSource(state: ComposerEditorState, typed: boolean): ComposerEditorState | null {
+  const col = collapseShownMarkdownSource(state, (r) => touchesRange(state.selection, r));
+  let { doc, selection } = col;
+  let changed = col.collapsed;
+  const ranges = collectStyledRanges(doc, { from: selectionFrom(selection), to: selectionTo(selection) }).filter((r) => touchesRange(selection, r) && revealsFaithfully(doc, r));
+  if (ranges.length === 0) return changed ? { doc, selection } : null;
 
-function mapRange(mapping: Mapping, { from, to }: TextRange): TextRange {
-  return { from: mapping.map(from, 1), to: mapping.map(to, -1) };
-}
-
-/** Shows styled text the selection touches as Markdown, returning the source it added. */
-function revealStyledText(tr: Transaction, type: MarkType, typed: boolean, takesBefore: boolean) {
-  const { schema } = tr.doc.type;
-  const selection = tr.selection;
-  const ranges = collectStyledRanges(tr.doc).filter(
-    (range) => touches(selection, range) && revealsFaithfully(tr.doc, range),
-  );
-  const revealed: { range: TextRange; step: number }[] = [];
+  const takesBefore = caretTakesMarksBefore({ doc, selection });
   const insertions: { at: number; length: number; closing: boolean }[] = [];
+
   for (const range of ranges.toReversed()) {
-    for (const name of STYLE_MARKS) {
-      const markType = schema.marks[name];
-      if (markType) tr.removeMark(range.from, range.to, markType);
+    const res = resolveFlatOffset(doc, range.from);
+    if (res.block.kind !== "line") continue;
+    const mid = sliceInlines(res.block.inlines, range.from - res.start, range.to - res.start);
+    const markers = range.markers.toSorted((a, b) => a.at - b.at || Number(b.closing) - Number(a.closing));
+    const src: ComposerInline[] = [];
+    let mi = 0;
+    const flush = (pos: number) => {
+      while (mi < markers.length && markers[mi]!.at <= pos) {
+        const m = markers[mi++]!;
+        src.push({ kind: "text", text: m.text, marks: [], isMarkdownSource: true });
+        insertions.push({ at: m.at, length: m.text.length, closing: m.closing });
+      }
+    };
+    let pos = range.from;
+    for (const item of mid) {
+      if (isChipInline(item)) {
+        flush(pos);
+        const { marks: _dropped, ...rest } = item;
+        src.push(rest);
+        pos += 1;
+      } else {
+        for (let i = 0; i < item.text.length; i += 1) {
+          flush(pos + i);
+          src.push({ kind: "text", text: item.text[i]!, marks: [], isMarkdownSource: true });
+        }
+        pos += item.text.length;
+      }
     }
-    let length = 0;
-    // Inserting from the end keeps earlier positions valid; at a shared
-    // position the opening marker goes in first so the closing one ends up before it.
-    const markers = range.markers.toSorted(
-      (left, right) => right.at - left.at || Number(left.closing) - Number(right.closing),
-    );
-    for (const { at, closing, text } of markers) {
-      tr.insert(at, schema.text(text, [type.create()]));
-      insertions.push({ at, length: text.length, closing });
-      length += text.length;
-    }
-    tr.addMark(range.from, range.to + length, type.create());
-    revealed.push({ range: { from: range.from, to: range.to + length }, step: tr.steps.length });
+    flush(range.to);
+    const len = inlinesFlatLength(res.block.inlines);
+    const nextInlines = normalizeInlines([
+      ...sliceInlines(res.block.inlines, 0, range.from - res.start),
+      ...src,
+      ...sliceInlines(res.block.inlines, range.to - res.start, len),
+    ]);
+    doc = { blocks: doc.blocks.map((b, i) => (i === res.blockIndex ? { ...res.block, inlines: nextInlines } : b)) };
+    changed = true;
   }
-  if (ranges.length === 0) return [];
-  // A caret that arrives at a styled edge stays outside its markers. One that
-  // just typed styled text stays inside them, so the next character continues it.
-  const map = (pos: number) => {
+
+  const mapPos = (pos: number) => {
     let next = pos;
     for (const { at, length, closing } of insertions) {
-      const inside = typed && selection.empty && (closing ? takesBefore : !takesBefore);
-      if (at < pos || (at === pos && (selection instanceof NodeSelection || closing !== inside))) {
-        next += length;
-      }
+      const inside = typed && selectionEmpty(selection) && (closing ? takesBefore : !takesBefore);
+      if (at < pos || (at === pos && closing !== inside)) next += length;
     }
     return next;
   };
-  tr.setSelection(mapSelection(tr, selection, map));
-  return revealed.map(({ range, step }) => mapRange(tr.mapping.slice(step), range));
+  return changed ? { doc, selection: { anchor: mapPos(selection.anchor), head: mapPos(selection.head) } } : null;
 }
 
-/** Shows styled text the selection touches as Markdown, and parses source it left. */
-function normalizeMarkdownSource(state: EditorState, typed: boolean): Transaction | null {
-  const type = state.schema.marks[MARKDOWN_SOURCE_MARK];
-  if (!type) return null;
-  const tr = state.tr;
-  collapseMarkdownSource(tr, (region) => touches(state.selection, region));
-  revealStyledText(tr, type, typed, caretTakesMarksBefore(state));
-  return tr.docChanged ? tr : null;
-}
-
-/**
- * After undo or redo, history items may point inside shown source, and a
- * rewrite in the history would clear redo. So until the next recorded edit,
- * rewrites stay out of it and only remove text they added: source the history
- * knows is hidden instead of parsed, and source revealed here is parsed back.
- */
-function normalizeDetached(state: EditorState, revealed: TextRange[]): Transaction | null {
-  const type = state.schema.marks[MARKDOWN_SOURCE_MARK];
-  if (!type) return null;
-  const tr = state.tr;
-  const kept: TextRange[] = [];
-  for (const region of revealed.toSorted((left, right) => right.from - left.from)) {
-    if (touches(state.selection, region)) kept.push(region);
-    else collapseRegion(tr, region, type);
-  }
-  const added = revealStyledText(tr, type, false, caretTakesMarksBefore(state));
-  if (!tr.docChanged) return null;
-  const shown = [...kept.map((region) => mapRange(tr.mapping, region)), ...added];
-  return tr.setMeta(markdownSourceKey, shown).setMeta("addToHistory", false);
-}
-
-/** Parses the source `normalizeDetached` revealed, leaving the document the history knows. */
-function collapseRevealed(state: EditorState, revealed: TextRange[]): Transaction {
-  const tr = state.tr;
-  const type = state.schema.marks[MARKDOWN_SOURCE_MARK];
-  if (type) {
-    for (const region of revealed.toSorted((left, right) => right.from - left.from)) {
-      collapseRegion(tr, region, type);
-    }
-  }
-  return tr.setMeta(markdownSourceKey, []).setMeta("addToHistory", false);
-}
-
-/** Replays `edit` after undoing `collapse`, so the history records the reveal with the edit. */
-function rebaseEdit(tr: Transaction, collapse: Transaction, edit: Transaction): Transaction {
-  for (let index = collapse.steps.length - 1; index >= 0; index--) {
-    tr.step(collapse.steps[index]!.invert(collapse.docs[index]!));
-  }
-  for (const step of edit.steps) tr.step(step);
-  tr.setSelection(edit.selection.map(tr.doc, StepMap.empty)).setTime(edit.time);
-  if (edit.storedMarksSet) tr.setStoredMarks(edit.storedMarks);
-  if (edit.scrolledIntoView) tr.scrollIntoView();
-  // Metadata has no public accessor, and grouping, paste rules and composition read it.
-  type WithMeta = { meta: Record<string, unknown> };
-  Object.assign((tr as unknown as WithMeta).meta, (edit as unknown as WithMeta).meta);
-  return tr;
-}
-
-const replayKey = new PluginKey("composer-markdown-source-replay");
-
-/**
- * Replays the edit a request carries after the source plugin appended its collapse,
- * in the request's one view update so an IME keeps its preedit. History ignores what
- * is appended to an unrecorded transaction, so the request itself records nothing.
- */
-const replayPlugin = new Plugin({
-  key: replayKey,
-  appendTransaction([request, collapse], _, state) {
-    const edit = request?.getMeta(replayKey) as Transaction | undefined;
-    // Appended transactions otherwise join the previous undo event.
-    return edit && collapse ? closeHistory(rebaseEdit(state.tr, collapse, edit)) : null;
-  },
-});
-
-function previewDecorations(
-  doc: ProseMirrorNode,
-  type: MarkType,
-  hidden: Selection | null,
-): DecorationSet {
-  const decorations: Decoration[] = [];
-  for (const region of sourceRegions(doc, type)) {
-    const hide = hidden !== null && !touches(hidden, region);
-    const { text, units } = regionUnits(doc, region);
-    const codeTicks = new Set<number>();
-    forEachUnitRun(units, (start, end, marks) => {
-      for (const name of marks ?? []) {
-        if (name !== "code") {
-          decorations.push(
-            Decoration.inline(region.from + start, region.from + end, {
-              nodeName: PREVIEW_TAGS[name],
-            }),
-          );
-          continue;
-        }
-        // One element holds the ticks and the code, so a right-to-left line
-        // keeps both ticks on their own sides of it.
-        let from = start;
-        let to = end;
-        if (units[from - 1] === null && text[from - 1] === "`") codeTicks.add((from -= 1));
-        if (units[to] === null && text[to] === "`") codeTicks.add(to++);
-        decorations.push(
-          Decoration.inline(region.from + from, region.from + to, { nodeName: "code", dir: "ltr" }),
-        );
-      }
-    });
-    forEachUnitRun(
-      units.map((marks, index) => (marks === null && (hide || !codeTicks.has(index)) ? null : [])),
-      (start, end, marks) => {
-        if (marks !== null) return;
-        decorations.push(
-          Decoration.inline(region.from + start, region.from + end, {
-            class: hide ? "composer-rich-marker-hidden" : "composer-rich-marker",
-          }),
-        );
-      },
+export function previewMarkdownSourceSpans(text: string, hideDelimiters = false): MarkdownSourcePreviewSegment[] {
+  const segments: MarkdownSourcePreviewSegment[] = [];
+  forEachUnitRun(inlineMarkdownUnitMarks(text), (s, e, marks) => {
+    segments.push(
+      marks === null
+        ? { text: text.slice(s, e), marks: [], isMarker: true, hidden: hideDelimiters }
+        : { text: text.slice(s, e), marks, isMarker: false },
     );
-  }
-  return DecorationSet.create(doc, decorations);
-}
-
-type MarkdownSourceState = {
-  decorations: DecorationSet;
-  /** From an undo or redo until the next recorded edit; see `normalizeDetached`. */
-  detached: boolean;
-  /** Source `normalizeDetached` revealed, which the history knows as styled text. */
-  revealed: TextRange[];
-};
-
-const markdownSourceKey = new PluginKey<MarkdownSourceState>("composer-markdown-source");
-
-function markdownSourcePlugin(type: MarkType): Plugin<MarkdownSourceState> {
-  let view: EditorView | null = null;
-  return new Plugin<MarkdownSourceState>({
-    key: markdownSourceKey,
-    view(editorView) {
-      view = editorView;
-      return {
-        destroy() {
-          view = null;
-        },
-      };
-    },
-    state: {
-      init: (_, state) => ({
-        decorations: previewDecorations(state.doc, type, null),
-        detached: false,
-        revealed: [],
-      }),
-      apply: (tr, old, _, state) => {
-        const history = isHistoryTransaction(tr);
-        const detached =
-          history || (old.detached && !(tr.docChanged && tr.getMeta("addToHistory") !== false));
-        const own = tr.getMeta(markdownSourceKey) as TextRange[] | undefined;
-        const revealed =
-          !detached || history
-            ? []
-            : (own ??
-              (tr.docChanged
-                ? old.revealed.map((range) => mapRange(tr.mapping, range))
-                : old.revealed));
-        const redraw = tr.docChanged || detached !== old.detached || (detached && tr.selectionSet);
-        return {
-          decorations: redraw
-            ? previewDecorations(state.doc, type, detached ? state.selection : null)
-            : old.decorations,
-          detached,
-          revealed,
-        };
-      },
-    },
-    props: {
-      decorations: (state) => markdownSourceKey.getState(state)?.decorations,
-    },
-    appendTransaction(transactions, _, state) {
-      if (transactions[0]?.getMeta(replayKey)) {
-        return collapseRevealed(state, markdownSourceKey.getState(state)?.revealed ?? []);
-      }
-      // Rewriting text mid-composition would break the IME's preedit.
-      if (view?.composing) return null;
-      // Rewrites appended to an undo or redo join its history step, which leaves
-      // the other direction unmapped. The dispatch hook normalizes after it instead.
-      if (transactions.some((tr) => isHistoryTransaction(tr) || tr.getMeta(markdownSourceKey))) {
-        return null;
-      }
-      if (!transactions.some((tr) => tr.docChanged || tr.selectionSet)) return null;
-      const source = markdownSourceKey.getState(state);
-      if (source?.detached) return normalizeDetached(state, source.revealed);
-      const tr = normalizeMarkdownSource(
-        state,
-        transactions.some((item) => item.docChanged),
-      );
-      // With nothing to undo, a recorded rewrite would only add a no-op undo.
-      if (tr && undoDepth(state) === 0) tr.setMeta("addToHistory", false);
-      return tr;
-    },
   });
+  return segments;
 }
-
-/** Keeps source `normalizeDetached` revealed out of what undo, redo and edits see. */
-const MarkdownSourceHistoryExtension = Extension.create({
-  name: "composer-markdown-source-history",
-  // Runs after undo grouping, so a rebased edit keeps the grouping chosen for it.
-  priority: 1,
-  dispatchTransaction({ transaction, next }) {
-    const { editor } = this;
-    const revealed = markdownSourceKey.getState(editor.state)?.revealed ?? [];
-    if (isHistoryTransaction(transaction)) {
-      if (revealed.length === 0) {
-        next(transaction);
-      } else {
-        const undoing = redoDepth(editor.state.apply(transaction)) > redoDepth(editor.state);
-        next(collapseRevealed(editor.state, revealed));
-        (undoing ? undo : redo)(editor.state, next);
-      }
-      const source = markdownSourceKey.getState(editor.state);
-      const tr = editor.view.composing
-        ? null
-        : normalizeDetached(editor.state, source?.revealed ?? []);
-      if (tr) next(tr);
-      return;
-    }
-    const recordedEdit =
-      transaction.docChanged &&
-      transaction.getMeta("addToHistory") !== false &&
-      transaction.getMeta(markdownSourceKey) === undefined;
-    if (revealed.length === 0 || !recordedEdit) {
-      next(transaction);
-      return;
-    }
-    next(editor.state.tr.setMeta(replayKey, transaction));
-  },
-});
-
-export const ComposerMarkdownSourceExtension = TiptapMark.create({
-  name: MARKDOWN_SOURCE_MARK,
-  // Its shortcuts run ahead of the style marks' own.
-  priority: 1001,
-  inclusive: false,
-  parseHTML() {
-    return [{ tag: "span.composer-markdown-source" }];
-  },
-  renderHTML() {
-    return ["span", { class: "composer-markdown-source" }, 0];
-  },
-  addKeyboardShortcuts() {
-    // Shown markers are plain text, so toggling a style there would wrap them
-    // in another style. Parse the source first and toggle the result.
-    const toggle = (name: RichTextMark) => () => {
-      const { state } = this.editor;
-      const { selection } = state;
-      const touched = sourceRegions(state.doc, this.type).some((region) => {
-        if (!touches(selection, region)) return false;
-        if (!selection.empty) return true;
-        // Turning a style off just inside its own markers would type into them.
-        // Everywhere else Tiptap's own toggle styles the typed text correctly.
-        const { units } = regionUnits(state.doc, region);
-        const offset = selection.from - region.from;
-        const [before, after] = [units[offset - 1], units[offset]];
-        return (
-          (before === null && after?.includes(name) === true) ||
-          (after === null && before?.includes(name) === true)
-        );
-      });
-      if (!touched) return false;
-      return this.editor.chain().command(collapseShownMarkdownSource).toggleMark(name).run();
-    };
-    return {
-      "Mod-b": toggle("bold"),
-      "Mod-B": toggle("bold"),
-      "Mod-i": toggle("italic"),
-      "Mod-I": toggle("italic"),
-      "Mod-Shift-s": toggle("strike"),
-      "Mod-e": toggle("code"),
-    };
-  },
-  addExtensions() {
-    return [MarkdownSourceHistoryExtension];
-  },
-  addProseMirrorPlugins() {
-    return [markdownSourcePlugin(this.type), replayPlugin];
-  },
-});

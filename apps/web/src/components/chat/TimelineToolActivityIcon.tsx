@@ -19,10 +19,10 @@ import {
   TerminalIcon,
   HammerIcon,
   WrenchIcon,
-  Code2Icon,
+  CodeXmlIcon as Code2Icon,
   XIcon,
   ZapIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { useAssetUrlState } from "../../assets/assetUrls";
 import { cn } from "~/lib/utils";
 import { TimelineRowCtx } from "./timelineRowContext";

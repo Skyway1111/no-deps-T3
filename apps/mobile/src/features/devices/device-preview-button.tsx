@@ -1,4 +1,4 @@
-import { Plural, T, useGT, Var } from "gt-react-native";
+import { Plural, T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "../../components/ui/AppText";

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
   DEFAULT_UNIFIED_SETTINGS,

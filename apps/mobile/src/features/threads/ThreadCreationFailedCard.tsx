@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { Button } from "../../components/ui/Button";
 import { View } from "react-native";
 

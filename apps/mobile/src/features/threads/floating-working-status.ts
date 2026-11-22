@@ -1,5 +1,5 @@
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 

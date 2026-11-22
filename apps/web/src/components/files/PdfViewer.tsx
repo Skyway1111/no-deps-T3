@@ -1,5 +1,6 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import {
+  Fragment,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -9,16 +10,15 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { TextLayer, type PDFDocumentProxy } from "pdfjs-dist";
-import { msg, useGT } from "gt-react";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
-import { ChevronDownIcon, ChevronUpIcon, MinusIcon, PlusIcon, ScanIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, MinusIcon, PlusIcon, ScanIcon } from "~/ui-core/icons";
 import { Input } from "~/components/ui/input";
 import { observeResize } from "~/lib/observeResize";
 import { FileSurfaceAction, FileSurfaceFailure, FileSurfaceLoading } from "./fileSurfaceChrome";
 import { readBoundedDocument } from "./readBoundedDocument";
 import { previewErrorText } from "./previewFailureMessages";
-import { openPdf } from "./pdfDocument";
+import { openPdf, pdfSpanScale, type PdfDocument, type PdfTextItem } from "./pdfDocument";
 import {
   currentPdfPage,
   pdfFindIncludes,
@@ -43,20 +43,7 @@ type PdfPosition = PdfViewState & { width: number; ratios: readonly number[] };
 // Thread switches unmount the preview; retain only the most recent documents.
 const positions = new Map<string, PdfPosition>();
 
-type PdfLink = { box: readonly [number, number, number, number] } & (
-  | { url: string }
-  | { page: number }
-);
-
-// Resolves a link annotation's destination, named or explicit, to a page index.
-async function pdfLinkPage(pdf: PDFDocumentProxy, dest: unknown): Promise<number | null> {
-  const explicit: unknown = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
-  if (!Array.isArray(explicit)) return null;
-  const [ref] = explicit as unknown[];
-  if (Number.isInteger(ref)) return ref as number;
-  if (typeof ref !== "object" || ref === null) return null;
-  return pdf.getPageIndex(ref as Parameters<PDFDocumentProxy["getPageIndex"]>[0]);
-}
+type PdfLink = ReturnType<PdfDocument["links"]>[number];
 
 export type PdfViewState = {
   page: number;
@@ -66,7 +53,7 @@ export type PdfViewState = {
 };
 
 function PdfPage(props: {
-  document: PDFDocumentProxy;
+  document: PdfDocument;
   index: number;
   width: number;
   query: string;
@@ -77,115 +64,57 @@ function PdfPage(props: {
 }) {
   const gt = useGT();
   const [links, setLinks] = useState<readonly PdfLink[]>([]);
+  const [spans, setSpans] = useState<readonly PdfTextItem[]>([]);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const text = useRef<HTMLDivElement>(null);
-  const painted = useRef<PDFDocumentProxy>(null);
+  const painted = useRef<PdfDocument>(null);
   const { document: pdf, index, width, onSize, onError } = props;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Render the PDF page canvas and text layer, cancelling tasks and releasing pdf.js page resources on cleanup.
+  const page = pdf.pages[index]!;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Paint the PDF page canvas and read its text and links, cancelling when the page or width changes.
   useEffect(() => {
-    let cancelled = false;
-    let paint: ReturnType<Awaited<ReturnType<PDFDocumentProxy["getPage"]>>["render"]> | undefined;
-    let layer: TextLayer | undefined;
-    let loadedPage: Awaited<ReturnType<PDFDocumentProxy["getPage"]>> | undefined;
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
       // A drag changes the width every frame. CSS scales the painted page until the width settles.
       if (painted.current === pdf)
         await new Promise((resolve) => (timer = setTimeout(resolve, 150)));
-      const page = await pdf.getPage(index + 1);
-      loadedPage = page;
-      if (cancelled || !canvas.current || !text.current) {
-        page.cleanup();
-        return;
-      }
-      const natural = page.getViewport({ scale: 1 });
-      onSize(index, natural.height / natural.width);
-      const viewport = page.getViewport({ scale: width / natural.width });
+      if (controller.signal.aborted || !canvas.current) return;
+      onSize(index, page.height / page.width);
+      const scale = width / page.width;
       const ratio = Math.min(
         2,
         window.devicePixelRatio || 1,
-        Math.sqrt((8 * 1024 * 1024) / (viewport.width * viewport.height)),
+        Math.sqrt((8 * 1024 * 1024) / (width * width * (page.height / page.width))),
       );
       // Resizing a canvas blanks it, so the page paints off screen and replaces the old one whole.
       const buffer = document.createElement("canvas");
-      buffer.width = Math.ceil(viewport.width * ratio);
-      buffer.height = Math.ceil(viewport.height * ratio);
-      paint = page.render({
-        canvas: buffer,
-        viewport,
-        transform: [ratio, 0, 0, ratio, 0, 0],
-        background: "white",
-      });
-      text.current.replaceChildren();
-      text.current.style.setProperty("--total-scale-factor", String(viewport.scale));
-      layer = new TextLayer({
-        container: text.current,
-        viewport,
-        textContentSource: page.streamTextContent(),
-      });
-      const shown = paint.promise.then(() => {
-        if (cancelled || !canvas.current) return;
-        canvas.current.width = buffer.width;
-        canvas.current.height = buffer.height;
-        canvas.current.getContext("2d", { alpha: false })?.drawImage(buffer, 0, 0);
-        buffer.width = 0;
-        painted.current = pdf;
-      });
-      const linked = page.getAnnotations({ intent: "display" }).then(async (annotations) => {
-        const found: PdfLink[] = [];
-        for (const annotation of annotations) {
-          if (annotation.subtype !== "Link") continue;
-          const [x1, y1] = viewport.convertToViewportPoint(annotation.rect[0], annotation.rect[1]);
-          const [x2, y2] = viewport.convertToViewportPoint(annotation.rect[2], annotation.rect[3]);
-          const box = [
-            Math.min(x1, x2) / viewport.width,
-            Math.min(y1, y2) / viewport.height,
-            Math.abs(x2 - x1) / viewport.width,
-            Math.abs(y2 - y1) / viewport.height,
-          ] as const;
-          if (typeof annotation.url === "string" && /^https?:\/\//i.test(annotation.url)) {
-            found.push({ box, url: annotation.url });
-            continue;
-          }
-          const target = await pdfLinkPage(pdf, annotation.dest).catch(() => null);
-          if (target !== null && target >= 0 && target < pdf.numPages)
-            found.push({ box, page: target });
-        }
-        if (!cancelled) setLinks(found);
-      });
-      // A page whose annotations cannot be read still renders, without links.
-      const linkedOrNone = linked.catch(() => undefined);
-      await Promise.all([shown, layer.render(), linkedOrNone]);
+      buffer.width = Math.ceil(width * ratio);
+      buffer.height = Math.ceil(width * (page.height / page.width) * ratio);
+      const context = buffer.getContext("2d", { alpha: false });
+      if (!context) throw new Error(m(msg("This PDF page could not render.")));
+      context.scale(scale * ratio, scale * ratio);
+      setLinks(pdf.links(index));
+      const items = await pdf.paint(index, context, controller.signal);
+      if (controller.signal.aborted || !canvas.current) return;
+      canvas.current.width = buffer.width;
+      canvas.current.height = buffer.height;
+      canvas.current.getContext("2d", { alpha: false })?.drawImage(buffer, 0, 0);
+      buffer.width = 0;
+      painted.current = pdf;
+      setSpans(items);
     })().catch((cause: unknown) => {
-      if (!cancelled)
+      if (!controller.signal.aborted)
         onError(thrownErrorMessage(cause, m) ?? m(msg("This PDF page could not render.")));
     });
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(timer);
-      paint?.cancel();
-      layer?.cancel();
-      // Release operator lists when virtual pages leave the viewport.
-      void Promise.allSettled([paint?.promise]).then(() => loadedPage?.cleanup());
     };
-  }, [pdf, index, width, onSize, onError]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Highlight pdf.js-owned text nodes and observe asynchronous text layer mutations for the current search query.
-  useEffect(() => {
-    const node = text.current;
-    if (!node) return;
-    const mark = () => {
-      const elements = Array.from(node.querySelectorAll('span[role="presentation"], br'));
-      const hits = pdfFindMatchRuns(
-        elements.map((element) => (element.tagName === "BR" ? "\n" : (element.textContent ?? ""))),
-        props.query,
-      );
-      elements.forEach((element, index) => element.classList.toggle("pdf-find-match", hits[index]));
-    };
-    mark();
-    const observer = new MutationObserver(mark);
-    observer.observe(node, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [props.query]);
+  }, [pdf, page, index, width, onSize, onError]);
+  const runs = spans.flatMap((span) => (span.hasEOL ? [span.str, "\n"] : [span.str]));
+  const hits = pdfFindMatchRuns(runs, props.query);
+  const runIndex: number[] = [];
+  spans.reduce((at, span) => (runIndex.push(at), at + (span.hasEOL ? 2 : 1)), 0);
+  const scale = width / page.width;
   return (
     <>
       <canvas
@@ -193,12 +122,33 @@ function PdfPage(props: {
         aria-label={gt("Page {number}", { number: String(index + 1) })}
         className="block h-full w-full"
       />
-      <div ref={text} data-pdf-text-layer />
+      <div data-pdf-text-layer>
+        {spans.map((span, position) => {
+          const hit = hits[runIndex[position]!];
+          const style = {
+            left: `${(span.x / page.width) * 100}%`,
+            top: `${((span.y - span.height * 0.86) / page.height) * 100}%`,
+            "--font-height": `${span.height}px`,
+            "--rotate": `${span.angle}rad`,
+            "--scale-x": pdfSpanScale(span.str, span.height * scale, span.width * scale),
+            transformOrigin: `0 ${span.height * scale * 0.86}px`,
+          } as CSSProperties;
+          return (
+            // oxlint-disable-next-line react/no-array-index-key -- Runs keep their reading order within an immutable page.
+            <Fragment key={position}>
+              <span role="presentation" className={hit ? "pdf-find-match" : undefined} style={style}>
+                {span.str}
+              </span>
+              {span.hasEOL ? <br /> : null}
+            </Fragment>
+          );
+        })}
+      </div>
       {links.length ? (
         <div className="pointer-events-none absolute inset-0">
           {links.map((link) => {
-            const [left, top, width, height] = link.box;
-            const key = `${link.box.join()}:${"url" in link ? link.url : link.page}`;
+            const [left, top, width, height] = link.rect;
+            const key = `${link.rect.join()}:${"url" in link ? link.url : link.page}`;
             const style = {
               left: `${left * 100}%`,
               top: `${top * 100}%`,
@@ -256,7 +206,7 @@ export default function PdfViewer(props: {
   const [initialView] = useState<PdfViewState>(
     () => savedPosition ?? props.initialView ?? { page: 0, offset: 0, zoom: null, left: 0 },
   );
-  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const [pdf, setPdf] = useState<PdfDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [ratios, setRatios] = useState<readonly number[]>([]);
@@ -272,16 +222,13 @@ export default function PdfViewer(props: {
   const scroll = useRef<HTMLDivElement>(null);
   const find = useRef<HTMLInputElement>(null);
   const zoomAnchor = useRef<{ page: number; offset: number; width: number } | null>(null);
-  const initialPage = initialView.page;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the PDF fetch, load timeout, and pdf.js document task across source changes, retries, and unmounts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the PDF fetch, load timeout, and parse across source changes, retries, and unmounts.
   useEffect(() => {
     const controller = new AbortController();
     let disposed = false;
-    let task: ReturnType<typeof openPdf> | undefined;
     const timeout = setTimeout(() => {
       setError(m(msg("This PDF took too long to load. Try again.")));
       controller.abort();
-      void task?.destroy();
     }, 30_000);
     void readBoundedDocument(
       props.src,
@@ -291,28 +238,17 @@ export default function PdfViewer(props: {
     )
       .then(async (bytes) => {
         controller.signal.throwIfAborted();
-        task = openPdf(bytes);
-        const document = await task.promise;
+        const document = await openPdf(bytes);
         if (document.numPages > MAX_PAGES)
           throw new Error(
             m(msg("Preview limited to 2,000 pages. Save this PDF to read it in full.")),
           );
-        const first = (await document.getPage(1)).getViewport({ scale: 1 });
-        const sizes = await Promise.all(
-          Array.from({ length: Math.min(initialPage + 1, document.numPages) }, async (_, index) => {
-            const size = (await document.getPage(index + 1)).getViewport({ scale: 1 });
-            return size.height / size.width;
-          }),
-        );
         if (controller.signal.aborted) return;
-        setPageWidth(first.width);
+        setPageWidth(document.pages[0]!.width);
         setRatios(
           savedPosition?.ratios.length === document.numPages
             ? savedPosition.ratios
-            : Array.from(
-                { length: document.numPages },
-                (_, index) => sizes[index] ?? first.height / first.width,
-              ),
+            : document.pages.map((page) => page.height / page.width),
         );
         setPdf(document);
       })
@@ -325,9 +261,8 @@ export default function PdfViewer(props: {
       disposed = true;
       controller.abort();
       clearTimeout(timeout);
-      void task?.destroy();
     };
-  }, [props.src, revision, initialPage, savedPosition]);
+  }, [props.src, revision, savedPosition]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Measure the PDF viewport before paint and observe resizes for fit-width sizing and visible-page selection.
   useLayoutEffect(() => {
     const node = scroll.current;
@@ -410,7 +345,7 @@ export default function PdfViewer(props: {
   useLayoutEffect(() => {
     if (firstMatch !== undefined) jumpToPage(firstMatch);
   }, [firstMatch]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Debounce pdf.js text extraction and cancel obsolete searches when the query or document changes.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Debounce PDF text extraction and cancel obsolete searches when the query or document changes.
   useEffect(() => {
     if (!pdf || !query.trim()) {
       // oxlint-disable-next-line react/set-state-in-effect -- A blank query cancels the previous search.
@@ -425,15 +360,11 @@ export default function PdfViewer(props: {
       setMatch(0);
       void (async () => {
         const found: number[] = [];
-        const sizes: number[] = [];
         let size = 0;
         for (let index = 0; index < pdf.numPages; index++) {
-          const page = await pdf.getPage(index + 1);
-          const pageSize = page.getViewport({ scale: 1 });
-          sizes.push(pageSize.height / pageSize.width);
-          const content = await page.getTextContent();
+          const items = await pdf.text(index);
           if (cancelled) return;
-          const text = pdfPageText(content.items);
+          const text = pdfPageText(items);
           size += text.length;
           if (size > MAX_FIND_TEXT)
             throw new Error(
@@ -441,13 +372,9 @@ export default function PdfViewer(props: {
             );
           if (!pdfFindIncludes(text, query)) continue;
           found.push(index);
-          if (found.length > 1) continue;
-          // Pages up to the first hit are measured, so its jump lands before the scan finishes.
-          setRatios((old) => [...sizes, ...old.slice(sizes.length)]);
-          setMatches([index]);
+          if (found.length === 1) setMatches([index]);
         }
         if (cancelled) return;
-        setRatios(sizes);
         setMatches(found);
       })()
         .catch((cause: unknown) => {

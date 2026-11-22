@@ -5,7 +5,7 @@ import type {
   PullRequestConversationThread,
 } from "@t3tools/contracts";
 import { canResolvePullRequestThread } from "@t3tools/client-runtime/pull-request-editing";
-import { msg, useGT } from "gt-react";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { m } from "~/i18n/messages";

@@ -2,7 +2,7 @@ import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 import { resolveSendEnvMode } from "@t3tools/shared/projectSettings";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import type { ComposerDraftWorkspaceSelection } from "../../state/use-composer-drafts";

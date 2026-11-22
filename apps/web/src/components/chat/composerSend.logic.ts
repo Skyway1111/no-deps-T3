@@ -1,5 +1,5 @@
 import type { EnvironmentId, ThreadContextRecord } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../../i18n/messages";
 import { collectInlineContextIds } from "../../lib/composerContextReferences";
 import type { ComposerThreadDraftState } from "../../composerDraftStore";

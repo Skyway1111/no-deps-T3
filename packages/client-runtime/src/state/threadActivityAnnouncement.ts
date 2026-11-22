@@ -1,7 +1,6 @@
 import type { OrchestrationV2Run, OrchestrationV2RunStatus, RunId } from "@t3tools/contracts";
 import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 export type ThreadActivityStatus = "working" | "approval" | "input" | "idle";
 

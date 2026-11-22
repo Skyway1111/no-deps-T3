@@ -1,6 +1,8 @@
-import type { Database } from "sql.js";
-
 import { boundedZip } from "@t3tools/client-runtime/zip/bounded-zip";
+import {
+  ReadOnlySqliteReader,
+  formatSqlitePreviewCell,
+} from "@t3tools/shared/sqlite/readOnlySqliteReader";
 import {
   ARCHIVE_ENTRY_MAX_BYTES,
   ARCHIVE_MAX_ENTRIES,
@@ -13,12 +15,11 @@ import {
 } from "./binaryPreviewProtocol";
 import { PreviewError, previewFailure } from "./previewFailure";
 
-let database: Database | null = null;
+let database: ReadOnlySqliteReader | null = null;
 let tables: string[] = [];
 // Entries over the preview limit keep only their size, so their payload is never copied.
 let files = new Map<string, Uint8Array<ArrayBuffer> | number>();
 const reply = (result: BinaryWorkerResult) => self.postMessage(result, { transfer: [] });
-const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 async function gunzip(bytes: ArrayBuffer) {
   const reader = new Blob([bytes])
@@ -172,54 +173,34 @@ async function handle(input: BinaryWorkerRequest) {
       input.page < 0
     )
       throw new PreviewError({ code: "table-unavailable" });
-    const columns =
-      database
-        .exec(`PRAGMA table_xinfo(${quote(input.table)})`)[0]
-        ?.values.filter((row) => row[6] !== 1)
-        .map((row) => String(row[1]))
-        .slice(0, 50) ?? [];
-    const fields = columns.map((name) => {
-      const field = quote(name);
-      return `CASE WHEN typeof(${field}) = 'blob' THEN '[blob: ' || length(${field}) || ' bytes]' ELSE substr(CAST(${field} AS TEXT), 1, 1024) END`;
+    const result = database.readRows(input.table, {
+      offset: input.page * SQLITE_PAGE_SIZE,
+      limit: SQLITE_PAGE_SIZE,
     });
-    const result = database.exec(
-      `SELECT ${fields.join(",")} FROM ${quote(input.table)} LIMIT ${SQLITE_PAGE_SIZE} OFFSET ${input.page * SQLITE_PAGE_SIZE}`,
-    )[0];
+    const columns = result.columns.slice(0, 50);
     reply({
       type: "rows",
       table: input.table,
       page: input.page,
       columns,
-      rows:
-        result?.values.map((row) => row.map((cell) => (cell === null ? "NULL" : String(cell)))) ??
-        [],
+      rows: result.rows.map((row) =>
+        row.slice(0, 50).map((cell) => formatSqlitePreviewCell(cell, 1024)),
+      ),
     });
     return;
   }
   if (input.bytes.byteLength > BINARY_PREVIEW_MAX_BYTES)
     throw new PreviewError({ code: "file-too-large" });
   if (input.kind === "sqlite") {
-    const [{ default: initSqlJs }, { default: wasmUrl }] = await Promise.all([
-      import("sql.js"),
-      import("sql.js/dist/sql-wasm.wasm?url"),
-    ]);
-    const SQL = await initSqlJs({ locateFile: () => wasmUrl });
-    database = new SQL.Database(new Uint8Array(input.bytes));
-    database.run("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;");
-    tables =
-      database
-        .exec(
-          "SELECT name FROM sqlite_schema WHERE type='table' AND substr(name, 1, 7) != 'sqlite_' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name LIMIT 101",
-        )[0]
-        ?.values.map((row) => String(row[0])) ?? [];
-    if (tables.length > 100) throw new PreviewError({ code: "database-too-many-tables" });
+    database = new ReadOnlySqliteReader(input.bytes);
+    const allTables = database.tables();
+    if (allTables.length > 100) throw new PreviewError({ code: "database-too-many-tables" });
+    tables = allTables.map((table) => table.name);
     reply({
       type: "sqlite",
       tables: tables.map((name) => ({
         name,
-        count: Number(
-          database!.exec(`SELECT count(*) FROM ${quote(name)}`)[0]?.values[0]?.[0] ?? 0,
-        ),
+        count: database!.countRows(name),
       })),
     });
   } else {

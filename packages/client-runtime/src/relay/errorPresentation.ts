@@ -4,8 +4,7 @@ import {
   type RelayEnvironmentStatusResponse,
   type RelayProtectedError,
 } from "@t3tools/contracts/relay";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 import { type MarkedText, resolveMarkedText } from "../errors/translatable.ts";
 

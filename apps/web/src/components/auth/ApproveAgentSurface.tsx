@@ -8,7 +8,7 @@ import {
 import { type AuthMcpApprovalDetails, EnvironmentId } from "@t3tools/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { m } from "../../i18n/messages";

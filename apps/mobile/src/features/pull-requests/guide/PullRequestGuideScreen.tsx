@@ -2,7 +2,7 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 import { AppBar } from "../../../components/ui/AppBar";

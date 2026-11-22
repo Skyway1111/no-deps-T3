@@ -1,4 +1,4 @@
-import { T, useGT, useLocale, Var } from "gt-react";
+import { T, useGT, useLocale, Var } from "@t3tools/shared/i18n/react";
 import { formatPercent, formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
 import { isModelCostUnknown, type ModelTotals } from "@t3tools/shared/usageMerge";
 

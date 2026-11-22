@@ -13,7 +13,7 @@ import {
   resolveProjectSettings,
 } from "@t3tools/shared/projectSettings";
 
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import type { SettingsTarget } from "./settings-environment-filter";

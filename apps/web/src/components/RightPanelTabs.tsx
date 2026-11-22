@@ -1,4 +1,4 @@
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -33,28 +33,30 @@ import {
   DndContext,
   type DragEndEvent,
   PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { restrictToFirstScrollableAncestor, restrictToHorizontalAxis } from "@dnd-kit/modifiers";
-import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+  sensor,
+  restrictToFirstScrollableAncestor,
+  restrictToHorizontalAxis,
+  horizontalListSortingStrategy,
+  SortableContext,
+  useSortable,
+  CSS,
+} from "~/ui-core/dnd";
 import {
-  Bot,
+  BotIcon as Bot,
   CircleDotIcon,
-  Smartphone,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  FileDiff,
-  Files,
-  Globe2,
-  MessagesSquare,
-  Plus,
-  TerminalSquare,
+  SmartphoneIcon as Smartphone,
+  ChevronDownIcon as ChevronDown,
+  ChevronLeftIcon as ChevronLeft,
+  ChevronRightIcon as ChevronRight,
+  FileDiffIcon as FileDiff,
+  FilesIcon as Files,
+  EarthIcon as Globe2,
+  MessagesSquareIcon as MessagesSquare,
+  PlusIcon as Plus,
+  SquareTerminalIcon as TerminalSquare,
   Volume2Icon,
   VolumeOffIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -904,7 +906,7 @@ function SortableTabList(props: {
   onMove: ((surfaceId: string, toIndex: number) => void) | undefined;
   children: ReactNode;
 }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = [sensor(PointerSensor, { activationConstraint: { distance: 6 } })];
   const surfaceIds = props.surfaces.map((surface) => surface.id);
   const { onMove, surfaces } = props;
   const handleDragEnd = ({ active, over }: DragEndEvent) => {

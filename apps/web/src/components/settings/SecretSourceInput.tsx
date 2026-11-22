@@ -11,8 +11,14 @@ import { hasFeatureFlag } from "@t3tools/client-runtime/state/server";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { useGT, useMessages } from "gt-react";
-import { AlertTriangleIcon, CheckIcon, KeyRoundIcon, RefreshCwIcon, TypeIcon } from "lucide-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
+import {
+  TriangleAlertIcon as AlertTriangleIcon,
+  CheckIcon,
+  KeyRoundIcon,
+  RefreshCwIcon,
+  TypeIcon,
+} from "~/ui-core/icons";
 import { useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";

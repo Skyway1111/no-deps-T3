@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "~/ui-core/router";
 
 import { AppearanceSettingsPanel } from "../components/settings/AppearanceSettingsPanel";
 

@@ -13,7 +13,7 @@ import {
 } from "@t3tools/client-runtime/pull-request-selection";
 import type { PullRequestLabelCandidate } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";

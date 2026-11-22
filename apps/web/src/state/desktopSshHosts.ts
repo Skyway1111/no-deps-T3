@@ -2,7 +2,7 @@ import type { DesktopBridge, DesktopDiscoveredSshHost } from "@t3tools/contracts
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 

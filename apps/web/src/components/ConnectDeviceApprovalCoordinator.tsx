@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -8,7 +8,7 @@ import {
 import { AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { useEffect, useRef, useState } from "react";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 import { authEnvironment } from "../state/auth";

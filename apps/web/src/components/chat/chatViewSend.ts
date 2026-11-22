@@ -11,7 +11,7 @@ import {
   wasBootstrapThreadNotCreated,
 } from "@t3tools/client-runtime/errors";
 import { Atom } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,

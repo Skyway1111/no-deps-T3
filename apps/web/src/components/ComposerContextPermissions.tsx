@@ -1,6 +1,6 @@
 import type { EnvironmentId, RuntimeMode } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { shortcutLabelForCommand } from "../keybindings";
 import { useManagedPolicy } from "../state/managedPolicy";

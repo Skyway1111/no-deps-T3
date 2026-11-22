@@ -1,6 +1,3 @@
-import type { Root } from "mdast";
-import type { Transformer } from "unified";
-
 interface MarkdownListNode {
   readonly type: string;
   readonly ordered?: boolean | null | undefined;
@@ -55,7 +52,9 @@ export function keepsOrderedListNumbers(processor: object): boolean {
 }
 
 /** Sits before list recovery so offsets still point into the file. */
-export function remarkKeepOrderedListNumbers(this: object): Transformer<Root> {
+export function remarkKeepOrderedListNumbers(
+  this: object,
+): (tree: MarkdownListNode, file: unknown) => void {
   return (tree, file) => {
     if (enabledProcessors.has(this)) keepOrderedListNumbers(tree, String(file));
   };

@@ -1,5 +1,5 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon } from "~/ui-core/icons";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { useState, type ReactNode } from "react";
@@ -32,7 +32,7 @@ import {
 import { Skeleton } from "../ui/skeleton";
 import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../../i18n/messages";
 
 import { GitIcon, JujutsuIcon, type Icon } from "../Icons";

@@ -15,7 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { AppBar } from "../../components/ui/AppBar";
 import { SymbolView } from "../../components/ui/AppSymbol";
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useMemo, useRef, type ComponentProps } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { RefreshControl } from "../../components/ui/RefreshControl";

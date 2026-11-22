@@ -4,7 +4,7 @@ import { nextTerminalId } from "@t3tools/shared/terminalLabels";
 import { resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabelsCopy";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 

@@ -1,4 +1,4 @@
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 
 import { APP_VERSION } from "../../branding";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";

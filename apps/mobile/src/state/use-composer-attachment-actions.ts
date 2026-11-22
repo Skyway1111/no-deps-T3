@@ -1,6 +1,6 @@
 import * as Dialog from "../components/ui/Dialog";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useRef } from "react";
 import { m } from "../i18n/messages";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS, type ServerConfig } from "@t3tools/contracts";

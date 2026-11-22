@@ -1,5 +1,5 @@
 import { CollapsibleUserMessageBody } from "./CollapsibleUserMessageBody";
-import { msg, T, useGT, useLocale, useMessages } from "gt-react-native";
+import { msg, T, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { toServerClock } from "@t3tools/client-runtime/clock";

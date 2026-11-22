@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import {
   useId,
   useRef,

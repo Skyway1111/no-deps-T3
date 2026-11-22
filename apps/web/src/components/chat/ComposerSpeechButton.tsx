@@ -1,6 +1,6 @@
 import type { VoiceInputState } from "@t3tools/client-runtime/voice-input";
-import { msg, useGT, useMessages } from "gt-react";
-import { CheckIcon, MicIcon, XIcon } from "lucide-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { CheckIcon, MicIcon, XIcon } from "~/ui-core/icons";
 import { useEffect, useState, type PointerEvent, type ReactElement } from "react";
 
 import { VoiceInputErrorPill } from "./VoiceInputErrorPill";

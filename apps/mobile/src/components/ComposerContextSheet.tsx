@@ -1,4 +1,4 @@
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 
 import { Button } from "./ui/Button";
 import * as Dialog from "./ui/Dialog";

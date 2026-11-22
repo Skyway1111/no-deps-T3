@@ -9,8 +9,8 @@ import type {
   ScopedThreadRef,
   ThreadId,
 } from "@t3tools/contracts";
-import { Link2Icon, Link2OffIcon, MessageSquareIcon } from "lucide-react";
-import { msg, T, useGT } from "gt-react";
+import { Link2Icon, Link2OffIcon, MessageSquareIcon } from "~/ui-core/icons";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";

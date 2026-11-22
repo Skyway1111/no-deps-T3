@@ -6,7 +6,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ThreadGuestShare, ThreadId } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import * as DateTime from "effect/DateTime";
 import { useMemo, useState } from "react";
 import { Platform, ScrollView, Share, View } from "react-native";

@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 export const PREVIEW_RECENT_URL_LIMIT = 10;
 

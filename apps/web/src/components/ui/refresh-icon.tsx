@@ -1,5 +1,5 @@
-import { RefreshCwIcon } from "lucide-react";
-import { cva, type VariantProps } from "class-variance-authority";
+import { RefreshCwIcon } from "~/ui-core/icons";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
 
 import { cn } from "~/lib/utils";
 import { observeVisibleAnimation } from "~/lib/visibleAnimation";

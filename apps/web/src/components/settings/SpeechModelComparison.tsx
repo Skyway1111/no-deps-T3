@@ -1,5 +1,5 @@
 import type { EnvironmentSpeechModel, SpeechBenchmarkTier } from "@t3tools/contracts";
-import { T, useLocale, Var } from "gt-react";
+import { T, useLocale, Var } from "@t3tools/shared/i18n/react";
 
 import { languageLabel } from "./SpeechLanguageSelect";
 

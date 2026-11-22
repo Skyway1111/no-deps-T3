@@ -10,7 +10,7 @@ import { refreshUsage, usageSummaryInput } from "@t3tools/client-runtime/state/u
 import { resolveUsageAccess } from "@t3tools/client-runtime/state/usage-access";
 import { mergeUsage, type EnvironmentUsage, type MergedUsage } from "@t3tools/shared/usageMerge";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { useCallback, useMemo } from "react";
 
 import { keepMarked } from "../i18n/messages";

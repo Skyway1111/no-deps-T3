@@ -5,7 +5,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { useEnvironmentScope } from "../../state/session";
 import { ScrollView, View } from "react-native";

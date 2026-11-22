@@ -15,17 +15,17 @@ import { childThreadInputsTitle } from "@t3tools/client-runtime/state/threads";
 import { commandDisplayText } from "@t3tools/client-runtime/work-log/command-label";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
 import * as DateTime from "effect/DateTime";
-import { msg, T, Var } from "gt-react";
+import { msg, T, Var } from "@t3tools/shared/i18n/react";
 import {
   CircleDashedIcon,
   CircleStopIcon,
   GitBranchIcon,
   MessageCircleIcon,
-  ShieldQuestionIcon,
+  ShieldQuestionMarkIcon as ShieldQuestionIcon,
   TargetIcon,
   TerminalIcon,
   TriangleAlertIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { Fragment } from "react";
 import { m, type MessageResolver } from "~/i18n/messages";
 import { tickTextContent } from "~/lib/tickTextContent";

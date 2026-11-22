@@ -1,4 +1,4 @@
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import type { DeviceToolVersions as ToolVersions } from "@t3tools/contracts";
 import { InlineButton } from "~/components/ui/button";

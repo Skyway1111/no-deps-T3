@@ -1,5 +1,5 @@
-import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { CheckIcon, ChevronRightIcon, SearchIcon } from "lucide-react";
+import { Menu as MenuPrimitive } from "~/ui-core/popups";
+import { CheckIcon, ChevronRightIcon, SearchIcon } from "~/ui-core/icons";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";

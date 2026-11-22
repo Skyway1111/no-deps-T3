@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState } from "react";
 import Animated, {
   cubicBezier,

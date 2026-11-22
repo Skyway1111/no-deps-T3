@@ -1,7 +1,14 @@
-import type { Processor } from "unified";
-import { decodeString } from "micromark-util-decode-string";
+import { decodeHtmlEntities } from "./markdown/index.ts";
 import { UNFINISHED_DRIVE_PATH } from "./markdownLinks.ts";
 import { isWindowsAbsolutePath } from "./path.ts";
+
+interface ProcessorLike {
+  data(): { fromMarkdownExtensions?: Array<Record<string, unknown>> };
+}
+
+function decodeMarkdownString(value: string): string {
+  return decodeHtmlEntities(value.replace(/\\([!-/:-@[-`{-~])/g, "$1"), { strict: true });
+}
 
 interface DestinationCompileContext {
   readonly stack: ReadonlyArray<{ readonly type: string; url?: string }>;
@@ -15,7 +22,7 @@ function keepWindowsPathDestination(this: DestinationCompileContext, token: unkn
   const node = this.stack.at(-1);
   if (node)
     node.url = isWindowsAbsolutePath(authored)
-      ? decodeString(authored.replaceAll("\\", "\\\\"))
+      ? decodeMarkdownString(authored.replaceAll("\\", "\\\\"))
       : decoded;
 }
 
@@ -55,7 +62,7 @@ function keepWindowsProsePathEscape(this: EscapeCompileContext) {
  * destinations themselves. Prose paths end at whitespace: past that, nothing tells a path
  * from a sentence, and `C:\x and \*this\*` must still read `*this*`.
  */
-export function remarkKeepWindowsProsePaths(this: Processor) {
+export function remarkKeepWindowsProsePaths(this: ProcessorLike) {
   (this.data().fromMarkdownExtensions ??= []).push({
     exit: { characterEscape: keepWindowsProsePathEscape },
   });
@@ -66,7 +73,7 @@ export function remarkKeepWindowsProsePaths(this: Processor) {
  * Windows path is a separator, so link, image, and definition destinations that are
  * Windows paths keep the text as written, and so do escapes inside drive paths.
  */
-export function remarkKeepWindowsPaths(this: Processor) {
+export function remarkKeepWindowsPaths(this: ProcessorLike) {
   (this.data().fromMarkdownExtensions ??= []).push({
     exit: {
       resourceDestinationString: keepWindowsPathDestination,

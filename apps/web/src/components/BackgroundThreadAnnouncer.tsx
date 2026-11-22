@@ -1,7 +1,7 @@
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import { isListedThreadLineage } from "@t3tools/contracts";
-import type { AnyRouter } from "@tanstack/react-router";
+import type { AnyRouter } from "~/ui-core/router";
 import type { AtomRegistry } from "effect/reactivity";
 
 import { useComposerDraftStore } from "../composerDraftStore";

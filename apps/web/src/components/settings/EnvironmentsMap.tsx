@@ -17,12 +17,12 @@ import type { PeerLinkHealth } from "@t3tools/client-runtime/state/peerLinks";
 import { AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   AppWindowIcon,
   ArrowUpDownIcon,
   CheckIcon,
-  CircleHelpIcon,
+  CircleQuestionMarkIcon as CircleHelpIcon,
   CloudIcon,
   GlobeIcon,
   MaximizeIcon,
@@ -33,7 +33,7 @@ import {
   UnfoldVerticalIcon,
   FoldVerticalIcon,
   XIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import {
   memo,
   type FocusEvent,

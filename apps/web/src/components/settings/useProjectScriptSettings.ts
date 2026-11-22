@@ -18,7 +18,7 @@ import { resolveProjectScripts } from "@t3tools/shared/projectScripts";
 import { clearProjectSettingsOverrides } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 
 import {

@@ -1,5 +1,4 @@
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 /** @public */
 export function formatDuration(durationMs: number, resolve: MFunctionType = mFallback): string {

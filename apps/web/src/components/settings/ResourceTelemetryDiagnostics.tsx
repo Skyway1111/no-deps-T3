@@ -4,7 +4,7 @@ import { AuthEnvironmentMaintainScope } from "@t3tools/contracts";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
   ActivityIcon,
-  AlertTriangleIcon,
+  TriangleAlertIcon as AlertTriangleIcon,
   BatteryIcon,
   CpuIcon,
   DatabaseIcon,
@@ -13,7 +13,7 @@ import {
   MemoryStickIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import type {
   BackgroundBooleanState,
   EnvironmentId,
@@ -36,7 +36,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../../i18n/messages";
 
 import {

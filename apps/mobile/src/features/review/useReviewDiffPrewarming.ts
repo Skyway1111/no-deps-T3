@@ -1,4 +1,4 @@
-import { useLocale } from "gt-react-native";
+import { useLocale } from "@t3tools/shared/i18n/react";
 import { useEffect } from "react";
 
 import { getCachedNativeReviewDiffData } from "./nativeReviewDiffAdapter";

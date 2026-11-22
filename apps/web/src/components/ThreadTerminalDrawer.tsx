@@ -1,7 +1,7 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import {
   isAtomCommandInterrupted,
@@ -16,13 +16,13 @@ import {
   type TerminalSessionState,
 } from "@t3tools/client-runtime/state/terminal";
 import {
-  Plus,
-  Square,
-  SquareSplitHorizontal,
-  SquareSplitVertical,
-  TerminalSquare,
-  Trash2,
-} from "lucide-react";
+  PlusIcon as Plus,
+  SquareIcon as Square,
+  SquareSplitHorizontalIcon as SquareSplitHorizontal,
+  SquareSplitVerticalIcon as SquareSplitVertical,
+  SquareTerminalIcon as TerminalSquare,
+  Trash2Icon as Trash2,
+} from "~/ui-core/icons";
 import {
   AuthPreviewOperateScope,
   AuthFilesystemReadScope,

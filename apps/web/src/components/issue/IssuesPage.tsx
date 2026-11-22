@@ -20,7 +20,7 @@ import type {
   IssueTrackerSummary,
   ProjectId,
 } from "@t3tools/contracts";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "~/ui-core/router";
 import {
   ArrowDownUpIcon,
   AtSignIcon,
@@ -32,8 +32,8 @@ import {
   Plug2Icon,
   UserCheckIcon,
   UsersIcon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { Fragment, useEffect, useEffectEvent, useState, type ReactNode } from "react";
 
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -57,7 +57,12 @@ import {
 import { m, type MessageResolver } from "~/i18n/messages";
 import { resolveFilterOptions } from "../pullRequest/pullRequestListOptions";
 import { IssueFiltersMenu } from "./IssueListFilterPickers";
-import { issueFilterProjects, issueListTargets, issueProjectKeys } from "./issuesSearch.logic";
+import {
+  issueFilterProjects,
+  issueListTargets,
+  issueProjectKeys,
+  issuesSearchFromUrl,
+} from "./issuesSearch.logic";
 import { ISSUE_SAVED_VIEWS } from "./issueSavedViews";
 import { SavedViewsMenu } from "~/components/SavedViewsMenu";
 import { PullRequestCompactFilterMenu } from "../pullRequest/PullRequestCompactFilterMenu";
@@ -193,7 +198,7 @@ export function IssuesPage() {
   const gt = useGT();
   const resolve = useMessages();
   const navigate = useNavigate({ from: "/issues" });
-  const search = useSearch({ from: "/_chat/issues" });
+  const search = useSearch<ReturnType<typeof issuesSearchFromUrl>>({ from: "/_chat/issues" });
   const { environments } = useEnvironments();
   const projects = useProjects();
   const issuesSupported = useIssuesSupported();

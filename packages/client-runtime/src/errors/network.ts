@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 export const NETWORK_BLOCKING_HINT = msg(
   "Your DNS or firewall may be blocking T3 Connect. Try another network, such as a different Wi-Fi or mobile data.",

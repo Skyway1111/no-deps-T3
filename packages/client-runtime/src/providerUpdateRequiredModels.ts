@@ -1,8 +1,7 @@
 import { PROVIDER_DISPLAY_NAMES, type ServerProvider } from "@t3tools/contracts";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
-import { mFallback, msg } from "gt-i18n";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 import { formatConjunctionList } from "./listFormat.ts";
-import type { MFunctionType } from "gt-i18n/types";
 
 const CLAUDE_CODE_NAME = "Claude Code";
 

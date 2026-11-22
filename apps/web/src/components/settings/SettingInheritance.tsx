@@ -6,9 +6,9 @@ import {
   type ServerSettings,
   type WorktreeSubmodules,
 } from "@t3tools/contracts";
-import { CheckIcon, ChevronRightIcon, LayersIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, LayersIcon } from "~/ui-core/icons";
 import * as Equal from "effect/Equal";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { cn } from "../../lib/utils";

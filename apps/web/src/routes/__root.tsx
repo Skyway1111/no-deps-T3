@@ -6,12 +6,13 @@ import {
   redirect,
   createRootRoute,
   type ErrorComponentProps,
+  type ParsedLocation,
   useLocation,
   useNavigate,
   useRouter,
-} from "@tanstack/react-router";
-import { msg, T, useGT, Var } from "gt-react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+} from "~/ui-core/router";
+import { msg, T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { CheckIcon, CopyIcon } from "~/ui-core/icons";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { APP_DISPLAY_NAME, APP_VERSION } from "../branding";
@@ -62,57 +63,62 @@ import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
 import { isChunkLoadError } from "../lib/chunkReloadGuard";
 import { shouldResumeSnapShotSetupOnStartup } from "../lib/snapShotSetupResume";
 
-export const Route = createRootRoute({
-  beforeLoad: async ({ location }) => {
-    // Guest links open on the owner's tunnel host in a browser with no T3 session, and must
-    // not trigger pairing or an environment connection.
-    if (location.pathname === GUEST_PAGE_PATH) {
-      return {
-        authGateState: {
-          status: "guest",
-        } as const,
-      };
-    }
+declare module "~/ui-core/router" {
+  interface RouteContext {
+    authGateState: Awaited<ReturnType<typeof resolveRootContext>>["authGateState"];
+  }
+}
 
-    if (location.pathname === "/pair" && hasHostedPairingRequest(new URL(window.location.href))) {
-      return {
-        authGateState: {
-          status: "hosted-pairing",
-        } as const,
-      };
-    }
-
-    if (isLocalEnvironmentDisabled() || isHostedStaticApp(new URL(window.location.href))) {
-      return {
-        authGateState: {
-          status: "hosted-static",
-        } as const,
-      };
-    }
-
-    const authGateState = await resolveInitialServerAuthGateState();
-    if (authGateState.status === "authenticated") {
-      // Idempotent, so every navigation can ask for it.
-      void configureClientTracing();
-    }
-    if (
-      authGateState.status === "authenticated" &&
-      getDesktopSnapShotBridge() &&
-      shouldResumeSnapShotSetupOnStartup() &&
-      location.pathname !== "/settings/snap-shot"
-    ) {
-      throw redirect({ to: "/settings/snap-shot", replace: true });
-    }
+async function resolveRootContext({ location }: { location: ParsedLocation }) {
+  // Guest links open on the owner's tunnel host in a browser with no T3 session, and must
+  // not trigger pairing or an environment connection.
+  if (location.pathname === GUEST_PAGE_PATH) {
     return {
-      authGateState,
+      authGateState: {
+        status: "guest",
+      } as const,
     };
-  },
+  }
+
+  if (location.pathname === "/pair" && hasHostedPairingRequest(new URL(window.location.href))) {
+    return {
+      authGateState: {
+        status: "hosted-pairing",
+      } as const,
+    };
+  }
+
+  if (isLocalEnvironmentDisabled() || isHostedStaticApp(new URL(window.location.href))) {
+    return {
+      authGateState: {
+        status: "hosted-static",
+      } as const,
+    };
+  }
+
+  const authGateState = await resolveInitialServerAuthGateState();
+  if (authGateState.status === "authenticated") {
+    // Idempotent, so every navigation can ask for it.
+    void configureClientTracing();
+  }
+  if (
+    authGateState.status === "authenticated" &&
+    getDesktopSnapShotBridge() &&
+    shouldResumeSnapShotSetupOnStartup() &&
+    location.pathname !== "/settings/snap-shot"
+  ) {
+    throw redirect({ to: "/settings/snap-shot", replace: true });
+  }
+  return {
+    authGateState,
+  };
+}
+
+export const Route = createRootRoute({
+  beforeLoad: resolveRootContext,
   component: RootRouteView,
   errorComponent: RootRouteErrorView,
   notFoundComponent: RootRouteNotFoundView,
-  head: () => ({
-    meta: [{ name: "title", content: APP_DISPLAY_NAME }],
-  }),
 });
 
 function RootRouteNotFoundView() {

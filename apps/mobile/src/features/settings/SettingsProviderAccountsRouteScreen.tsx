@@ -1,5 +1,5 @@
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import * as Dialog from "../../components/ui/Dialog";
 import {
   isAtomCommandInterrupted,

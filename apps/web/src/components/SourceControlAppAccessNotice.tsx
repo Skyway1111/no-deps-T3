@@ -3,8 +3,8 @@ import {
   readHostCredentialSettings,
   sourceControlClients,
 } from "@t3tools/client-runtime/source-control-clients";
-import { ExternalLinkIcon } from "lucide-react";
-import { T, Var } from "gt-react";
+import { ExternalLinkIcon } from "~/ui-core/icons";
+import { T, Var } from "@t3tools/shared/i18n/react";
 
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { cn } from "../lib/utils";

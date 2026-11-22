@@ -1,5 +1,5 @@
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
-import { CircleAlertIcon, DownloadIcon } from "lucide-react";
+import { CircleAlertIcon, DownloadIcon } from "~/ui-core/icons";
 
 // Static on purpose: the title says when an update is running, and spinners repaint every frame.
 export function ComposerServerUpdateIcon({

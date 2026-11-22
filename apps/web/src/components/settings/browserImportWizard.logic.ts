@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import type { BrowserImportFailureReason, BrowserImportSource } from "@t3tools/contracts";

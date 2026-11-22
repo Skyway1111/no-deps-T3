@@ -1,8 +1,8 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter } from "~/ui-core/router";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { ScopedProjectRef } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
 import { resolveThreadRouteTarget } from "../threadRoutes";

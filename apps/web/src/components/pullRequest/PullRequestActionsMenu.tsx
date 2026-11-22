@@ -20,13 +20,13 @@ import {
   CopyIcon,
   HammerIcon,
   LinkIcon,
-  MessageCircleQuestionIcon,
-  MoreHorizontalIcon,
+  MessageCircleQuestionMarkIcon as MessageCircleQuestionIcon,
+  EllipsisIcon as MoreHorizontalIcon,
   RotateCcwIcon,
   ScrollTextIcon,
   Trash2Icon,
-} from "lucide-react";
-import { Branch, msg, T, useGT, useMessages } from "gt-react";
+} from "~/ui-core/icons";
+import { Branch, msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useId, useState } from "react";
 
 import { useOpenLink } from "~/browser/useOpenLink";

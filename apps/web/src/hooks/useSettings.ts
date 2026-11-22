@@ -1,6 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useRef, useSyncExternalStore, use } from "react";
-import { useSyncExternalStoreWithSelector } from "use-sync-external-store/with-selector";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -55,7 +54,7 @@ import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { useEnvironments, usePrimaryEnvironment } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useTheme } from "./useTheme";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
 import {
   environmentSession,
@@ -331,6 +330,29 @@ export function useClientSettings<T = ClientSettings>(
     getDefaultClientSettings,
     selector ?? (selectWholeClientSettings as (settings: ClientSettings) => T),
     Equal.equals,
+  );
+}
+
+function useSyncExternalStoreWithSelector<S, T>(
+  subscribe: (onChange: () => void) => () => void,
+  getSnapshot: () => S,
+  getServerSnapshot: () => S,
+  selector: (snapshot: S) => T,
+  isEqual: (a: T, b: T) => boolean,
+): T {
+  const last = useRef<{ snapshot: S; selector: (snapshot: S) => T; value: T } | null>(null);
+  const read = (snapshot: S): T => {
+    const prev = last.current;
+    if (prev?.snapshot === snapshot && prev.selector === selector) return prev.value;
+    const next = selector(snapshot);
+    const value = prev !== null && isEqual(prev.value, next) ? prev.value : next;
+    last.current = { snapshot, selector, value };
+    return value;
+  };
+  return useSyncExternalStore(
+    subscribe,
+    () => read(getSnapshot()),
+    () => read(getServerSnapshot()),
   );
 }
 

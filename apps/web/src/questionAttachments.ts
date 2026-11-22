@@ -13,7 +13,7 @@ import type {
   ThreadContextRecord,
   ThreadId,
 } from "@t3tools/contracts";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 import { DraftId, useComposerDraftStore } from "./composerDraftStore";
 import {
   cancelPreparingComposerImages,

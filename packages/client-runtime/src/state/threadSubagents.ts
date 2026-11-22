@@ -4,8 +4,7 @@ import { copySorted } from "@t3tools/shared/Array";
 
 import { isActiveSubagentStatus, isTerminalSubagentStatus } from "./subagentRuntime.ts";
 import { resolveActiveThreadRun } from "./threadWorkflows.ts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 type Projection = OrchestrationV2ThreadProjection;
 type Subagent = OrchestrationV2Subagent;

@@ -13,7 +13,7 @@ import {
   type RuntimeMode,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 import * as Dialog from "../../components/ui/Dialog";

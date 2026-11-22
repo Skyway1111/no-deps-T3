@@ -11,8 +11,7 @@ import type {
   ConnectionHop,
   SupervisorConnectionState,
 } from "./model.ts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 export type ConnectionHopResult = "ok" | "failed" | "unchecked";
 

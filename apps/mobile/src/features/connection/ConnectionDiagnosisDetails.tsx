@@ -1,4 +1,4 @@
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   AVAILABLE_CONNECTION_STATE,

@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useLocation, useNavigate } from "~/ui-core/router";
 import { useState } from "react";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";

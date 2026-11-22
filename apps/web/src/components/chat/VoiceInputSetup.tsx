@@ -1,4 +1,4 @@
-import { T, Var, msg, useGT, useLocale } from "gt-react";
+import { T, Var, msg, useGT, useLocale } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import {
@@ -11,8 +11,8 @@ import type {
   EnvironmentSpeechModel,
   EnvironmentSpeechStatus,
 } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
-import { CircleAlertIcon, MicIcon, RefreshCwIcon } from "lucide-react";
+import { useNavigate } from "~/ui-core/router";
+import { CircleAlertIcon, MicIcon, RefreshCwIcon } from "~/ui-core/icons";
 import { useEffect, useRef, useState } from "react";
 
 import { useClientSettings } from "../../hooks/useSettings";

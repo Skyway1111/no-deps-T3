@@ -1,7 +1,7 @@
-import * as NodeModule from "node:module";
 
 import type { AntigravitySettings, ServerProviderUsageWindow } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { getSecret } from "@t3tools/shared/sys/keyring";
 import * as Clock from "effect/Clock";
 import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
@@ -167,76 +167,11 @@ class AntigravityKeyringError extends Schema.TaggedError<AntigravityKeyringError
 }
 
 // A single-executable server resolves packages on disk only through `require`.
-const requireExternal = NodeModule.createRequire(import.meta.url);
-
-/**
- * go-keyring's Windows target is `gemini:antigravity`; @napi-rs/keyring reads `antigravity.gemini`,
- * and its `withTarget` overwrites the target with an empty secret before reading.
- */
-export function readWindowsCliCredential(
-  architecture: NodeJS.Architecture,
-): Uint8Array | undefined {
-  // CREDENTIALW offsets and the pointers below are 64-bit.
-  if (architecture !== "x64" && architecture !== "arm64") {
-    throw new Error(`no credential access on ${architecture}`);
-  }
-  const { DataType, load, open } = requireExternal("ffi-rs") as typeof import("ffi-rs");
-  open({ library: "t3-advapi32", path: "advapi32.dll" });
-  open({ library: "t3-kernel32", path: "kernel32.dll" });
-  const copy = (into: Buffer, from: bigint) =>
-    load({
-      library: "t3-kernel32",
-      funcName: "RtlMoveMemory",
-      retType: DataType.Void,
-      paramsType: [DataType.U8Array, DataType.BigInt, DataType.BigInt],
-      paramsValue: [into, from, BigInt(into.length)],
-    });
-  const out = Buffer.alloc(8);
-  const read = load({
-    library: "t3-advapi32",
-    funcName: "CredReadW",
-    retType: DataType.I32,
-    // CRED_TYPE_GENERIC
-    paramsType: [DataType.WString, DataType.U32, DataType.U32, DataType.U8Array],
-    paramsValue: ["gemini:antigravity", 1, 0, out],
-    errno: true as const,
-  });
-  if (read.value === 0) {
-    // ERROR_NOT_FOUND
-    if (read.errnoCode === 1168) return undefined;
-    throw new Error(`CredReadW failed with Windows error ${read.errnoCode}`);
-  }
-  const credential = out.readBigUInt64LE();
-  try {
-    // CredentialBlobSize is a DWORD at 32 and CredentialBlob a pointer at 40.
-    const header = Buffer.alloc(48);
-    copy(header, credential);
-    const size = header.readUInt32LE(32);
-    if (size === 0) return undefined;
-    const blob = Buffer.alloc(size);
-    copy(blob, header.readBigUInt64LE(40));
-    return blob;
-  } finally {
-    load({
-      library: "t3-advapi32",
-      funcName: "CredFree",
-      retType: DataType.Void,
-      paramsType: [DataType.BigInt],
-      paramsValue: [credential],
-    });
-  }
-}
-
-// Loaded lazily: a native binding that fails to load must not take the provider down.
-const readCliKeyringSecret = (platform: NodeJS.Platform, architecture: NodeJS.Architecture) =>
+// go-keyring's item: service "gemini", user "antigravity" (Windows target `gemini:antigravity`).
+const readCliKeyringSecret = () =>
   Effect.tryPromise({
     try: async () => {
-      const secret =
-        platform === "win32"
-          ? readWindowsCliCredential(architecture)
-          : await new (
-              requireExternal("@napi-rs/keyring") as typeof import("@napi-rs/keyring")
-            ).AsyncEntry("gemini", "antigravity").getSecret();
+      const secret = await getSecret("gemini", "antigravity");
       return secret ? decodeGoKeyringSecret(secret) : undefined;
     },
     catch: (cause) => new AntigravityKeyringError({ cause }),
@@ -334,7 +269,7 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
     "antigravity-acp",
     "antigravity-oauth-token",
   );
-  const readKeyringSecret = input.readKeyringSecret ?? readCliKeyringSecret(platform, architecture);
+  const readKeyringSecret = input.readKeyringSecret ?? readCliKeyringSecret();
   let cached:
     | { fingerprint: string; account: string; accessToken: string; expiresAt: number }
     | undefined;

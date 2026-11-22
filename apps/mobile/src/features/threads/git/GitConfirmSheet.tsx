@@ -4,7 +4,7 @@ import { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useCallback, useMemo } from "react";
 import { View } from "react-native";
 

@@ -19,8 +19,8 @@ import {
   ListChecksIcon,
   PlayIcon,
   WrenchIcon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import React, { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import {

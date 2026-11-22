@@ -1,5 +1,5 @@
 import { constVoid } from "effect/Function";
-import type { CDPSession } from "playwright-core";
+import type { CdpSession } from "@t3tools/shared/cdp";
 
 const escapeHtml = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
@@ -9,7 +9,7 @@ export const isPdfAssetUrl = (url: string) => {
   return pathname.startsWith("/api/assets/") && /\.pdf$/i.test(pathname);
 };
 
-export async function installPdfDocumentNavigation(cdp: CDPSession) {
+export async function installPdfDocumentNavigation(cdp: CdpSession) {
   const nativeViewer = await cdp.send("Runtime.evaluate", {
     expression: "navigator.pdfViewerEnabled",
     returnByValue: true,

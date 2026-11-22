@@ -1,5 +1,5 @@
 import type { ChatAttachment } from "@t3tools/contracts";
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 
 import { useTheme } from "~/hooks/useTheme";

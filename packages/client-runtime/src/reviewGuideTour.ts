@@ -1,7 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type { PullRequestReviewGuideExcerpt, PullRequestReviewGuideStop } from "@t3tools/contracts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 export function stepTourPosition(current: number, delta: 1 | -1, stopCount: number): number {
   return Math.max(Math.min(current + delta, stopCount - 1), 0);

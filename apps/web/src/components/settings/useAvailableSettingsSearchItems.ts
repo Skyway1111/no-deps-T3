@@ -1,4 +1,4 @@
-import { useMessages } from "gt-react";
+import { useMessages } from "@t3tools/shared/i18n/react";
 import { hasFeatureFlag } from "@t3tools/client-runtime/state/server";
 import { AuthEnvironmentMaintainScope } from "@t3tools/contracts";
 

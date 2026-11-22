@@ -1,7 +1,7 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/provider-instance-display";
-import { CircleAlertIcon, GitBranchIcon } from "lucide-react";
-import { useGT } from "gt-react";
+import { CircleAlertIcon, GitBranchIcon } from "~/ui-core/icons";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import type { useProject } from "~/state/entities";

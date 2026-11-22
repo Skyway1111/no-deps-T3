@@ -1,5 +1,5 @@
 import { Atom, type AtomRegistry } from "effect/reactivity";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import type { DraftComposerAttachment } from "../../lib/composerImages";

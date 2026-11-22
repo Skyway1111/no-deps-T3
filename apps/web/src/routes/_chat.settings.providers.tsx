@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "~/ui-core/router";
 import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { ProviderSettingsPanel } from "../components/settings/ProviderSettingsPanel";
 import { useSettingsScope } from "../components/settings/SettingsScopeContext";

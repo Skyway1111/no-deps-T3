@@ -1,11 +1,10 @@
 import { pipe } from "effect/Function";
-import { p256 } from "@noble/curves/nist";
-import { sha256 } from "@noble/hashes/sha2";
 import * as Base64Url from "effect/encoding/Base64Url";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
+import { sha256, verifyP256 } from "./parsers/crypto.ts";
 import { DpopPublicJwk as DpopPublicJwkSchema, normalizeDpopHtu } from "./dpopCommon.ts";
 import type { DpopPublicJwk as DpopPublicJwkType } from "./dpopCommon.ts";
 import { stableStringify } from "./relaySigning.ts";
@@ -107,19 +106,6 @@ export function computeDpopAccessTokenHash(accessToken: string): string {
   return Base64Url.encode(sha256(new TextEncoder().encode(accessToken)));
 }
 
-function publicKeyBytesFromJwk(jwk: DpopPublicJwkType): Uint8Array {
-  const x = base64UrlToBytes(jwk.x);
-  const y = base64UrlToBytes(jwk.y);
-  if (x.length !== 32 || y.length !== 32) {
-    throw new Error("Invalid P-256 public key coordinate length.");
-  }
-  const publicKey = new Uint8Array(65);
-  publicKey[0] = 0x04;
-  publicKey.set(x, 1);
-  publicKey.set(y, 33);
-  return publicKey;
-}
-
 export function verifyDpopProof(input: {
   readonly proof: string | null | undefined;
   readonly method: string;
@@ -172,14 +158,11 @@ export function verifyDpopProof(input: {
 
     const signature = base64UrlToBytes(parts[2]);
     const signatureInputHash = sha256(new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
-    const verified = p256.verify(
+    const verified = verifyP256(
       signature,
       signatureInputHash,
-      publicKeyBytesFromJwk(header.value.jwk),
-      {
-        prehash: false,
-        format: "compact",
-      },
+      base64UrlToBytes(header.value.jwk.x),
+      base64UrlToBytes(header.value.jwk.y),
     );
     if (!verified) {
       return { ok: false, code: "invalid_signature", reason: "Invalid DPoP signature." };

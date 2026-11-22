@@ -1,5 +1,5 @@
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 import type { PullRequestDetailTab } from "~/rightPanelStore";
 

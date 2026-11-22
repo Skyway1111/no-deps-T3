@@ -7,7 +7,7 @@ import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import * as Haptics from "expo-haptics";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { m } from "../../i18n/messages";

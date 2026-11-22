@@ -13,7 +13,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { pullRequestConversationThreads, type PullRequestThreadComment } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 import { ScrollView, View, type ScrollViewInstance } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";

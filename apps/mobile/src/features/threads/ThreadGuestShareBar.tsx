@@ -13,7 +13,7 @@ import {
   type ThreadGuestShare,
 } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 

@@ -1,6 +1,5 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -65,7 +64,7 @@ function ContextChip({ className, kind, state, shape, render, ...props }: Contex
     "data-slot": "context-chip",
     "data-state": state,
   };
-  return useRender({
+  return renderElement({
     defaultTagName: "span",
     props: mergeProps<"span">(defaultProps, props),
     render,
@@ -94,7 +93,7 @@ function ContextChipAction({ className, render, ...props }: useRender.ComponentP
     "data-slot": "context-chip-action",
     type: render ? undefined : ("button" as const),
   };
-  return useRender({
+  return renderElement({
     defaultTagName: "button",
     props: mergeProps<"button">(defaultProps, props),
     render,

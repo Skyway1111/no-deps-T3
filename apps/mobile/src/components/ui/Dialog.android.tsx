@@ -15,7 +15,7 @@ import { verticalScroll } from "@expo/ui/jetpack-compose/modifiers";
 import { useAppearancePreferences } from "../../features/settings/appearance/AppearancePreferencesProvider";
 import { useScaledTextRole } from "../../features/settings/appearance/useScaledTextRole";
 
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useSyncExternalStore } from "react";
 import { m } from "../../i18n/messages";
 import { themeColorWithContrast } from "../../lib/mobileTheme";

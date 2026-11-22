@@ -26,7 +26,7 @@ import type {
   ThreadContextRecord,
   ThreadId,
 } from "@t3tools/contracts";
-import { decodeMsg, msg } from "gt-react";
+import { decodeMsg, msg } from "@t3tools/shared/i18n/react";
 import { upgradeLegacyContextMessage } from "@t3tools/shared/composerContextLegacy";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
 import {

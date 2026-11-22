@@ -1,4 +1,4 @@
-import type { LegendListRef } from "@legendapp/list/react";
+import type { VirtualListRef } from "~/ui-core/virtualList";
 import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import type { ThreadFindMatch } from "./threadFind";
 import { useThreadFindHighlights } from "./threadFindHighlights";
@@ -39,7 +39,7 @@ function revealThreadFindMatch(
   inputs: RevealInputs,
   context: {
     readonly state: RevealState;
-    readonly listRef: RefObject<LegendListRef | null>;
+    readonly listRef: RefObject<VirtualListRef | null>;
     readonly readInputs: () => RevealInputs;
   },
 ): void {
@@ -103,7 +103,7 @@ function revealThreadFindMatch(
       (previous?.key === matchKey && previous.rowIndex === rowIndex && previous.entries === entries)
     )
       return;
-    // Activity can insert rows during LegendList layout; retarget pending jumps.
+    // Activity can insert rows during VirtualList layout; retarget pending jumps.
     const request = { key: matchKey, rowIndex, entries };
     state.positioning = request;
 
@@ -198,7 +198,7 @@ export function useThreadFindNavigation({
   navigationId: number;
   rowIndex: number;
   entries: FindEntries;
-  listRef: RefObject<LegendListRef | null>;
+  listRef: RefObject<VirtualListRef | null>;
   contentInsetEndAdjustment: number;
   listReady: boolean;
   historyControls?:

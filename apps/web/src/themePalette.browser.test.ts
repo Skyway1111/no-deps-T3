@@ -1,10 +1,8 @@
-import { converter } from "culori/fn";
+import { toRgb } from "@t3tools/shared/ui/color";
 import { describe, expect, it } from "vite-plus/test";
 
 import "~/index.css";
 import { getStandardPaintedThemeColors } from "./themePalette";
-
-const toRgb = converter("rgb");
 
 function paintedChannels(variable: string, canvas: readonly number[] = [0, 0, 0]): number[] {
   const probe = document.createElement("div");

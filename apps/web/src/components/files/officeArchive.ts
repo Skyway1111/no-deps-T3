@@ -1,6 +1,6 @@
-import JSZip from "jszip";
 import { checkZipDirectory } from "@t3tools/client-runtime/zip/directory";
-import { SaxesParser } from "saxes";
+import { MemoryZipArchive, openZip } from "@t3tools/client-runtime/zip/native-zip";
+import { XmlStreamParser } from "@t3tools/shared/parsers/xml";
 import { externalUrl } from "./office/links";
 
 import {
@@ -37,7 +37,7 @@ export const WORD_LIMITS = {
 };
 
 function xmlParser() {
-  const parser = new SaxesParser({ xmlns: true });
+  const parser = new XmlStreamParser();
   parser.on("doctype", () => {
     throw new PreviewError({ code: "office-xml-declarations" });
   });
@@ -587,7 +587,7 @@ function engineStyles(xml: string) {
     );
 }
 
-async function boundWorkbook(archive: JSZip) {
+async function boundWorkbook(archive: MemoryZipArchive) {
   const paths = new Map<string, string>();
   // Chart sheets and other non-grid sheets hold no cells to bound.
   const otherSheets = new Set<string>();
@@ -960,7 +960,7 @@ function wordXmlCost(xml: string, roles: Set<string> | undefined) {
 // Layout can repeat notes at references and headers/footers across pages.
 // Charge those copies, not just the XML that defines them.
 async function wordExpansion(
-  archive: JSZip,
+  archive: MemoryZipArchive,
   parts: ReturnType<typeof wordPartTypes>,
   mediaSizes: Map<string, number>,
   auxiliaryCosts: Map<string, { bytes: number; markup: number }>,
@@ -1141,18 +1141,21 @@ export async function boundedArchive(input: Extract<OfficeWorkerRequest, { type:
   if (bytes.byteLength > OFFICE_PREVIEW_MAX_BYTES)
     throw new PreviewError({ code: "file-too-large" });
   checkZipDirectory(bytes);
-  const source = await JSZip.loadAsync(bytes).catch(() => {
+  let source: ReturnType<typeof openZip>;
+  try {
+    source = openZip(bytes);
+  } catch {
     throw new PreviewError({ code: "office-invalid" });
-  });
-  const allEntries = Object.values(source.files);
+  }
+  const allEntries = source.entries;
   if (allEntries.length > 2048) throw new PreviewError({ code: "office-too-many-entries" });
-  const entries = allEntries.filter((entry) => !entry.dir);
+  const entries = allEntries.filter((entry) => !entry.directory);
   if (
     input.kind === "docx" &&
     entries.some((entry) => entry.name.includes("\\") || entry.name.startsWith("/"))
   )
     throw new PreviewError({ code: "word-limited-archive-paths" });
-  const archive = new JSZip();
+  const archive = new MemoryZipArchive();
   const partTypes = wordPartTypes();
   // Metadata must be bounded and classified before any payload gets a media exemption.
   if (input.kind === "docx")
@@ -1174,65 +1177,45 @@ export async function boundedArchive(input: Extract<OfficeWorkerRequest, { type:
     const sections = document ? wordSections() : null;
     let decoder: TextDecoder | undefined;
     let length = 0;
-    await new Promise<void>((resolve, reject) => {
-      // JSZip exposes this streaming API at runtime but omits it from its types.
-      const stream = (
-        entry as JSZip.JSZipObject & {
-          internalStream(type: "uint8array"): JSZip.JSZipStreamHelper<Uint8Array>;
+    await source.streamEntry(entry, {
+      onChunk(chunk) {
+        total += chunk.length;
+        length += chunk.length;
+        if (total > (spreadsheet ? 128 * 1024 * 1024 : OFFICE_PREVIEW_MAX_BYTES)) {
+          throw new PreviewError({ code: "office-too-large-expanded" });
         }
-      ).internalStream("uint8array");
-      stream
-        .on("data", (chunk: Uint8Array) => {
-          total += chunk.length;
-          length += chunk.length;
-          if (total > (spreadsheet ? 128 * 1024 * 1024 : OFFICE_PREVIEW_MAX_BYTES)) {
-            stream.pause();
-            reject(new PreviewError({ code: "office-too-large-expanded" }));
-            return;
-          }
-          try {
-            if (sections) {
-              decoder ??= officeXmlDecoder(chunk);
-              sections.write(decoder.decode(chunk, { stream: true }));
-            }
-          } catch (cause) {
-            stream.pause();
-            reject(cause);
-            return;
-          }
-          if (document && length > 4 * 1024 * 1024) {
-            const kept = Math.max(0, chunk.length - (length - 4 * 1024 * 1024));
-            if (kept) chunks.push(chunk.subarray(0, kept));
-            wordInputTruncated = true;
-            return;
-          }
-          // Media is bounded independently. Even renamed auxiliary XML must
-          // stay small before the engine parses it.
-          if (input.kind === "docx" && !document && !media) {
-            for (const byte of chunk) if (byte === 0x3c) wordAuxiliaryMarkup++;
-            if (
-              length > WORD_LIMITS.auxiliaryPartBytes ||
-              wordAuxiliaryMarkup > WORD_LIMITS.auxiliaryMarkup
-            ) {
-              stream.pause();
-              reject(new PreviewError({ code: "word-limited-auxiliary-markup" }));
-              return;
-            }
-          }
+        if (sections) {
+          decoder ??= officeXmlDecoder(chunk);
+          sections.write(decoder.decode(chunk, { stream: true }));
+        }
+        if (document && length > 4 * 1024 * 1024) {
+          const kept = Math.max(0, chunk.length - (length - 4 * 1024 * 1024));
+          if (kept) chunks.push(chunk.subarray(0, kept));
+          wordInputTruncated = true;
+          return;
+        }
+        // Media is bounded independently. Even renamed auxiliary XML must
+        // stay small before the engine parses it.
+        if (input.kind === "docx" && !document && !media) {
+          for (const byte of chunk) if (byte === 0x3c) wordAuxiliaryMarkup++;
           if (
-            total > (spreadsheet ? 128 * 1024 * 1024 : OFFICE_PREVIEW_MAX_BYTES) ||
-            (spreadsheet && total > Math.max(bytes.byteLength * 200, 8 * 1024 * 1024)) ||
-            (!document &&
-              (spreadsheet || media || entry.name.endsWith(".xml")) &&
-              length > (spreadsheet ? 64 * 1024 * 1024 : 8 * 1024 * 1024))
+            length > WORD_LIMITS.auxiliaryPartBytes ||
+            wordAuxiliaryMarkup > WORD_LIMITS.auxiliaryMarkup
           ) {
-            stream.pause();
-            reject(new PreviewError({ code: "office-too-large-expanded" }));
-          } else chunks.push(chunk);
-        })
-        .on("error", reject)
-        .on("end", resolve)
-        .resume();
+            throw new PreviewError({ code: "word-limited-auxiliary-markup" });
+          }
+        }
+        if (
+          total > (spreadsheet ? 128 * 1024 * 1024 : OFFICE_PREVIEW_MAX_BYTES) ||
+          (spreadsheet && total > Math.max(bytes.byteLength * 200, 8 * 1024 * 1024)) ||
+          (!document &&
+            (spreadsheet || media || entry.name.endsWith(".xml")) &&
+            length > (spreadsheet ? 64 * 1024 * 1024 : 8 * 1024 * 1024))
+        ) {
+          throw new PreviewError({ code: "office-too-large-expanded" });
+        }
+        chunks.push(chunk);
+      },
     });
     const content = new Uint8Array(document ? Math.min(length, 4 * 1024 * 1024) : length);
     let offset = 0;
@@ -1373,7 +1356,7 @@ export async function prepareOffice(
     result.archive.file(root, xml);
   }
   return {
-    bytes: await result.archive.generateAsync({ type: "arraybuffer", compression: "STORE" }),
+    bytes: result.archive.toStoredZip(),
     truncated:
       result.word?.truncated || result.workbook?.sheets.some((sheet) => sheet.truncated) || false,
     view: result.workbook && {

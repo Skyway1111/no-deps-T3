@@ -7,7 +7,7 @@ import type {
 } from "@t3tools/contracts";
 import { summarizeChangedFiles } from "@t3tools/shared/changedFileKind";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";

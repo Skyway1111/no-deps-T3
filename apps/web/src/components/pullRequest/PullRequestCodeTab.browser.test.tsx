@@ -1,5 +1,4 @@
-import { sha256 } from "@noble/hashes/sha2";
-import { bytesToHex } from "@noble/hashes/utils";
+import { bytesToHex, sha256 } from "@t3tools/shared/parsers/crypto";
 import {
   EnvironmentId,
   ProjectId,

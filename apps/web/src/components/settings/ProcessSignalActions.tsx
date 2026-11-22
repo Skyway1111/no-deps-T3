@@ -1,5 +1,5 @@
 import type { ServerProcessSignal } from "@t3tools/contracts";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 
 import { InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";

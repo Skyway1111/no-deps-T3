@@ -2,7 +2,7 @@ import { PRIMARY_LOCAL_ENVIRONMENT_ID, type DesktopEnvironmentBootstrap } from "
 import * as Schema from "effect/Schema";
 
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 const PrimaryEnvironmentTargetSource = Schema.Literals([

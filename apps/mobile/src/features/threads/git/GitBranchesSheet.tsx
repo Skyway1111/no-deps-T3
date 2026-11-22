@@ -1,6 +1,6 @@
 import { sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { SheetHeader } from "../../../components/ui/SheetHeader";

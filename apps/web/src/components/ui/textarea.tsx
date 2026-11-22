@@ -1,5 +1,4 @@
-import { Field as FieldPrimitive } from "@base-ui/react/field";
-import { mergeProps } from "@base-ui/react/merge-props";
+import { Field as FieldPrimitive, mergeProps } from "~/ui-core/primitives";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";

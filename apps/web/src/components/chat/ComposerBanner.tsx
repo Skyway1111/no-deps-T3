@@ -1,6 +1,5 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { ChevronDownIcon, XIcon } from "lucide-react";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { ChevronDownIcon, XIcon } from "~/ui-core/icons";
 import type { ComponentProps } from "react";
 
 import { cn } from "~/lib/utils";
@@ -172,7 +171,7 @@ function Row({
     "data-composer-banner-row": "true",
     "data-composer-banner-layout": layout,
   };
-  return useRender({
+  return renderElement({
     defaultTagName: "div",
     render,
     props: mergeProps<"div">(rowProps, props),
@@ -238,7 +237,7 @@ function Actions({ className, ...props }: ComponentProps<"span">) {
 }
 
 function Children({ className, render, ...props }: useRender.ComponentProps<"div">) {
-  return useRender({
+  return renderElement({
     defaultTagName: "div",
     render,
     props: mergeProps<"div">(

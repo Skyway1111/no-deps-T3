@@ -6,7 +6,7 @@ import {
   type SpeedCost,
 } from "@t3tools/shared/usageMerge";
 
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import type { ShareSegment } from "./UsageShareBar";
 

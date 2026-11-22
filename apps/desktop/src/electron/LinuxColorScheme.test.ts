@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Event-driven fake of the portal transport.
 import * as NodeEvents from "node:events";
-import { DBusError, Message, MessageType, Variant, type MessageBus } from "dbus-next";
+import { DBusError, Message, MessageType, Variant, type MessageBus } from "@t3tools/shared/sys/dbus";
 import { expect, it, vi } from "vite-plus/test";
 
 import { watchLinuxColorScheme, type LinuxColorScheme } from "./LinuxColorScheme.ts";
@@ -22,13 +22,13 @@ class FakeBus extends NodeEvents.EventEmitter {
   async call(message: Message) {
     this.calls.push(message);
     if (message.member === "AddMatch")
-      return new Message({ type: MessageType.METHOD_RETURN, replySerial: "1" });
+      return new Message({ type: MessageType.METHOD_RETURN, replySerial: 1 });
     if (message.member === "ReadOne") this.readOneCalled.resolve();
     const value = await (message.member === "ReadOne" ? this.settings.readOne : this.settings.read);
     if (value === undefined) throw new DBusError("org.freedesktop.DBus.Error.UnknownMethod", "");
     return new Message({
       type: MessageType.METHOD_RETURN,
-      replySerial: "1",
+      replySerial: 1,
       signature: "v",
       body: [value],
     });

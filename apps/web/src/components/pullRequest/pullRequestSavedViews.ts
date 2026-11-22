@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { SavedViewIdentity } from "@t3tools/client-runtime/saved-views";
 
 import type { SavedView, SavedViewsKind } from "../SavedViewsMenu";

@@ -8,8 +8,7 @@ import type {
   OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import { isOrchestrationV2WorkActive, isProviderNativeSubagentThread } from "@t3tools/contracts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 export type RuntimeSubagentStatus =
   | "pending"

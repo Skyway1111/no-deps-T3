@@ -19,7 +19,7 @@ import {
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
-import * as NodePtyAdapter from "./NodePtyAdapter.ts";
+import * as SysPtyAdapter from "./SysPtyAdapter.ts";
 import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -2302,7 +2302,6 @@ it.layer(
     }),
   );
 
-  // POSIX exec failures are asynchronous in node-pty; ConPTY has a separate readiness protocol.
   it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
     "resolves configured shells and falls back from invalid paths with the real PTY adapter",
     () =>
@@ -2313,7 +2312,7 @@ it.layer(
         const nonExecutable = path.join(baseDir, "not-executable");
         yield* fs.writeFileString(nonExecutable, "#!/bin/sh\nexit 0\n");
         yield* fs.chmod(nonExecutable, 0o644);
-        const ptyAdapter = yield* PtyAdapter.PtyAdapter.pipe(Effect.provide(NodePtyAdapter.layer));
+        const ptyAdapter = yield* PtyAdapter.PtyAdapter.pipe(Effect.provide(SysPtyAdapter.layer));
         const toolsDir = path.join(baseDir, "tools");
         const customShell = path.join(toolsDir, "custom-shell");
         yield* fs.makeDirectory(toolsDir);

@@ -5,8 +5,8 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { useGT } from "gt-react";
-import { CableIcon, ClipboardCopyIcon, ExternalLinkIcon, SquareIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { CableIcon, ClipboardCopyIcon, ExternalLinkIcon, SquareIcon } from "~/ui-core/icons";
 
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";

@@ -6,8 +6,8 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useRouter } from "@tanstack/react-router";
-import { msg } from "gt-react";
+import { useRouter } from "~/ui-core/router";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { currentClientMetadata } from "~/connection/platform";

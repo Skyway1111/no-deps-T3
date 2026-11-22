@@ -1,5 +1,5 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { useParams } from "@tanstack/react-router";
+import { useParams } from "~/ui-core/router";
 
 import {
   resolveThreadRouteRef,

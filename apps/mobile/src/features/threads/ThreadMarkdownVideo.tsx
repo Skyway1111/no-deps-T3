@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { createContext, useContext } from "react";
 import { MediaVideoPlayer } from "../../components/MediaVideoPlayer";
 import { useAssetUrlState, useRefreshAssetUrl } from "../../state/assets";

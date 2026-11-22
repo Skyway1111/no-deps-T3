@@ -1,6 +1,6 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { sourceControlInstallHintText } from "@t3tools/client-runtime/contract-labels";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
@@ -25,7 +25,7 @@ import type {
   SourceControlRepositoryVisibility,
   VcsStatusResult,
 } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import * as Option from "effect/Option";
 import { memo, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useDeadlinePassed } from "../hooks/useDeadline";
@@ -38,12 +38,12 @@ import {
   CloudUploadIcon,
   FileDiffIcon,
   GitBranchPlusIcon,
-  GitCommitIcon,
+  GitCommitHorizontalIcon as GitCommitIcon,
   InfoIcon,
   LockIcon,
   GlobeIcon,
-} from "lucide-react";
-import { Radio as RadioPrimitive } from "@base-ui/react/radio";
+} from "~/ui-core/icons";
+import { Radio as RadioPrimitive } from "~/ui-core/primitives";
 import { RadioGroup } from "~/components/ui/radio-group";
 import { Spinner } from "~/components/ui/spinner";
 import { Toggle, ToggleGroup } from "~/components/ui/toggle-group";

@@ -1,9 +1,9 @@
-import { CircleAlertIcon, RefreshCwIcon } from "lucide-react";
+import { CircleAlertIcon, RefreshCwIcon } from "~/ui-core/icons";
 import type { ReactNode } from "react";
 
 import { threadSyncLabel, type ThreadSyncPhase } from "../../threadSync";
 import { cn } from "~/lib/utils";
-import { useMessages } from "gt-react";
+import { useMessages } from "@t3tools/shared/i18n/react";
 
 /** A line of thread state for the end of the timeline. */
 export interface ThreadNowItem {

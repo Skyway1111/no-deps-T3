@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useSyncExternalStore } from "react";
 
 import type { MessageResolver } from "~/i18n/messages";

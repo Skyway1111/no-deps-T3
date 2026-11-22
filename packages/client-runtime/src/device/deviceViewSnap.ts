@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from "three";
+import { Quaternion, Vector3 } from "./webglEngine.ts";
 const y = new Vector3(0, 1, 0);
 
 export function nearestDeviceView<T extends { rotation: Quaternion; yawLimit: number }>(

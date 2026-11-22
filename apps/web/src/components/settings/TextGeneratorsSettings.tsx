@@ -11,9 +11,14 @@ import { pickModelSelection } from "@t3tools/shared/model";
 import { AsyncResult } from "effect/reactivity";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { CheckIcon, MoreVertical, PlusIcon, ServerIcon } from "lucide-react";
+import {
+  CheckIcon,
+  EllipsisVerticalIcon as MoreVertical,
+  PlusIcon,
+  ServerIcon,
+} from "~/ui-core/icons";
 import { useState } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
 import {

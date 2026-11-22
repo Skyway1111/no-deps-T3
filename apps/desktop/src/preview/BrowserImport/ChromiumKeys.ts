@@ -3,6 +3,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { KeyringError, getSecret } from "@t3tools/shared/sys/keyring";
 
 import * as Effect from "effect/Effect";
 import * as Base64 from "effect/encoding/Base64";
@@ -49,31 +50,26 @@ export interface ChromiumKeyMaterial {
 const derive = (passphrase: string, iterations: number) =>
   NodeCrypto.pbkdf2Sync(passphrase, KEY_SALT, iterations, KEY_LENGTH, "sha1");
 
-// In-process Keychain access attributes grants to this app. Keep modal prompts untimed to preserve their listener.
+// Keychain access is granted to the bundled t3-sys helper. Keep modal prompts untimed to preserve their listener.
 const readKeychainSecret = Effect.fn("ChromiumKeys.readKeychainSecret")(function* (
   service: string,
   account: string,
 ) {
-  // Loading the macOS binding at startup can prevent other platforms from opening.
-  const Keyring = yield* Effect.tryPromise({
-    try: () => import("@napi-rs/keyring"),
-    catch: (cause) => new ChromiumKeyError({ reason: "keychainUnavailable", cause }),
-  });
   const secret = yield* Effect.tryPromise({
-    try: () => new Keyring.AsyncEntry(service, account).getPassword(),
-    catch: (cause) => {
-      const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
-      const missing = /no (matching )?entry|not found/i.test(message);
-      return new ChromiumKeyError({
-        reason: missing ? "keychainItemMissing" : "needsKeychainApproval",
+    try: () => getSecret(service, account),
+    catch: (cause) =>
+      new ChromiumKeyError({
+        reason:
+          cause instanceof KeyringError && cause.reason === "unavailable"
+            ? "keychainUnavailable"
+            : "needsKeychainApproval",
         cause,
-      });
-    },
+      }),
   });
-  if (!secret) {
+  if (!secret?.length) {
     return yield* new ChromiumKeyError({ reason: "keychainItemMissing" });
   }
-  return secret;
+  return secret.toString("utf8");
 });
 
 /** Exit codes distinguish missing keys, denied access, and unavailable keyrings without localized message parsing. */

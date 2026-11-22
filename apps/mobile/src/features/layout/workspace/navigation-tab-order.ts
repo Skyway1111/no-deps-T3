@@ -1,4 +1,4 @@
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 export const NAVIGATION_TAB_ORDER = ["threads", "pullRequests", "issues", "usage"] as const;
 export type NavigationTab = (typeof NAVIGATION_TAB_ORDER)[number];

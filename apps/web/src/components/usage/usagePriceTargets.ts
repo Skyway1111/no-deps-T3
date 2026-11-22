@@ -3,7 +3,7 @@ import type {
   ServerSettingsPatch,
   UsageModelPriceOverride,
 } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "~/i18n/messages";
 

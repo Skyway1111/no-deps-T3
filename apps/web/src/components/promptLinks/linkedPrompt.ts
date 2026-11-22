@@ -1,5 +1,5 @@
 import type { LinkedPrompt } from "@t3tools/shared/promptLinks";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { type ComposerThreadTarget, useComposerDraftStore } from "~/composerDraftStore";
 import { m } from "~/i18n/messages";

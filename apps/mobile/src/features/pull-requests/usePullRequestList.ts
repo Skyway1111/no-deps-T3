@@ -14,7 +14,7 @@ import type { EnvironmentId, PullRequestDiffStat, PullRequestListInput } from "@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { use, useMemo, useState } from "react";
 import { environmentCatalog } from "../../connection/catalog";
 import { m } from "../../i18n/messages";

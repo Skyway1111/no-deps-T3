@@ -7,8 +7,8 @@ import {
   hasIssueTrackerTeams,
 } from "@t3tools/client-runtime/state/issue-trackers";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { T, useGT, useMessages } from "gt-react";
-import { ChevronDownIcon, ExternalLinkIcon, XIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ChevronDownIcon, ExternalLinkIcon, XIcon } from "~/ui-core/icons";
 import { useState, type ElementType } from "react";
 import type {
   EnvironmentId,

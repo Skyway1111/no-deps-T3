@@ -1,4 +1,4 @@
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import type { MessageResolver } from "../../i18n/messages";
 

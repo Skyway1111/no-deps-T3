@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { useParams } from "@tanstack/react-router";
+import { useParams } from "~/ui-core/router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -14,7 +14,7 @@ import {
 } from "@t3tools/contracts";
 import { projectCloneProgressSummary } from "@t3tools/client-runtime/contract-labels";
 import { useEffect, useRef } from "react";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";

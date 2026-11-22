@@ -8,11 +8,11 @@ import {
   type DesktopSnapShotSetupAction,
   type SnapShotShortcut,
 } from "@t3tools/contracts";
-import { PlayIcon } from "lucide-react";
+import { PlayIcon } from "~/ui-core/icons";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { useContext, useRef, useState } from "react";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { useClientSettings, updateClientSettings } from "../../hooks/useSettings";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";

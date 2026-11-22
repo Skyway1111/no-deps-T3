@@ -4,10 +4,9 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
-import { lock } from "proper-lockfile";
+import { lockFile } from "@t3tools/shared/sys/fileLock";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
-import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
 export interface ProviderMaintenanceCommandCoordinatorShape<E> {
@@ -20,7 +19,6 @@ export interface ProviderMaintenanceCommandCoordinatorShape<E> {
 }
 
 class MachineLockError extends Schema.TaggedError<MachineLockError>()("MachineLockError", {
-  held: Schema.Boolean,
   cause: Schema.Defect(),
 }) {}
 
@@ -43,25 +41,15 @@ const withMachineLock = <A, E, R>(
   const file = machineLockFile(lockKey);
   const acquire = Effect.acquireRelease(
     Effect.tryPromise({
-      try: async () => {
+      // Waits in the kernel for another server's update to finish.
+      try: async (signal) => {
         await NodeFSP.mkdir(directory, { recursive: true });
-        return await lock(file, {
-          realpath: false,
-          stale: 60_000,
-          update: 10_000,
-          onCompromised: () => {},
-        });
+        return await lockFile(file, { signal });
       },
-      catch: (cause) =>
-        new MachineLockError({
-          held: (cause as { code?: unknown } | null)?.code === "ELOCKED",
-          cause,
-        }),
+      catch: (cause) => new MachineLockError({ cause }),
     }),
-    // A compromised lease rejects on release; the update has already finished by then.
-    (release) => Effect.promise(() => release().catch(() => undefined)),
+    (release) => Effect.promise(() => release()),
   ).pipe(
-    Effect.retry({ while: (error) => error.held, schedule: Schedule.spaced("1 second") }),
     Effect.catch((error) =>
       Effect.logWarning("Could not lock provider update across servers", {
         lockKey,

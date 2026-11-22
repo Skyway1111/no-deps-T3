@@ -84,7 +84,7 @@ import {
   mcpAppFromToolItem,
 } from "@t3tools/shared/toolOutput";
 import * as DateTime from "effect/DateTime";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import {
   IDLE_COMPACTION_TITLES,

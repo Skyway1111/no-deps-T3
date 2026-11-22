@@ -1,5 +1,5 @@
 // @effect-diagnostics globalTimers:off -- Bound session-bus registration at a native callback boundary.
-import { Message, MessageType, NameFlag, RequestNameReply, sessionBus } from "dbus-next";
+import { Message, NameFlag, RequestNameReply, sessionBus } from "@t3tools/shared/sys/dbus";
 
 import {
   NIRI_CAPTURE_INTERFACE as INTERFACE,
@@ -30,11 +30,9 @@ export async function startNiriCaptureShortcut(
     if (message.path !== PATH || message.interface !== INTERFACE || message.member !== "Capture")
       return false;
     if (message.signature || message.body.length) {
-      // Preserve dbus-next's numeric reply serial; its newError factory has incorrect types.
-      const reply = Message.newMethodReturn(message, "s", ["Capture takes no arguments."]);
-      reply.type = MessageType.ERROR;
-      reply.errorName = "org.freedesktop.DBus.Error.InvalidArgs";
-      bus.send(reply);
+      bus.send(
+        Message.newError(message, "org.freedesktop.DBus.Error.InvalidArgs", "Capture takes no arguments."),
+      );
       return true;
     }
     if (!closed) onCapture();

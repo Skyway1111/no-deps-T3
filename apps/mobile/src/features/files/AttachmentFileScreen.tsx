@@ -5,7 +5,7 @@ import {
   clampFileAttachmentUploadBytes,
   formatAttachmentSize,
 } from "@t3tools/client-runtime/state/attachments";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 import { View } from "react-native";
 

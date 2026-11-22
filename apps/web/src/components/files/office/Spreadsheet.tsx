@@ -1,52 +1,53 @@
-import * as Schema from "effect/Schema";
-import { observeResize } from "~/lib/observeResize";
-import { msg, useGT } from "gt-react";
-import { useEffect, useRef, useState } from "react";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { m } from "~/i18n/messages";
-import {
-  cellAtPoint,
-  normalizeRange,
-  selectionAt,
-  selectionKeyReducer,
-  extendTo,
-  hyperlinkAtCell,
-  safeExternalHyperlink,
-  parseHyperlinkLocation,
-  type Selection,
-  type CellAddr,
-} from "@betteroffice/xlsx/headless";
+import { observeResize } from "~/lib/observeResize";
+import { columnName, sheetTsv, type CellStyle, type SheetData } from "../decoders/officeEngine";
 import { FileSurfaceLoading, FileSurfaceNotice } from "../fileSurfaceChrome";
 import type { WorkbookView } from "../officePreviewProtocol";
-import { createWorkerClient, SupersededError } from "./worker-rpc";
-import type { SheetLayout, SheetMethods, SheetFrameRequest, SheetTab } from "./sheet-protocol";
-import {
-  coverMerges,
-  contains,
-  lastCell,
-  settleMerges,
-  skipHidden,
-  columnName,
-} from "./sheet-cells";
-import {
-  paintCells,
-  paintHeaders,
-  paintSelection,
-  shiftGrid,
-  headerHeight,
-  type Painted,
-} from "./sheet-paint";
 import { externalUrl } from "./links";
-import { bufferedViewport, cachedViewport, retainCachedViewport } from "./sheet-viewport";
+import type { OfficeMethods } from "./office.worker";
+import { createWorkerClient } from "./worker-rpc";
 
-const isSupersededError = Schema.is(SupersededError);
+type Engine = ReturnType<typeof createWorkerClient<OfficeMethods>>;
+type Opened = { engine: Engine; tabs: readonly { index: number; name: string }[]; styles: readonly CellStyle[] };
+type Selection = { row: number; column: number; anchorRow: number; anchorColumn: number };
 
-type Client = ReturnType<typeof createWorkerClient<SheetMethods>>;
-type Opened = {
-  engine: Client;
-  tabs: readonly SheetTab[];
-  layout: SheetLayout;
-  target?: CellAddr | undefined;
-};
+/** Offsets along one axis with O(log k) lookups, where k counts rows or columns of custom size. */
+function axis(count: number, base: number, custom: ReadonlyMap<number, number>, hidden: ReadonlySet<number>) {
+  const size = (i: number) => (hidden.has(i) ? 0 : (custom.get(i) ?? base));
+  const exceptions = [...new Set([...custom.keys(), ...hidden])].filter((i) => i < count).sort((a, b) => a - b);
+  const before: number[] = [];
+  let delta = 0;
+  for (const i of exceptions) {
+    before.push(delta);
+    delta += size(i) - base;
+  }
+  const start = (i: number) => {
+    let lo = 0;
+    let hi = exceptions.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (exceptions[mid]! < i) lo = mid + 1;
+      else hi = mid;
+    }
+    return i * base + (lo < exceptions.length ? before[lo]! : delta);
+  };
+  const index = (offset: number) => {
+    let lo = 0;
+    let hi = count - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (start(mid) <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  return { size, start, index, count, total: start(count) };
+}
+
+const HEADER = 22;
+
 export default function Spreadsheet(props: {
   bytes: ArrayBuffer;
   view: WorkbookView;
@@ -56,69 +57,60 @@ export default function Spreadsheet(props: {
   const { onError, bytes: source, onDetails, view } = props;
   const gt = useGT();
   const [opened, setOpened] = useState<Opened>();
+  const [sheet, setSheet] = useState<{ index: number; data: SheetData }>();
   const [error, setError] = useState("");
   const picking = useRef<AbortController | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Open the workbook worker and cancel workbook and sheet requests when the source changes or unmounts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the workbook worker and its sheet requests for this file, closing it when the file changes or unmounts.
   useEffect(() => {
     const controller = new AbortController();
-    const worker = new Worker(new URL("./spreadsheet.worker.ts", import.meta.url), {
-      type: "module",
-    });
-    const engine = createWorkerClient<SheetMethods>(worker);
-    const fail = (cause: unknown) => {
-      if (!controller.signal.aborted) onError(cause);
-    };
-    worker.addEventListener("error", fail);
-    worker.addEventListener("messageerror", fail);
+    const worker = new Worker(new URL("./office.worker.ts", import.meta.url), { type: "module" });
+    const engine = createWorkerClient<OfficeMethods>(worker);
     const bytes = source.slice(0);
     void engine
-      .call("open", { bytes, view }, { transfer: [bytes], signal: controller.signal })
-      .then((value) => {
-        if (!value) throw new Error(m(msg("This workbook has no visible sheets.")));
-        setOpened({ ...value, engine });
-        onDetails(
-          m(
-            msg("{count, plural, one {{count} sheet} other {{count} sheets}}", {
-              count: value.tabs.length,
-            }),
-          ),
-        );
+      .call("workbook", { bytes, view }, { transfer: [bytes], signal: controller.signal })
+      .then(async ({ tabs, active, styles }) => {
+        if (!tabs.length) throw new Error(m(msg("This workbook has no visible sheets.")));
+        const data = await engine.call("sheet", { sheet: active }, { signal: controller.signal });
+        setOpened({ engine, tabs, styles });
+        setSheet({ index: active, data });
+        onDetails(m(msg("{count, plural, one {{count} sheet} other {{count} sheets}}", { count: tabs.length })));
       })
-      .catch(fail);
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) onError(cause);
+      });
     return () => {
       controller.abort();
       picking.current?.abort();
       engine.close();
     };
   }, [source, view, onDetails, onError]);
-  const show = (sheet: number, target?: CellAddr) => {
-    if (!opened) return;
+  if (!opened || !sheet) return <FileSurfaceLoading />;
+  const show = (index: number) => {
     picking.current?.abort();
-    if (sheet === opened.layout.info.activeSheet) return;
+    if (index === sheet.index) return;
     const controller = new AbortController();
     picking.current = controller;
     void opened.engine
-      .call("show", { sheet }, { signal: controller.signal })
-      .then((layout) => {
+      .call("sheet", { sheet: index }, { signal: controller.signal })
+      .then((data) => {
         setError("");
-        setOpened({ ...opened, layout, target });
+        setSheet({ index, data });
       })
       .catch(() => {
         if (!controller.signal.aborted) setError(m(msg("This sheet could not be opened.")));
       });
   };
-  if (!opened) return <FileSurfaceLoading />;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {error ? <FileSurfaceNotice>{error}</FileSurfaceNotice> : null}
-      <SpreadsheetGrid
-        key={opened.layout.info.activeSheet}
-        engine={opened.engine}
-        layout={opened.layout}
-        initialCell={opened.target}
-        onNavigate={(name, cell) => {
-          const tab = opened.tabs.find((tab) => tab.name.toLowerCase() === name.toLowerCase());
-          if (tab) show(tab.index, cell);
+      <SheetGrid
+        key={sheet.index}
+        sheet={sheet.data}
+        styles={opened.styles}
+        gridlines={sheet.data.gridlines && !view.hiddenGridlines.includes(sheet.index)}
+        onNavigate={(name) => {
+          const tab = opened.tabs.find((candidate) => candidate.name.toLowerCase() === name.toLowerCase());
+          if (tab) show(tab.index);
         }}
       />
       <div
@@ -126,20 +118,10 @@ export default function Spreadsheet(props: {
         aria-label={gt("Sheets")}
         className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t border-border px-2"
         onKeyDown={(event) => {
-          const current = opened.tabs.findIndex(
-            (tab) => tab.index === opened.layout.info.activeSheet,
-          );
-          const next =
-            event.key === "ArrowRight"
-              ? (current + 1) % opened.tabs.length
-              : event.key === "ArrowLeft"
-                ? (current + opened.tabs.length - 1) % opened.tabs.length
-                : event.key === "Home"
-                  ? 0
-                  : event.key === "End"
-                    ? opened.tabs.length - 1
-                    : -1;
-          if (next < 0) return;
+          const current = opened.tabs.findIndex((tab) => tab.index === sheet.index);
+          const count = opened.tabs.length;
+          const next = { ArrowRight: (current + 1) % count, ArrowLeft: (current + count - 1) % count, Home: 0, End: count - 1 }[event.key];
+          if (next === undefined) return;
           event.preventDefault();
           const tab = opened.tabs[next];
           if (tab) show(tab.index);
@@ -151,8 +133,8 @@ export default function Spreadsheet(props: {
             key={tab.index}
             type="button"
             role="tab"
-            aria-selected={tab.index === opened.layout.info.activeSheet}
-            tabIndex={tab.index === opened.layout.info.activeSheet ? 0 : -1}
+            aria-selected={tab.index === sheet.index}
+            tabIndex={tab.index === sheet.index ? 0 : -1}
             onClick={() => show(tab.index)}
             className="h-7 shrink-0 rounded-md px-2.5 text-xs text-muted-foreground hover:bg-accent aria-selected:bg-accent aria-selected:text-foreground"
           >
@@ -164,610 +146,332 @@ export default function Spreadsheet(props: {
   );
 }
 
-function SpreadsheetGrid(props: {
-  engine: Client;
-  layout: SheetLayout;
-  initialCell: CellAddr | undefined;
-  onNavigate: (sheet: string, cell: CellAddr) => void;
-}) {
-  const { onNavigate, layout, engine, initialCell } = props;
+function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; gridlines: boolean; onNavigate: (sheet: string) => void }) {
+  const { sheet, styles, gridlines } = props;
+  const gt = useGT();
   const scroller = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const spacer = useRef<HTMLDivElement>(null);
-  const columnHeaderBand = useRef<HTMLDivElement>(null);
-  const rowHeaderBand = useRef<HTMLDivElement>(null);
-  const [notice, setNotice] = useState("");
-  const [reader, setReader] = useState<{ row: number; col: number; text: string }[]>([]);
-  const [active, setActive] = useState({ row: 0, col: 0 });
-  const navigate = useRef(onNavigate);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Keep the installed native pointer listener calling the latest navigation handler without restarting the canvas engine.
+  const [viewport, setViewport] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [selection, setSelection] = useState<Selection>({ row: 0, column: 0, anchorRow: 0, anchorColumn: 0 });
+  const dragging = useRef(false);
+  const grid = useMemo(() => {
+    const rows = axis(Math.max(sheet.maxRow + 50, 100), sheet.defaultHeight, sheet.rowHeights, sheet.hiddenRows);
+    const columns = axis(Math.max(sheet.maxColumn + 10, 26), sheet.defaultWidth, sheet.columnWidths, sheet.hiddenColumns);
+    const covered = new Map<string, SheetData["merges"][number]>();
+    for (const merge of sheet.merges)
+      if ((merge.r2 - merge.r1 + 1) * (merge.c2 - merge.c1 + 1) <= 10000)
+        for (let r = merge.r1; r <= merge.r2; r++) for (let c = merge.c1; c <= merge.c2; c++) covered.set(`${r}:${c}`, merge);
+    const gutter = Math.max(36, String(rows.count).length * 8 + 14);
+    return { rows, columns, covered, gutter };
+  }, [sheet]);
+  const { rows, columns, covered, gutter } = grid;
+  const frozenRows = Math.min(sheet.frozen.rows, rows.count);
+  const frozenColumns = Math.min(sheet.frozen.columns, columns.count);
+  const frozenHeight = rows.start(frozenRows);
+  const frozenWidth = columns.start(frozenColumns);
+  // Screen positions: frozen panes stay put, the rest scrolls beneath them.
+  const xOf = (c: number) => gutter + columns.start(c) - (c < frozenColumns ? 0 : viewport.left);
+  const yOf = (r: number) => HEADER + rows.start(r) - (r < frozenRows ? 0 : viewport.top);
+  const cellAt = (x: number, y: number) => {
+    const ix = x - gutter;
+    const iy = y - HEADER;
+    const column = ix < frozenWidth ? columns.index(Math.max(0, ix)) : columns.index(ix + viewport.left);
+    const row = iy < frozenHeight ? rows.index(Math.max(0, iy)) : rows.index(iy + viewport.top);
+    return { row, column };
+  };
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Observe the scroll container's size for the painted viewport.
   useEffect(() => {
-    navigate.current = onNavigate;
-  }, [onNavigate]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own canvas painting, worker requests, resize observation, and native scroll, keyboard, and pointer listeners for this sheet.
+    const node = scroller.current;
+    if (!node) return;
+    const update = () => setViewport({ left: node.scrollLeft, top: node.scrollTop, width: node.clientWidth, height: node.clientHeight });
+    update();
+    return observeResize(node, update);
+  }, []);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Paint the visible cells into the canvas whenever the viewport, selection or sheet changes.
   useEffect(() => {
-    const root = scroller.current;
     const target = canvas.current;
-    const space = spacer.current;
-    const columns = columnHeaderBand.current;
-    const rows = rowHeaderBand.current;
-    if (!root || !target || !space || !columns || !rows) return;
+    if (!target || !viewport.width || !viewport.height) return;
+    const ratio = window.devicePixelRatio || 1;
+    target.width = Math.round(viewport.width * ratio);
+    target.height = Math.round(viewport.height * ratio);
     const context = target.getContext("2d");
     if (!context) return;
-    const controller = new AbortController();
-    let info = layout.info;
-    let chartWidth = layout.chartWidth;
-    let chartHeight = layout.chartHeight;
-    const sheet = info.activeSheet;
-    const frozen = { rows: info.frozenRows, cols: info.frozenCols };
-    const headers = { width: 44, height: headerHeight };
-    let selection: Selection = selectionAt(initialCell ?? { row: 0, col: 0 });
-    let painted: Painted | undefined;
-    let grid: ReturnType<typeof shiftGrid> | undefined;
-    let raf = 0;
-    let requested = "";
-    let sent = 0;
-    let received = 0;
-    let drag = false;
-    let resizing:
-      | {
-          axis: "row" | "column";
-          pointerId: number;
-          index: number;
-          start: number;
-          edge: number;
-          delta: number;
-        }
-      | undefined;
-    let resizingPending = false;
-    let header: "row" | "column" | "all" | undefined;
-    let pressed: { row: number; col: number } | undefined;
-    let end: { x: number; y: number } | undefined;
-    let left = info.initialScrollX;
-    let top = info.initialScrollY;
-    let drawn = { x: left, y: top };
-    let reachX = 0;
-    let reachY = 0;
-    let readController: AbortController | undefined;
-    const range = () => coverMerges(normalizeRange(selection), layout.merges);
-    const at = (cell: { row: number; col: number }) => {
-      const merge = layout.merges.find((item) => contains(item, cell));
-      return selectionAt(merge ? { row: merge.top, col: merge.left } : cell);
+    context.scale(ratio, ratio);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, viewport.width, viewport.height);
+    context.textBaseline = "middle";
+    const rangeOf = (frozen: number, frozenSize: number, scroll: number, extent: number, header: number, along: typeof rows) => {
+      const first = along.index(frozenSize + scroll);
+      const last = along.index(frozenSize + scroll + Math.max(0, extent - header - frozenSize));
+      return { first: Math.max(frozen, first), last };
     };
-    const schedule = () => {
-      if (raf || controller.signal.aborted) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        paint();
-      });
+    const visibleRows = rangeOf(frozenRows, frozenHeight, viewport.top, viewport.height, HEADER, rows);
+    const visibleColumns = rangeOf(frozenColumns, frozenWidth, viewport.left, viewport.width, gutter, columns);
+    const rowList = [...Array.from({ length: frozenRows }, (_, i) => i), ...Array.from({ length: visibleRows.last - visibleRows.first + 1 }, (_, i) => visibleRows.first + i)];
+    const columnList = [...Array.from({ length: frozenColumns }, (_, i) => i), ...Array.from({ length: visibleColumns.last - visibleColumns.first + 1 }, (_, i) => visibleColumns.first + i)];
+    const region = (r: number, c: number) => ({
+      x: r < 0 ? 0 : c < frozenColumns ? gutter : gutter + frozenWidth,
+      y: r < frozenRows ? HEADER : HEADER + frozenHeight,
+    });
+    const clipTo = (r: number, c: number, draw: () => void) => {
+      const { x, y } = region(r, c);
+      context.save();
+      context.beginPath();
+      context.rect(x, y, c < frozenColumns ? frozenWidth : viewport.width - x, r < frozenRows ? frozenHeight : viewport.height - y);
+      context.clip();
+      draw();
+      context.restore();
     };
-    const resizeArea = () => {
-      const width = Math.min(
-        (end?.x ?? Infinity) + (painted?.frame.frozen.width ?? 0),
-        Math.max(info.contentWidth, chartWidth, reachX, left + root.clientWidth) + root.clientWidth,
-      );
-      const height = Math.min(
-        (end?.y ?? Infinity) + (painted?.frame.frozen.height ?? 0),
-        Math.max(info.contentHeight, chartHeight, reachY, top + root.clientHeight) +
-          root.clientHeight,
-      );
-      space.style.width = `${headers.width + width}px`;
-      space.style.height = `${headers.height + height}px`;
-    };
-    const paint = () => {
-      const ratio = window.devicePixelRatio || 1;
-      const width = root.clientWidth;
-      const height = root.clientHeight;
-      const size = { width: width - headers.width, height: height - headers.height };
-      if (size.width <= 0 || size.height <= 0) return;
-      columns.style.width = `${size.width}px`;
-      rows.style.height = `${size.height}px`;
-      left = root.scrollLeft;
-      top = root.scrollTop;
-      resizeArea();
-      const viewport = { x: left, y: top, ...size };
-      drawn = painted ? cachedViewport(painted.frame.viewport, viewport) : viewport;
-      const input: SheetFrameRequest = {
-        sheet,
-        x: left,
-        y: top,
-        ...size,
-        ratio,
-        offset: { x: 0, y: 0 },
-        wider: bufferedViewport(viewport),
-      };
-      const key = JSON.stringify(input);
-      const needsFrame =
-        !painted ||
-        requested === "" ||
-        drawn.x !== left ||
-        drawn.y !== top ||
-        painted.request.width !== size.width ||
-        painted.request.height !== size.height ||
-        painted.request.ratio !== ratio;
-      if (needsFrame && key !== requested) {
-        requested = key;
-        sent += 1;
-        const order = sent;
-        void engine
-          .call("frame", input, { key: "frame", signal: controller.signal })
-          .then((reply) => {
-            if (order < received || controller.signal.aborted) {
-              reply?.bitmap.close();
-              return;
-            }
-            received = order;
-            if (!reply) {
-              if (requested === key) requested = "";
-              setNotice(m(msg("These cells could not be drawn. Try scrolling to another area.")));
-              return;
-            }
-            if (
-              painted &&
-              retainCachedViewport(painted.frame.viewport, reply.viewport, {
-                x: root.scrollLeft,
-                y: root.scrollTop,
-                width: root.clientWidth - headers.width,
-                height: root.clientHeight - headers.height,
-              })
-            ) {
-              reply.bitmap.close();
-              if (requested === key) requested = JSON.stringify(painted.request);
-              return;
-            }
-            setNotice("");
-            painted?.frame.bitmap.close();
-            painted = { request: input, frame: reply };
-            end = reply.end;
-            schedule();
-          })
-          .catch((cause: unknown) => {
-            if (!isSupersededError(cause) && !controller.signal.aborted) {
-              if (requested === key) requested = "";
-              setNotice(m(msg("These cells could not be drawn.")));
-            }
-          });
+    const drawCell = (r: number, c: number, x: number, y: number, w: number, h: number, overflowRight: number) => {
+      const cell = sheet.rows.get(r)?.get(c);
+      const style = cell ? styles[cell.style] : undefined;
+      if (style?.fill) {
+        context.fillStyle = style.fill;
+        context.fillRect(x, y, w, h);
       }
-      if (
-        target.width !== Math.round(width * ratio) ||
-        target.height !== Math.round(height * ratio)
-      ) {
-        target.width = Math.round(width * ratio);
-        target.height = Math.round(height * ratio);
-        target.style.width = `${width}px`;
-        target.style.height = `${height}px`;
-      }
-      if (!painted) {
-        context.fillStyle = "#fff";
-        context.fillRect(0, 0, target.width, target.height);
-        return;
-      }
-      paintCells(context, painted, { ratio, headers, ...drawn, ...size });
-      grid =
-        painted.frame.grid &&
-        shiftGrid(painted.frame.grid, frozen, painted.frame.frozen, {
-          x: painted.frame.viewport.x - drawn.x,
-          y: painted.frame.viewport.y - drawn.y,
-        });
-      if (!grid) return;
-      const anchor = selection.anchor;
-      paintSelection(context, {
-        grid,
-        ratio,
-        headers,
-        ...size,
-        range: range(),
-        active: coverMerges(
-          { top: anchor.row, left: anchor.col, bottom: anchor.row, right: anchor.col },
-          layout.merges,
-        ),
-      });
-      paintHeaders(context, { grid, ratio, headers, width, height, selected: range() });
-      if (resizing) {
-        const edge = resizing.edge + resizing.delta;
+      if (cell?.text) {
+        context.font = style?.font ?? "400 14.67px Carlito, Calibri, sans-serif";
+        context.fillStyle = cell.error ? "#c00000" : (style?.color ?? "#000");
+        const numeric = typeof cell.value === "number" && !style?.align;
+        const align = style?.align === "general" || !style?.align ? (numeric ? "right" : typeof cell.value === "boolean" || cell.error ? "center" : "left") : style.align;
         context.save();
-        context.setTransform(ratio, 0, 0, ratio, 0, 0);
-        context.strokeStyle = "#217346";
-        context.lineWidth = 1;
-        context.setLineDash([4, 3]);
         context.beginPath();
-        if (resizing.axis === "column") {
-          context.moveTo(edge + headers.width, 0);
-          context.lineTo(edge + headers.width, height);
-        } else {
-          context.moveTo(0, edge + headers.height);
-          context.lineTo(width, edge + headers.height);
-        }
-        context.stroke();
+        context.rect(x, y, align === "left" ? w + overflowRight : w, h);
+        context.clip();
+        const ty = style?.valign === "top" ? y + 9 : style?.valign === "center" ? y + h / 2 : y + h - 9;
+        context.textAlign = align === "right" ? "right" : align === "center" || align === "centerContinuous" ? "center" : "left";
+        context.fillText(cell.text, context.textAlign === "right" ? x + w - 4 : context.textAlign === "center" ? x + w / 2 : x + 4, ty);
         context.restore();
       }
-    };
-    const read = () => {
-      const focus = selection.focus;
-      setActive(focus);
-      readController?.abort();
-      readController = new AbortController();
-      const top = Math.max(0, focus.row - 5);
-      const left = Math.max(0, focus.col - 3);
-      const range = {
-        top,
-        left,
-        bottom: Math.min(lastCell.row, top + 10),
-        right: Math.min(lastCell.col, left + 6),
-      };
-      void engine
-        .call("cells", { sheet, range }, { key: "reader", signal: readController.signal })
-        .then((rows) => {
-          if (!controller.signal.aborted)
-            setReader(
-              rows.flatMap((row, r) =>
-                row.map((text, c) => ({ row: top + r, col: left + c, text })),
-              ),
-            );
-        })
-        .catch(() => undefined);
-    };
-    const select = (next: Selection) => {
-      selection = next;
-      read();
-      schedule();
-    };
-    const reveal = () => {
-      const cell = selection.focus;
-      void engine
-        .call("position", { sheet, cell }, { key: "position", signal: controller.signal })
-        .then((position) => {
-          if (!position || controller.signal.aborted) return;
-          const panes = painted?.frame.frozen ?? { width: 0, height: 0 };
-          const place = (start: number, next: number, current: number, visible: number) =>
-            start < current ? start : next > current + visible ? next - visible : current;
-          const x =
-            cell.col < info.frozenCols
-              ? left
-              : place(
-                  position.start.x,
-                  position.next.x,
-                  left,
-                  root.clientWidth - headers.width - panes.width,
-                );
-          const y =
-            cell.row < info.frozenRows
-              ? top
-              : place(
-                  position.start.y,
-                  position.next.y,
-                  top,
-                  root.clientHeight - headers.height - panes.height,
-                );
-          reachX = Math.max(reachX, x + root.clientWidth);
-          reachY = Math.max(reachY, y + root.clientHeight);
-          resizeArea();
-          root.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
-          schedule();
-        })
-        .catch(() => undefined);
-    };
-    const hit = (event: PointerEvent) => {
-      if (!grid) return;
-      const rect = target.getBoundingClientRect();
-      const x = event.clientX - rect.left - headers.width;
-      const y = event.clientY - rect.top - headers.height;
-      const frame = painted?.frame;
-      if (
-        frame &&
-        ((x >= frame.frozen.width && x < frame.frozen.width + frame.viewport.x - drawn.x) ||
-          (y >= frame.frozen.height && y < frame.frozen.height + frame.viewport.y - drawn.y))
-      )
-        return;
-      const cell = cellAtPoint(
-        grid,
-        Math.max(0, Math.min(x, root.clientWidth - headers.width - 1)),
-        Math.max(0, Math.min(y, root.clientHeight - headers.height - 1)),
-      );
-      return cell ? { cell, x, y } : undefined;
-    };
-    const resizeHit = (event: PointerEvent) => {
-      if (!grid || resizingPending) return;
-      const rect = target.getBoundingClientRect();
-      const x = event.clientX - rect.left - headers.width;
-      const y = event.clientY - rect.top - headers.height;
-      const axis: "row" | "column" | undefined =
-        x >= 0 && y < 0 ? "column" : y >= 0 && x < 0 ? "row" : undefined;
-      if (!axis) return;
-      const offsets = axis === "column" ? grid.colOffsets : grid.rowOffsets;
-      const indices = axis === "column" ? grid.colIndices : grid.rowIndices;
-      const start = axis === "column" ? grid.startCol : grid.startRow;
-      const point = axis === "column" ? x : y;
-      for (let i = 1; i < offsets.length; i++) {
-        const edge = offsets[i]!;
-        const size = edge - offsets[i - 1]!;
-        if (edge > 0 && size > 0 && Math.abs(point - edge) <= 4)
-          return {
-            axis,
-            pointerId: event.pointerId,
-            index: indices?.[i - 1] ?? start + i - 1,
-            start: axis === "column" ? event.clientX : event.clientY,
-            delta: 0,
-            edge,
-          } satisfies NonNullable<typeof resizing>;
+      const borders = style?.borders;
+      if (borders) {
+        context.lineWidth = 1;
+        for (const [side, color] of Object.entries(borders)) {
+          context.strokeStyle = color;
+          context.beginPath();
+          if (side === "left" || side === "right") {
+            const bx = Math.round(side === "left" ? x : x + w) + 0.5;
+            context.moveTo(bx, y);
+            context.lineTo(bx, y + h);
+          } else {
+            const by = Math.round(side === "top" ? y : y + h) + 0.5;
+            context.moveTo(x, by);
+            context.lineTo(x + w, by);
+          }
+          context.stroke();
+        }
       }
     };
-    const pointerDown = (event: PointerEvent) => {
-      if (event.button !== 0 || resizingPending || resizing) return;
-      const track = resizeHit(event);
-      if (track) {
-        event.preventDefault();
-        root.focus({ preventScroll: true });
-        root.setPointerCapture(event.pointerId);
-        resizing = track;
-        pressed = undefined;
-        schedule();
-        return;
-      }
-      const found = hit(event);
-      if (!found) return;
-      root.focus({ preventScroll: true });
-      root.setPointerCapture(event.pointerId);
-      drag = true;
-      header = found.x < 0 ? (found.y < 0 ? "all" : "row") : found.y < 0 ? "column" : undefined;
-      pressed = header ? undefined : found.cell;
-      if (found.x < 0 && found.y < 0)
-        select({ anchor: { row: lastCell.row, col: lastCell.col }, focus: { row: 0, col: 0 } });
-      else if (found.x < 0)
-        select({
-          anchor: { row: found.cell.row, col: lastCell.col },
-          focus: { row: found.cell.row, col: 0 },
+    for (const r of rowList) {
+      const h = rows.size(r);
+      if (!h) continue;
+      for (const c of columnList) {
+        const w = columns.size(c);
+        if (!w) continue;
+        const merge = covered.get(`${r}:${c}`);
+        if (merge && (merge.r1 !== r || merge.c1 !== c)) continue;
+        clipTo(r, c, () => {
+          const x = xOf(c);
+          const y = yOf(r);
+          if (gridlines && !merge) {
+            context.strokeStyle = "#e1e1e1";
+            context.lineWidth = 1;
+            context.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, w, h);
+          }
+          if (merge) {
+            const mw = columns.start(merge.c2 + 1) - columns.start(merge.c1);
+            const mh = rows.start(merge.r2 + 1) - rows.start(merge.r1);
+            context.fillStyle = "#fff";
+            context.fillRect(x, y, mw, mh);
+            if (gridlines) {
+              context.strokeStyle = "#e1e1e1";
+              context.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, mw, mh);
+            }
+            drawCell(r, c, x, y, mw, mh, 0);
+            return;
+          }
+          let overflow = 0;
+          for (let next = c + 1; next < Math.min(columns.count, c + 8) && !sheet.rows.get(r)?.get(next)?.text && !covered.has(`${r}:${next}`); next++) overflow += columns.size(next);
+          drawCell(r, c, x, y, w, h, overflow);
         });
-      else if (found.y < 0)
-        select({
-          anchor: { row: lastCell.row, col: found.cell.col },
-          focus: { row: 0, col: found.cell.col },
-        });
-      else select(event.shiftKey ? extendTo(selection, found.cell) : at(found.cell));
-    };
-    const pointerMove = (event: PointerEvent) => {
-      if (resizing) {
-        if (event.pointerId !== resizing.pointerId) return;
-        const point = resizing.axis === "column" ? event.clientX : event.clientY;
-        resizing.delta = Math.round(point - resizing.start);
-        schedule();
-        return;
       }
-      const hovered = resizeHit(event);
-      root.style.cursor = hovered ? (hovered.axis === "column" ? "col-resize" : "row-resize") : "";
-      if (!drag) return;
-      const found = hit(event);
-      if (found && header !== "all")
-        select(
-          extendTo(selection, {
-            row: header === "column" ? 0 : found.cell.row,
-            col: header === "row" ? 0 : found.cell.col,
-          }),
-        );
-    };
-    const pointerUp = (event: PointerEvent) => {
-      if (resizing) {
-        if (event.pointerId !== resizing.pointerId) return;
-        const track = resizing;
-        resizing = undefined;
-        root.style.cursor = "";
-        root.releasePointerCapture(event.pointerId);
-        schedule();
-        if (track.delta === 0) return;
-        resizingPending = true;
-        setNotice(m(msg("Resizing preview...")));
-        void engine
-          .call(
-            "resize",
-            { sheet, axis: track.axis, index: track.index, delta: track.delta },
-            { signal: controller.signal },
-          )
-          .then((nextLayout) => {
-            if (controller.signal.aborted) return;
-            info = nextLayout.info;
-            chartWidth = nextLayout.chartWidth;
-            chartHeight = nextLayout.chartHeight;
-            painted?.frame.bitmap.close();
-            painted = undefined;
-            grid = undefined;
-            sent += 1;
-            received = sent;
-            requested = "";
-            end = undefined;
-            schedule();
-          })
-          .catch(() => {
-            if (!controller.signal.aborted)
-              setNotice(m(msg("This row or column could not be resized.")));
-          })
-          .finally(() => {
-            resizingPending = false;
-          });
-        return;
-      }
-      drag = false;
-      const found = hit(event);
-      if (!found || !pressed || found.cell.row !== pressed.row || found.cell.col !== pressed.col)
-        return;
-      const cell = at(found.cell).anchor;
-      const list = painted?.frame;
-      if (!list) return;
-      const link = hyperlinkAtCell(
-        { width: 0, height: 0, commands: [], hyperlinks: [...list.hyperlinks] },
-        cell.row,
-        cell.col,
-      );
-      if (!link) return;
-      const url = safeExternalHyperlink(link);
-      const safe = url && externalUrl(url);
-      if (safe) {
-        window.open(safe, "_blank", "noopener,noreferrer");
-        return;
-      }
-      const internal =
-        link.location && parseHyperlinkLocation(link.location, info.sheetNames[sheet] ?? "");
-      if (!internal) return;
-      if (internal.sheetName.toLowerCase() !== (info.sheetNames[sheet] ?? "").toLowerCase())
-        navigate.current(internal.sheetName, { row: internal.row, col: internal.col });
-      else {
-        select(at({ row: internal.row, col: internal.col }));
-        reveal();
-      }
-    };
-    const copy = () => {
-      const used = layout.used;
-      const selected = range();
-      const clipped = {
-        ...selected,
-        bottom: Math.min(selected.bottom, Math.max(selected.top, used?.bottom ?? 0)),
-        right: Math.min(selected.right, Math.max(selected.left, used?.right ?? 0)),
-      };
-      if ((clipped.bottom - clipped.top + 1) * (clipped.right - clipped.left + 1) > 200_000) {
-        setNotice(m(msg("Select fewer than 200,000 cells to copy.")));
-        return;
-      }
-      void engine
-        .call("copy", { sheet, range: clipped }, { signal: controller.signal })
-        .then((text) => {
-          if (text === undefined) throw new Error("No cells");
-          return navigator.clipboard.writeText(text);
-        })
-        .catch(() => {
-          if (!controller.signal.aborted)
-            setNotice(m(msg("The selected cells could not be copied.")));
-        });
-    };
-    const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && resizing) {
-        event.preventDefault();
-        resizing = undefined;
-        root.style.cursor = "";
-        schedule();
-        return;
-      }
-      const command = event.ctrlKey || event.metaKey;
-      if (command && event.key.toLowerCase() === "c") {
-        event.preventDefault();
-        copy();
-        return;
-      }
-      if (event.key === "Tab" || event.altKey || event.isComposing) return;
-      const action = selectionKeyReducer(selection, event, {
-        rows: Math.max((layout.used?.bottom ?? 0) + 1, selection.focus.row + 1),
-        cols: Math.max((layout.used?.right ?? 0) + 1, selection.focus.col + 1),
-        rowsPerPage: Math.max(1, Math.floor((root.clientHeight - headerHeight) / 20)),
-      });
-      if (action.type !== "move") return;
-      event.preventDefault();
-      select(
-        skipHidden(
-          selection.focus,
-          settleMerges(selection, action.selection, layout.merges),
-          layout.hidden,
-        ),
-      );
-      reveal();
-    };
-    const cancel = (event: PointerEvent) => {
-      if (resizing && event.pointerId !== resizing.pointerId) return;
-      drag = false;
-      pressed = undefined;
-      resizing = undefined;
-      root.style.cursor = "";
-      schedule();
-    };
-    const leave = () => {
-      if (!drag && !resizing) root.style.cursor = "";
-    };
-    root.addEventListener("scroll", schedule);
-    root.addEventListener("keydown", key);
-    root.addEventListener("pointerdown", pointerDown);
-    root.addEventListener("pointermove", pointerMove);
-    root.addEventListener("pointerup", pointerUp);
-    root.addEventListener("pointercancel", cancel);
-    root.addEventListener("lostpointercapture", cancel);
-    root.addEventListener("pointerleave", leave);
-    const unobserve = observeResize(root, schedule);
-    window.addEventListener("resize", schedule);
-    resizeArea();
-    root.scrollTo({ left, top });
-    if (initialCell) {
-      selection = at(initialCell);
-      reveal();
     }
-    read();
-    schedule();
-    return () => {
-      controller.abort();
-      readController?.abort();
-      cancelAnimationFrame(raf);
-      unobserve();
-      window.removeEventListener("resize", schedule);
-      painted?.frame.bitmap.close();
-      root.removeEventListener("scroll", schedule);
-      root.removeEventListener("keydown", key);
-      root.removeEventListener("pointerdown", pointerDown);
-      root.removeEventListener("pointermove", pointerMove);
-      root.removeEventListener("pointerup", pointerUp);
-      root.removeEventListener("pointercancel", cancel);
-      root.removeEventListener("lostpointercapture", cancel);
-      root.removeEventListener("pointerleave", leave);
-    };
-  }, [engine, layout, initialCell]);
+    // Selection.
+    const r1 = Math.min(selection.row, selection.anchorRow);
+    const r2 = Math.max(selection.row, selection.anchorRow);
+    const c1 = Math.min(selection.column, selection.anchorColumn);
+    const c2 = Math.max(selection.column, selection.anchorColumn);
+    context.save();
+    context.beginPath();
+    context.rect(gutter, HEADER, viewport.width - gutter, viewport.height - HEADER);
+    context.clip();
+    const sx = xOf(c1);
+    const sy = yOf(r1);
+    const sw = xOf(c2) + columns.size(c2) - sx;
+    const sh = yOf(r2) + rows.size(r2) - sy;
+    context.fillStyle = "rgba(33, 115, 70, 0.12)";
+    if (r1 !== r2 || c1 !== c2) context.fillRect(sx, sy, sw, sh);
+    context.strokeStyle = "#217346";
+    context.lineWidth = 2;
+    context.strokeRect(sx, sy, sw, sh);
+    context.restore();
+    // Headers.
+    context.font = "400 12px system-ui, sans-serif";
+    context.textAlign = "center";
+    context.fillStyle = "#f5f5f5";
+    context.fillRect(0, 0, viewport.width, HEADER);
+    context.fillRect(0, 0, gutter, viewport.height);
+    for (const c of columnList) {
+      const w = columns.size(c);
+      if (!w) continue;
+      const x = xOf(c);
+      if (x + w < gutter) continue;
+      context.fillStyle = c >= c1 && c <= c2 ? "#dcebe2" : "#f5f5f5";
+      context.fillRect(Math.max(gutter, x), 0, w, HEADER);
+      context.fillStyle = "#555";
+      context.fillText(columnName(c), x + w / 2, HEADER / 2);
+      context.fillStyle = "#d4d4d4";
+      context.fillRect(Math.round(x + w), 0, 1, HEADER);
+    }
+    for (const r of rowList) {
+      const h = rows.size(r);
+      if (!h) continue;
+      const y = yOf(r);
+      if (y + h < HEADER) continue;
+      context.fillStyle = r >= r1 && r <= r2 ? "#dcebe2" : "#f5f5f5";
+      context.fillRect(0, Math.max(HEADER, y), gutter, h);
+      context.fillStyle = "#555";
+      context.fillText(String(r + 1), gutter / 2, y + h / 2);
+      context.fillStyle = "#d4d4d4";
+      context.fillRect(0, Math.round(y + h), gutter, 1);
+    }
+    context.fillStyle = "#c8c8c8";
+    context.fillRect(0, HEADER - 1, viewport.width, 1);
+    context.fillRect(gutter - 1, 0, 1, viewport.height);
+    if (frozenRows) context.fillRect(0, HEADER + frozenHeight, viewport.width, 1);
+    if (frozenColumns) context.fillRect(gutter + frozenWidth, 0, 1, viewport.height);
+  });
+
+  const r1 = Math.min(selection.row, selection.anchorRow);
+  const r2 = Math.max(selection.row, selection.anchorRow);
+  const c1 = Math.min(selection.column, selection.anchorColumn);
+  const c2 = Math.max(selection.column, selection.anchorColumn);
+  const active = sheet.rows.get(selection.row)?.get(selection.column);
+  const address = `${columnName(selection.column)}${selection.row + 1}`;
+  const link = sheet.links.get(address);
+  const external = link && !link.startsWith("#") ? externalUrl(link) : undefined;
+  const reveal = (row: number, column: number) => {
+    const node = scroller.current;
+    if (!node) return;
+    if (row >= frozenRows) {
+      const top = rows.start(row) - frozenHeight;
+      const bottom = rows.start(row + 1) - frozenHeight - (node.clientHeight - HEADER - frozenHeight);
+      if (top < node.scrollTop) node.scrollTop = top;
+      else if (bottom > node.scrollTop) node.scrollTop = bottom;
+    }
+    if (column >= frozenColumns) {
+      const left = columns.start(column) - frozenWidth;
+      const right = columns.start(column + 1) - frozenWidth - (node.clientWidth - gutter - frozenWidth);
+      if (left < node.scrollLeft) node.scrollLeft = left;
+      else if (right > node.scrollLeft) node.scrollLeft = right;
+    }
+  };
+  const step = (row: number, column: number, dr: number, dc: number) => {
+    let r = row;
+    let c = column;
+    do r = Math.min(rows.count - 1, Math.max(0, r + dr));
+    while (dr && rows.size(r) === 0 && r > 0 && r < rows.count - 1);
+    do c = Math.min(columns.count - 1, Math.max(0, c + dc));
+    while (dc && columns.size(c) === 0 && c > 0 && c < columns.count - 1);
+    return { row: r, column: c };
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const modifier = event.metaKey || event.ctrlKey;
+    if (modifier && event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      void navigator.clipboard?.writeText(sheetTsv(sheet, r1, c1, r2, c2));
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      setSelection({ row: Math.max(0, sheet.maxRow - 1), column: Math.max(0, sheet.maxColumn - 1), anchorRow: 0, anchorColumn: 0 });
+      return;
+    }
+    const page = Math.max(1, Math.floor((viewport.height - HEADER) / sheet.defaultHeight) - 1);
+    const moves: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1], PageUp: [-page, 0], PageDown: [page, 0], Enter: [1, 0], Tab: [0, event.shiftKey ? -1 : 1] };
+    let next: { row: number; column: number } | undefined;
+    if (event.key === "Home") next = { row: modifier ? 0 : selection.row, column: 0 };
+    else if (event.key === "End") next = modifier ? { row: Math.max(0, sheet.maxRow - 1), column: Math.max(0, sheet.maxColumn - 1) } : { row: selection.row, column: Math.max(0, sheet.maxColumn - 1) };
+    else if (moves[event.key]) next = step(selection.row, selection.column, ...moves[event.key]!);
+    if (!next) return;
+    event.preventDefault();
+    const extend = event.shiftKey && event.key !== "Tab" && event.key !== "Enter";
+    setSelection((current) => ({ ...next, anchorRow: extend ? current.anchorRow : next.row, anchorColumn: extend ? current.anchorColumn : next.column }));
+    reveal(next.row, next.column);
+  };
+  const point = (event: PointerEvent<HTMLCanvasElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return cellAt(event.clientX - box.left, event.clientY - box.top);
+  };
   return (
-    <div className="relative flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2 text-xs">
+        <span className="w-16 shrink-0 font-mono text-muted-foreground">{address}</span>
+        <span className="min-w-0 flex-1 truncate font-mono select-text" aria-live="polite">
+          {active?.formula ? `=${active.formula}` : (active?.text ?? "")}
+        </span>
+        {external ? (
+          <a href={external} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary underline">
+            {gt("Open link")}
+          </a>
+        ) : link?.startsWith("#") ? (
+          <button type="button" className="shrink-0 text-primary underline" onClick={() => props.onNavigate(link.slice(1).split("!")[0]!.replace(/^'|'$/g, ""))}>
+            {gt("Go to {target}", { target: link.slice(1) })}
+          </button>
+        ) : null}
+      </div>
       <div
         ref={scroller}
-        dir="ltr"
-        tabIndex={0}
         role="grid"
-        aria-label={layout.info.sheetNames[layout.info.activeSheet]}
-        aria-readonly="true"
-        aria-multiselectable="true"
-        aria-rowcount={lastCell.row + 1}
-        aria-colcount={lastCell.col + 1}
-        aria-activedescendant={`office-cell-${active.row}-${active.col}`}
-        // The sheet is white in every theme, so its scrollbars keep the light theme's thumb.
-        className="relative min-h-0 min-w-0 flex-1 select-none overflow-auto bg-white scheme-light outline-none [--app-scrollbar-thumb-hover:rgb(191_191_191)] [--app-scrollbar-thumb:rgb(217_217_217)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        aria-label={sheet.name}
+        aria-rowcount={sheet.maxRow}
+        aria-colcount={sheet.maxColumn}
+        tabIndex={0}
+        className="relative min-h-0 flex-1 overflow-auto outline-none"
+        onKeyDown={onKeyDown}
+        onScroll={(event) => {
+          const node = event.currentTarget;
+          setViewport({ left: node.scrollLeft, top: node.scrollTop, width: node.clientWidth, height: node.clientHeight });
+        }}
       >
-        <div
-          ref={spacer}
-          aria-hidden="true"
-          className="pointer-events-none absolute left-0 top-0"
-        />
-        <div aria-hidden="true" className="sticky left-0 top-0 h-0 w-0">
-          <canvas ref={canvas} className="absolute left-0 top-0 block" />
-          <div ref={columnHeaderBand} className="absolute left-11 top-0 h-5 touch-none" />
-          <div ref={rowHeaderBand} className="absolute left-0 top-5 w-11 touch-none" />
-        </div>
-        <div className="sr-only">
-          {[...new Set(reader.map((cell) => cell.row))].map((row) => (
-            <div key={row} role="row" aria-rowindex={row + 1}>
-              {reader
-                .filter((cell) => cell.row === row)
-                .map((cell) => (
-                  <span
-                    key={cell.col}
-                    role="gridcell"
-                    id={`office-cell-${cell.row}-${cell.col}`}
-                    aria-colindex={cell.col + 1}
-                    aria-label={`${columnName(cell.col)}${cell.row + 1}`}
-                  >
-                    {cell.text}
-                  </span>
-                ))}
-            </div>
-          ))}
+        <div style={{ width: gutter + columns.total, height: HEADER + rows.total }}>
+          <canvas
+            ref={canvas}
+            aria-hidden="true"
+            className="sticky top-0 left-0 block"
+            style={{ width: viewport.width, height: viewport.height }}
+            onPointerDown={(event) => {
+              const cell = point(event);
+              event.currentTarget.setPointerCapture(event.pointerId);
+              dragging.current = true;
+              setSelection((current) => ({ ...cell, anchorRow: event.shiftKey ? current.anchorRow : cell.row, anchorColumn: event.shiftKey ? current.anchorColumn : cell.column }));
+            }}
+            onPointerMove={(event) => {
+              if (!dragging.current) return;
+              const cell = point(event);
+              setSelection((current) => (current.row === cell.row && current.column === cell.column ? current : { ...current, ...cell }));
+            }}
+            onPointerUp={() => {
+              dragging.current = false;
+            }}
+            onDoubleClick={() => {
+              if (external) window.open(external, "_blank", "noopener,noreferrer");
+            }}
+          />
         </div>
       </div>
-      {notice ? (
-        <div
-          role="status"
-          className="absolute inset-x-3 bottom-3 rounded-md bg-background p-2 text-xs text-foreground shadow-md"
-        >
-          {notice}
-        </div>
-      ) : null}
     </div>
   );
 }

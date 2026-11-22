@@ -7,9 +7,10 @@ import {
   IMAGE_DIMENSIONS_HEADER_BYTES,
   readImageDimensions,
 } from "@t3tools/shared/imageDimensions";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
+import { decodeHeif, iccProfileIsDisplayP3, parseHeif } from "../components/files/decoders/heicDecoder";
 
 const MAX_DIMENSION = IMAGE_ATTACHMENT_MAX_EDGE;
 export const MAX_STASH_IMAGE_DATA_URL_CHARS = 1_300_000;
@@ -53,126 +54,6 @@ export function isHeicImageFile(file: Pick<File, "name" | "type">): boolean {
   );
 }
 
-interface HeicMetadataBox {
-  payloadOffset: number;
-  endOffset: number;
-}
-
-function findHeicMetadataBox(
-  view: DataView,
-  startOffset: number,
-  endOffset: number,
-  type: number,
-): HeicMetadataBox | null {
-  let offset = startOffset;
-  while (offset + 8 <= endOffset) {
-    let size = view.getUint32(offset);
-    let headerSize = 8;
-    if (size === 1) {
-      if (offset + 16 > endOffset) return null;
-      const extendedSize = view.getBigUint64(offset + 8);
-      if (extendedSize > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-      size = Number(extendedSize);
-      headerSize = 16;
-    } else if (size === 0) {
-      size = endOffset - offset;
-    }
-    if (size < headerSize || size > endOffset - offset) return null;
-
-    const nextOffset = offset + size;
-    if (view.getUint32(offset + 4) === type) {
-      return { payloadOffset: offset + headerSize, endOffset: nextOffset };
-    }
-    offset = nextOffset;
-  }
-  return null;
-}
-
-// D50-adapted Display P3 primaries, as an ICC profile's rXYZ, gXYZ and bXYZ tags carry them.
-const DISPLAY_P3_ICC_PRIMARIES = [
-  [0x7258595a, 0.5151, 0.2412, -0.0011],
-  [0x6758595a, 0.292, 0.6922, 0.0419],
-  [0x6258595a, 0.1571, 0.0666, 0.7841],
-] as const;
-
-function iccProfileIsDisplayP3(view: DataView, start: number, end: number): boolean {
-  if (start + 132 > end) return false;
-  const tagCount = Math.min(view.getUint32(start + 128), Math.floor((end - start - 132) / 12));
-  let matched = 0;
-  for (let index = 0; index < tagCount; index += 1) {
-    const entry = start + 132 + index * 12;
-    const primary = DISPLAY_P3_ICC_PRIMARIES.find(
-      ([signature]) => signature === view.getUint32(entry),
-    );
-    if (!primary) continue;
-    const tag = start + view.getUint32(entry + 4);
-    if (tag < start || tag + 20 > end || view.getUint32(tag) !== 0x58595a20) return false;
-    for (let axis = 0; axis < 3; axis += 1) {
-      if (Math.abs(view.getInt32(tag + 8 + axis * 4) / 65536 - primary[axis + 1]!) > 0.005) {
-        return false;
-      }
-    }
-    matched += 1;
-  }
-  return matched === DISPLAY_P3_ICC_PRIMARIES.length;
-}
-
-/** `colr` is an nclx code point (12 is Display P3) or an embedded ICC profile. */
-function heicColorIsDisplayP3(view: DataView, box: HeicMetadataBox): boolean {
-  if (box.payloadOffset + 6 > box.endOffset) return false;
-  const colorType = view.getUint32(box.payloadOffset);
-  if (colorType === 0x6e636c78) return view.getUint16(box.payloadOffset + 4) === 12;
-  if (colorType === 0x70726f66 || colorType === 0x72494343) {
-    return iccProfileIsDisplayP3(view, box.payloadOffset + 4, box.endOffset);
-  }
-  return false;
-}
-
-type HeicMetadataResult =
-  | { ok: true; displayP3: boolean }
-  | { ok: false; reason: ImageCompressionFailureReason };
-
-async function readHeicMetadata(file: File): Promise<HeicMetadataResult> {
-  const unreadable = { ok: false, reason: "unreadable" } as const;
-  const metadata = await file.slice(0, MAX_HEIC_METADATA_BYTES).arrayBuffer();
-  const view = new DataView(metadata);
-  const meta = findHeicMetadataBox(view, 0, view.byteLength, 0x6d657461);
-  if (!meta || meta.payloadOffset + 4 > meta.endOffset) return unreadable;
-  const properties = findHeicMetadataBox(view, meta.payloadOffset + 4, meta.endOffset, 0x69707270);
-  if (!properties) return unreadable;
-  const containers = findHeicMetadataBox(
-    view,
-    properties.payloadOffset,
-    properties.endOffset,
-    0x6970636f,
-  );
-  if (!containers) return unreadable;
-
-  let offset = containers.payloadOffset;
-  let foundImageDimensions = false;
-  while (offset < containers.endOffset) {
-    const image = findHeicMetadataBox(view, offset, containers.endOffset, 0x69737065);
-    if (!image) break;
-    if (image.payloadOffset + 12 > image.endOffset) return unreadable;
-    const width = view.getUint32(image.payloadOffset + 4);
-    const height = view.getUint32(image.payloadOffset + 8);
-    if (width === 0 || height === 0) return unreadable;
-    if (width > MAX_HEIC_DECODE_PIXELS / height) return { ok: false, reason: "too-large" };
-    foundImageDimensions = true;
-    offset = image.endOffset;
-  }
-  if (!foundImageDimensions) return unreadable;
-
-  let displayP3 = false;
-  offset = containers.payloadOffset;
-  while (!displayP3 && offset < containers.endOffset) {
-    const color = findHeicMetadataBox(view, offset, containers.endOffset, 0x636f6c72);
-    if (!color) break;
-    displayP3 = heicColorIsDisplayP3(view, color);
-    offset = color.endOffset;
-  }
-  return { ok: true, displayP3 };
-}
 
 async function inflateIccProfile(deflated: Uint8Array<ArrayBuffer>): Promise<Uint8Array | null> {
   const reader = new Blob([deflated])
@@ -693,23 +574,17 @@ async function convertHeicImage(
 
   let bitmap: ImageBitmap | undefined;
   try {
-    const metadata = await readHeicMetadata(file);
-    if (!metadata.ok) return metadata;
-    bitmap =
-      typeof createImageBitmap === "function"
-        ? await createImageBitmap(file).catch(() => undefined)
-        : undefined;
-    const decodedNatively = bitmap !== undefined;
-    if (!bitmap) {
-      const { heicTo } = await import("heic-to/csp");
-      bitmap = await heicTo({ blob: file, type: "bitmap" });
-    }
+    const bytes = await file.arrayBuffer();
+    const metadata = parseHeif(bytes);
+    if (metadata.width > MAX_HEIC_DECODE_PIXELS / metadata.height) return { ok: false, reason: "too-large" };
+    const decoded = await decodeHeif(bytes, metadata);
+    bitmap = decoded.bitmap;
     const imageSize = fitImageAttachmentSize(bitmap) ?? {
       width: bitmap.width,
       height: bitmap.height,
     };
-    // heic-to ignores the color profile and hands back the raw Display P3 values as sRGB.
-    if (!decodedNatively && metadata.displayP3) {
+    // WebCodecs and embedded thumbnails ignore the color profile and hand back the raw Display P3 values as sRGB.
+    if (!decoded.native && metadata.displayP3) {
       const source = bitmap;
       bitmap = await readPixelsAsDisplayP3(source, imageSize);
       source.close();

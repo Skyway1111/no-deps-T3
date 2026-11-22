@@ -28,9 +28,8 @@ export function formatInlineContextReference(reference: ComposerContextReference
 }
 
 export function collectInlineContextIds(prompt: string): string[] {
-  return Array.from(
-    new Set(collectComposerContextReferences(prompt).map((occurrence) => occurrence.contextId)),
-  );
+  const references = collectComposerContextReferences(prompt);
+  return references.length === 0 ? [] : Array.from(new Set(references.map((occurrence) => occurrence.contextId)));
 }
 
 export function stripInlineContextReferences(prompt: string): string {

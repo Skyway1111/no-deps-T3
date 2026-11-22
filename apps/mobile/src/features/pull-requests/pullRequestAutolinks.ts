@@ -1,8 +1,6 @@
 import { githubEmojiAliases } from "@t3tools/client-runtime/pull-request-markdown";
 import type { ReferenceAutolink } from "@t3tools/client-runtime/source-control-clients";
-import remarkGfm from "remark-gfm";
-import remarkParse from "remark-parse";
-import { unified } from "unified";
+import { parseMarkdown } from "@t3tools/shared/markdown";
 
 type MarkdownNode = {
   readonly type: string;
@@ -15,7 +13,6 @@ type MarkdownNode = {
   readonly children?: readonly MarkdownNode[] | undefined;
 };
 
-const parser = unified().use(remarkParse).use(remarkGfm);
 const UNLINKED_TYPES = new Set([
   "link",
   "linkReference",
@@ -89,7 +86,7 @@ export function nativePullRequestMarkdown(
       }
     }
   };
-  visit(parser.parse(markdown), false);
+  visit(parseMarkdown(markdown, { gfm: true }), false);
   if (edits.length === 0) return { markdown, sourceOffset: unchanged };
   let rewritten = "";
   let cursor = 0;

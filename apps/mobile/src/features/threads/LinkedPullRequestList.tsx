@@ -7,7 +7,7 @@ import {
   threadPullRequestKeyOf,
   type PullRequestListLine,
 } from "@t3tools/client-runtime/thread-pull-requests";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useMemo } from "react";
 import { Pressable, useWindowDimensions, View } from "react-native";
 

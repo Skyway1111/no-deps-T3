@@ -11,7 +11,7 @@ import {
   type SourceControlProviderKind,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 

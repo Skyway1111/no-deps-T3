@@ -55,7 +55,7 @@ import {
 } from "@t3tools/client-runtime/composer-model-mentions";
 import { useAtomRefresh } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
-import { msg, useGT, useMessages } from "gt-react-native";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useState } from "react";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";

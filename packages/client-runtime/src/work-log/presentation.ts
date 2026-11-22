@@ -29,9 +29,8 @@ import {
   t3ToolResultIndicatesFailure,
   type T3ToolSummaryCall,
 } from "@t3tools/client-runtime/t3ToolSummary";
-import { mFallback, msg } from "gt-i18n";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 import { t3ToolSentence } from "./t3ToolSentences.ts";
-import type { MFunctionType } from "gt-i18n/types";
 
 export type WorkLogToolLifecycleStatus = RuntimeItemStatus | "stopped" | "idle";
 

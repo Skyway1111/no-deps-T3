@@ -1,6 +1,6 @@
 import { AppActivityIndicator } from "./AppActivityIndicator";
 import { Column, Text as NativeText, RNHostView } from "@expo/ui/jetpack-compose";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { use, useState, type ReactNode } from "react";
 import { View } from "react-native";
 

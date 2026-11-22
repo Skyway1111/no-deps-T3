@@ -1,5 +1,5 @@
-import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { BookmarkIcon, FileIcon, FileTextIcon } from "lucide-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
+import { BookmarkIcon, FileIcon, FileTextIcon } from "~/ui-core/icons";
 import { memo, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";

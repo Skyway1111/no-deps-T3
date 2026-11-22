@@ -10,8 +10,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { T, useGT, Var } from "gt-react";
-import { ChevronDownIcon } from "lucide-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { ChevronDownIcon } from "~/ui-core/icons";
 import {
   memo,
   useEffect,

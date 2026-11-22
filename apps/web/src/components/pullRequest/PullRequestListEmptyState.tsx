@@ -1,6 +1,6 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { T, useGT, Var } from "gt-react";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { PlusIcon, SearchIcon } from "~/ui-core/icons";
 
 import { openCommandPalette } from "../../commandPaletteBus";
 import { Button } from "../ui/button";

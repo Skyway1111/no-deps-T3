@@ -13,9 +13,9 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { isLoopbackHost } from "@t3tools/shared/preview";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
-import { CableIcon, GlobeIcon, SquareIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { CableIcon, GlobeIcon, SquareIcon, ChevronDownIcon, ChevronUpIcon } from "~/ui-core/icons";
 import { type MouseEvent, useState } from "react";
 
 import {

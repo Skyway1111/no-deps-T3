@@ -4,14 +4,14 @@ import {
   CHATGPT_WORKSPACE_ADMIN_REQUEST,
   CHATGPT_WORKSPACE_USAGE_LIMIT_CODE,
 } from "@t3tools/shared/usageLimits";
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { memo } from "react";
 import { m } from "../../i18n/messages";
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { Alert, AlertAction, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
-import { CircleAlertIcon, XIcon } from "lucide-react";
+import { CircleAlertIcon, XIcon } from "~/ui-core/icons";
 import { OpenAI } from "../Icons";
 import { ChatGptUsageButton } from "../settings/ChatGptUsageButton";
 import { ExpandableText } from "../settings/ExpandableText";

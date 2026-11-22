@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import * as Schema from "effect/Schema";
 import {
   useEffect,
@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { useLocation, useRouter, type AnyRouter } from "@tanstack/react-router";
+import { useLocation, useRouter, type AnyRouter } from "~/ui-core/router";
 
 import { moveWorkspaceFocus, workspaceAreaProps } from "../lib/workspaceFocus";
 import { isCommandPaletteOpen } from "../commandPaletteBus";

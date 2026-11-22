@@ -1,5 +1,5 @@
-import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
-import { useRender } from "@base-ui/react/use-render";
+import { AlertDialog as AlertDialogPrimitive } from "~/ui-core/popups";
+import { renderElement } from "~/ui-core/primitives";
 
 import { cn } from "~/lib/utils";
 import {
@@ -58,7 +58,7 @@ function AlertDialogPopup({
   portalContainer?: AlertDialogPrimitive.Portal.Props["container"];
 }) {
   const { popupRef, initialFocus } = useDialogActionInitialFocus();
-  const popup = useRender({
+  const popup = renderElement({
     ref: popupRef,
     render: (
       <AlertDialogPrimitive.Popup

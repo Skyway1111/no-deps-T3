@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
-import { mFallback } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, type MFunctionType } from "@t3tools/shared/i18n";
 
 import {
   formatHostedThreadLink,

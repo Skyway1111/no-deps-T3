@@ -14,10 +14,10 @@ import {
 } from "@t3tools/shared/paletteSearch";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { useNavigate } from "@tanstack/react-router";
-import { MessageSquareIcon } from "lucide-react";
+import { useNavigate } from "~/ui-core/router";
+import { MessageSquareIcon } from "~/ui-core/icons";
 import { useState } from "react";
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import {
   applyProviderInstanceSettings,

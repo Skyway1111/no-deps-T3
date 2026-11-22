@@ -15,10 +15,10 @@ import {
   ShapeGeometry,
   Vector2,
   Vector3,
-  type Camera,
+  type PerspectiveCamera as Camera,
   type BufferGeometry,
   type Texture,
-} from "three";
+} from "./webglEngine.ts";
 import type { DeviceScreenSize } from "./stream.ts";
 import { IOS_PHONE_SHAPE, type DeviceShapeProfile } from "./shapeProfile.ts";
 
@@ -131,7 +131,7 @@ export function createPhoneScene(
     20,
   );
   updateDisplayUv(screenGeometry, screenWidth, SCREEN_HEIGHT, layout);
-  const screenMaterial = new MeshBasicMaterial({ map: texture, toneMapped: false });
+  const screenMaterial = new MeshBasicMaterial({ map: texture });
   const display = new Mesh(screenGeometry, screenMaterial);
   display.position.z = 0.043;
   orientation.add(display);

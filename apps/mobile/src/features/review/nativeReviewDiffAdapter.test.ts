@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { diffWordsWithSpace } from "diff";
+import { diffWordsWithSpace } from "@t3tools/shared/diff";
 import { AsyncResult } from "effect/reactivity";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { EnvironmentId, ProjectId, type PullRequestDiffResult } from "@t3tools/contracts";
@@ -15,7 +15,7 @@ import {
 import type { ReviewInlineComment } from "./reviewCommentSelection";
 import { buildReviewParsedDiff, type ReviewParsedDiff } from "./reviewModel";
 
-vi.mock("diff", { spy: true });
+vi.mock("@t3tools/shared/diff", { spy: true });
 
 function makeComment(text: string): ReviewInlineComment {
   return {

@@ -10,7 +10,7 @@ import {
   type PullRequestListResult,
   type PullRequestListStatsInput,
 } from "@t3tools/contracts";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { PullRequestListControls } from "../../persistence/mobile-preferences";
 import { compareTimestamps } from "../../lib/time";
 import { m, type MessageResolver } from "../../i18n/messages";

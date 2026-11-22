@@ -1,6 +1,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useGT, useMessages } from "gt-react";
-import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ChevronDownIcon, GitBranchIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { usePaginatedBranches } from "../state/queries";

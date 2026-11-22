@@ -1,5 +1,5 @@
-import { parse, type ParseError } from "jsonc-parser";
-import { msg } from "gt-react";
+import { parseJsonc } from "@t3tools/shared/parsers/jsonc";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "./i18n/messages";
 
@@ -140,9 +140,8 @@ export function isVsCodeThemeFile(value: unknown): boolean {
 }
 
 export function parseThemeImport(source: string): ThemeDefinition {
-  const errors: ParseError[] = [];
-  const value: unknown = parse(source, errors, { allowTrailingComma: true });
-  if (errors.length > 0) throw new Error(m(msg("That theme file is not valid JSON.")));
+  const value = parseJsonc(source);
+  if (value === undefined) throw new Error(m(msg("That theme file is not valid JSON.")));
   return isVsCodeThemeFile(value)
     ? parseVsCodeThemeFile(value)
     : parseThemeFile(JSON.parse(source));

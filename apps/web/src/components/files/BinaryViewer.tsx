@@ -5,8 +5,8 @@ import {
   hostPreviewMimeTypeFromExtension,
 } from "@t3tools/shared/filePreview";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { ChevronLeftIcon, ChevronRightIcon, FileIcon, FolderIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { ChevronLeftIcon, ChevronRightIcon, FileIcon, FolderIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { m } from "~/i18n/messages";
 

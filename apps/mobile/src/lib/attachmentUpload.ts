@@ -5,7 +5,7 @@ import {
   verifyPersistedAttachmentUpload,
 } from "@t3tools/client-runtime/state/attachments";
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import type {
   ChatFileAttachment,

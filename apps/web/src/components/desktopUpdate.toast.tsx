@@ -1,6 +1,6 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
-import { msg, T } from "gt-react";
-import { ArrowRightIcon } from "lucide-react";
+import { msg, T } from "@t3tools/shared/i18n/react";
+import { ArrowRightIcon } from "~/ui-core/icons";
 
 import {
   getDesktopUpdateDownloadedVersion,

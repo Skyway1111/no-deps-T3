@@ -2,7 +2,7 @@
  * The hosted app's side of an agent sign-in on a T3 Connect environment: it reads the request
  * and sends the decision with the owner's own Connect session there, so no code is needed.
  */
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { type MarkedText, markedTextEnglish } from "../errors/translatable.ts";
 import type {
   AuthMcpApprovalDecisionRequest,

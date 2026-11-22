@@ -3,7 +3,7 @@ import { RegistryContext, useAtomRefresh, useAtomValue } from "@effect/atom-reac
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useContext } from "react";
 
 import { m, type MessageResolver } from "../i18n/messages";

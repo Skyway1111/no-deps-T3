@@ -36,7 +36,7 @@ import {
   GitCommitHorizontalIcon,
   MessageSquareIcon,
   PanelRightIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import {
   lazy,
   Suspense,
@@ -46,7 +46,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import { m } from "~/i18n/messages";
 

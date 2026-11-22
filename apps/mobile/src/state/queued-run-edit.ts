@@ -6,7 +6,7 @@ import type {
   UploadChatAttachment,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { stripAttachmentOnlyBootstrapPrompt } from "@t3tools/shared/composerContextReferences";
 import {
   makeQueuedRunEditStore,

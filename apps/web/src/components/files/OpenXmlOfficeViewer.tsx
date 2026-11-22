@@ -1,6 +1,6 @@
 import { useStableCallback } from "~/hooks/useStableCallback";
 import type { OfficePreviewKind } from "@t3tools/shared/filePreview";
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { m } from "~/i18n/messages";
 import {

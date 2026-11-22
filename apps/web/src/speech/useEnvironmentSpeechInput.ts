@@ -18,9 +18,9 @@ import type {
 } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { chooseSetupSpeechModel } from "@t3tools/shared/speech";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import * as Option from "effect/Option";
-import { msg, useGT } from "gt-react";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";

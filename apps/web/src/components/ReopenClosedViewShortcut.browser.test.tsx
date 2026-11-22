@@ -7,7 +7,7 @@ import {
   createRouter,
   Outlet,
   RouterProvider,
-} from "@tanstack/react-router";
+} from "~/ui-core/router";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -32,7 +32,7 @@ vi.mock(import("@effect/atom-react"), async (original) => ({
   ...(await original()),
   useAtomValue: (() => state.keybindings) as never,
 }));
-vi.mock(import("@tanstack/react-router"), async (original) => ({
+vi.mock(import("~/ui-core/router"), async (original) => ({
   ...(await original()),
   useNavigate: (() => state.navigate) as never,
   useParams: (() => state.params) as never,

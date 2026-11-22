@@ -1,6 +1,6 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { MaximizeIcon, MinusIcon, PlusIcon, ScanIcon } from "lucide-react";
+import { MaximizeIcon, MinusIcon, PlusIcon, ScanIcon } from "~/ui-core/icons";
 import { ExpandedImageDialog } from "~/components/chat/ExpandedImageDialog";
 import { observeResize } from "~/lib/observeResize";
 import { AttachmentImage } from "../media/AttachmentImage";

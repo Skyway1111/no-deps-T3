@@ -1,4 +1,4 @@
-import { msg, T, Var } from "gt-react";
+import { msg, T, Var } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 import { type SlowRpcAckRequest, subscribeSlowRpcAckRequests } from "../rpc/requestLatencyState";

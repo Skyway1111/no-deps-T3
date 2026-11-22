@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 export type WizardNavigation =
   | { readonly kind: "navigate"; readonly step: number }

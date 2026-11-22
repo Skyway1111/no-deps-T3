@@ -1,5 +1,5 @@
 import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
-import type { AnyRouter } from "@tanstack/react-router";
+import type { AnyRouter } from "~/ui-core/router";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import * as commandPalette from "../commandPaletteBus";

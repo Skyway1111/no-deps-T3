@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
-import { useLocale, useMessages } from "gt-react-native";
+import { useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import * as Linking from "expo-linking";
 import { useEffect, useEffectEvent } from "react";
 import { Platform } from "react-native";

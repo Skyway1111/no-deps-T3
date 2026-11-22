@@ -19,7 +19,7 @@ import {
   makeThreadCacheWriteOrder,
 } from "@t3tools/client-runtime/platform";
 import { TokenStore } from "@t3tools/client-runtime/authorization";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import {
   ConnectionTransientError,
   ConnectionBlockedError,

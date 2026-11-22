@@ -1,7 +1,7 @@
 import { EnvironmentId, type ServerConfig } from "@t3tools/contracts";
 import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
 import type { AttachmentUploadStatus } from "@t3tools/client-runtime/state/attachment-uploads";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 
 import { parseLegacyNewTaskDraftKey } from "../state/new-task-draft-key";

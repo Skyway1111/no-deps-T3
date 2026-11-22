@@ -1,6 +1,6 @@
 import type { PullRequestInvolvement, PullRequestListState } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react";
-import { Plug2Icon, SearchIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { Plug2Icon, SearchIcon } from "~/ui-core/icons";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { isElectron } from "~/env";

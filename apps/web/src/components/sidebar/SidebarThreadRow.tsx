@@ -9,9 +9,7 @@ import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { useDeadlinePassed } from "~/hooks/useDeadline";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
-import { useDraggable } from "@dnd-kit/core";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useDraggable, useSortable, CSS } from "~/ui-core/dnd";
 import {
   canSnooze,
   hasQueuedTurnStart,
@@ -50,16 +48,16 @@ import {
   ClockIcon,
   FolderGit2Icon,
   GitBranchIcon,
-  MessageCircleQuestionIcon,
+  MessageCircleQuestionMarkIcon as MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
-  ShieldQuestionIcon,
+  ShieldQuestionMarkIcon as ShieldQuestionIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
   UserRoundIcon,
   XIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import {
   memo,
   useRef,
@@ -69,7 +67,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import type { MessageResolver } from "../../i18n/messages";
 
@@ -90,7 +88,6 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import {
-  animateSidebarLayoutChanges,
   hasUnseenCompletion,
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
@@ -504,7 +501,6 @@ export function SortableThreadRow(
       sortableDisabled || !canOperateThread
         ? SIDEBAR_SORTABLE_DRAG_DISABLED
         : SIDEBAR_SORTABLE_DRAG_ENABLED,
-    animateLayoutChanges: animateSidebarLayoutChanges,
   });
   // dnd-kit memoizes each field but not the bag, so the memoized row would
   // rerender on every shell update without this.

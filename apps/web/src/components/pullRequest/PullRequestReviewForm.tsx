@@ -1,7 +1,7 @@
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { EnvironmentId, PullRequestRef, PullRequestReviewVerdict } from "@t3tools/contracts";
-import { CheckIcon, MessageSquareIcon, XCircleIcon } from "lucide-react";
-import { msg, useGT, useMessages } from "gt-react";
+import { CheckIcon, MessageSquareIcon, CircleXIcon as XCircleIcon } from "~/ui-core/icons";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
 
 import { m } from "~/i18n/messages";

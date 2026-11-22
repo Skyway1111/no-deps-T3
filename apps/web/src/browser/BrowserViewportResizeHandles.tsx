@@ -3,7 +3,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { cn } from "~/lib/utils";
 

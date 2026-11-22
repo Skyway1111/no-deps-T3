@@ -1,7 +1,7 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { changeRequestTermKind } from "../../../lib/changeRequestTerm";
 import { SymbolView } from "../../../components/ui/AppSymbol";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { ComponentProps } from "react";
 import { View } from "react-native";
 import { Button } from "../../../components/ui/Button";

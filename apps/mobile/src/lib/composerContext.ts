@@ -6,7 +6,7 @@ import { isProviderSkillUserInvocable } from "@t3tools/client-runtime/providerSk
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
 import { videoMimeType } from "@t3tools/shared/video";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import {
   assistantCitationLabel,

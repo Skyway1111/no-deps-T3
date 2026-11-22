@@ -1,9 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off - Credential leases coordinate Node server processes.
 import * as NodePath from "node:path";
-import { lock } from "proper-lockfile";
 import { ProviderSetupError, type ProviderInstanceId } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import { lockFile } from "@t3tools/shared/sys/fileLock";
 
 /** Keep rotating tokens and their active profile atomic across servers sharing a secret store. */
 export const withChatGptSessionLock = <A, E, R>(
@@ -25,18 +25,16 @@ export const withChatGptSessionLock = <A, E, R>(
       const services = yield* Effect.context<never>();
       yield* Effect.acquireRelease(
         Effect.tryPromise({
-          try: () =>
-            lock(NodePath.join(directory, `${key}.bin`), {
-              realpath: false,
-              stale: 120_000,
-              update: 10_000,
-              retries: { retries: 80, factor: 1, minTimeout: 500, maxTimeout: 500 },
+          try: (signal) =>
+            lockFile(NodePath.join(directory, `${key}.bin`), {
+              waitMs: 40_000,
+              signal,
               onCompromised: () =>
                 Effect.runSyncWith(services)(Deferred.fail(compromised, failure())),
             }),
           catch: failure,
         }),
-        (release) => Effect.promise(() => release()).pipe(Effect.ignore),
+        (release) => Effect.promise(() => release()),
       );
       return yield* Effect.raceFirst(task, Deferred.await(compromised));
     }),

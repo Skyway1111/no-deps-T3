@@ -1,7 +1,7 @@
 import { type ProviderDriverKind, type ProviderInstanceId } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { memo } from "react";
-import { CheckIcon, StarIcon } from "lucide-react";
+import { CheckIcon, StarIcon } from "~/ui-core/icons";
 import { getDisplayModelName } from "./providerIconUtils";
 import { ComboboxItem } from "../ui/combobox";
 import { Button } from "../ui/button";

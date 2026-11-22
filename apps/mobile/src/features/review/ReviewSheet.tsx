@@ -8,7 +8,7 @@ import { AppBar } from "../../components/ui/AppBar";
 import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
 import type { ReviewSectionItem } from "./reviewModel";
 import { useReviewHeaderPresentation } from "./useReviewHeaderPresentation";
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { type Ref, type ReactElement, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, ScrollView, type NativeSyntheticEvent, StyleSheet, View } from "react-native";
 import { RefreshControl } from "../../components/ui/RefreshControl";

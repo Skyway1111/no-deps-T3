@@ -22,9 +22,9 @@ import {
   MessageSquarePlusIcon,
   TagIcon,
   UsersIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import * as Schema from "effect/Schema";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { m, type MessageResolver } from "~/i18n/messages";

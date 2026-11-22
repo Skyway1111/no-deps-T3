@@ -11,7 +11,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef } from "react";
 import { m } from "~/i18n/messages";
 import { selectActiveRightPanelSurface, useRightPanelStore } from "../../rightPanelStore";

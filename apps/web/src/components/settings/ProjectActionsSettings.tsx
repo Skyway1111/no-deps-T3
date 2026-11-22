@@ -8,8 +8,8 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
-import { ChevronDownIcon, PlusIcon } from "lucide-react";
-import { T, useGT } from "gt-react";
+import { ChevronDownIcon, PlusIcon } from "~/ui-core/icons";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { useT3ProjectFileState } from "../../hooks/useT3ProjectFileScripts";
 import { useEnvironments } from "../../state/environments";

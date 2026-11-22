@@ -1,7 +1,7 @@
 import type { PullRequestContextMetadata } from "@t3tools/contracts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { useGT, useMessages } from "gt-react";
-import { ArrowRightIcon } from "lucide-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ArrowRightIcon } from "~/ui-core/icons";
 
 import { cn } from "~/lib/utils";
 

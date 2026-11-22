@@ -6,7 +6,7 @@ import {
   type PointerEventHandler,
   type ReactNode,
 } from "react";
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -14,7 +14,7 @@ import {
   PlayIcon,
   CornerUpRightIcon,
   ListPlusIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
 import type { MessageResolver } from "~/i18n/messages";
 import { formatContextWindowTokens } from "~/lib/contextWindow";

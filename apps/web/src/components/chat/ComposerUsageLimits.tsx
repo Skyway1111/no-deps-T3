@@ -1,8 +1,8 @@
 import type { EnvironmentId, UsageLimitsReport } from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { limitsNotice } from "@t3tools/shared/usageLimitsCopy";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { GaugeIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { GaugeIcon } from "~/ui-core/icons";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { ensureLocalApi } from "../../localApi";

@@ -6,9 +6,10 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Texture,
-} from "three";
+} from "./webglEngine.ts";
 import { expect, it, vi } from "vite-plus/test";
-import { createImportedPhoneScene, disposeDeviceModel } from "./modelScene.ts";
+import { createImportedPhoneScene } from "./modelScene.ts";
+import { disposeObject as disposeDeviceModel } from "./webglEngine.ts";
 import { phoneDisplayLayout } from "./phoneScene.ts";
 
 function asset() {

@@ -4,9 +4,8 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, RunId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
-import { msg } from "gt-react";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { msg } from "@t3tools/shared/i18n/react";
+import { create, createJSONStorage, persist } from "@t3tools/shared/core/react";
 
 import { useClosedViewStore } from "./closedViewStore";
 import { m } from "./i18n/messages";

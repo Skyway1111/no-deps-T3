@@ -1,4 +1,4 @@
-import type { AnyRouter } from "@tanstack/react-router";
+import type { AnyRouter } from "~/ui-core/router";
 import { describe, expect, it } from "vite-plus/test";
 
 import { isMacPlatform } from "../lib/utils";

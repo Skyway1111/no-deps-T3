@@ -3,7 +3,7 @@ import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-co
 import type { PullRequestActor } from "@t3tools/contracts";
 import IconAlertTriangle from "@tabler/icons-react-native/IconAlertTriangle";
 import { Image } from "expo-image";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { View } from "react-native";
 import { useResolveClassNames } from "uniwind";
 

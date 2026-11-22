@@ -21,7 +21,7 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
-} from "@tanstack/react-router";
+} from "~/ui-core/router";
 import * as Cause from "effect/Cause";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";

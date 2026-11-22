@@ -3,7 +3,7 @@ import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import * as Dialog from "../components/ui/Dialog";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import { filePreviewDelimiter, parseDelimitedPreview } from "@t3tools/shared/delimitedPreview";
 import type { AssetResource, EnvironmentId } from "@t3tools/contracts";

@@ -1,4 +1,4 @@
-import type { SearchMiddleware } from "@tanstack/react-router";
+import type { SearchMiddleware } from "~/ui-core/router";
 
 import { validateSettingsScopeSearch, type SettingsScopeSearch } from "./settingsScope";
 

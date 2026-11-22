@@ -3,7 +3,7 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import type { PullRequestChangeBreakdown } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { View } from "react-native";
 import Animated from "react-native-reanimated";

@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useState } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";

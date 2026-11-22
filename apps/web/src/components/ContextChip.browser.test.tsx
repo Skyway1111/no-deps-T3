@@ -1,4 +1,4 @@
-import { FileIcon } from "lucide-react";
+import { FileIcon } from "~/ui-core/icons";
 import { describe, expect, it } from "vite-plus/test";
 
 import "~/index.css";

@@ -1,4 +1,4 @@
-import { T } from "gt-react";
+import { T } from "@t3tools/shared/i18n/react";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
 import { isElectron } from "../env";

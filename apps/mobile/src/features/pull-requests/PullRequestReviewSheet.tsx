@@ -6,7 +6,7 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { PullRequestReviewVerdict } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { Pressable, View } from "react-native";

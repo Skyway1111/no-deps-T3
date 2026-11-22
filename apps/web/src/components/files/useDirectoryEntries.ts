@@ -3,7 +3,7 @@ import type { EnvironmentId, ProjectEntry } from "@t3tools/contracts";
 import { useAtomMount, useAtomSubscribe } from "@effect/atom-react";
 import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";

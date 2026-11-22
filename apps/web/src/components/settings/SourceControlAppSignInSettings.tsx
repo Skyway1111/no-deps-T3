@@ -8,8 +8,8 @@ import {
 } from "@t3tools/client-runtime/source-control-clients";
 import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
-import { msg, T, useGT, Var } from "gt-react";
-import { CheckIcon, ExternalLinkIcon, CopyIcon } from "lucide-react";
+import { msg, T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { CheckIcon, ExternalLinkIcon, CopyIcon } from "~/ui-core/icons";
 import { useState, type ReactNode } from "react";
 
 import { T3AppIcon } from "~/components/T3AppIcon";

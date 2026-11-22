@@ -286,6 +286,13 @@ import {
   SOCKET_FRAME_PARTS_QUERY_PARAM,
   splitLargeSocketFrames,
 } from "@t3tools/shared/socketFrameParts";
+import {
+  decodeWireChunks,
+  encodeWireChunk,
+  encodeWireChunks,
+  WIRE_FRAME_QUERY_PARAM,
+} from "@t3tools/shared/core/codec";
+import * as Socket from "effect/socket/Socket";
 import { isTelemetryIdHash } from "@t3tools/shared/telemetryId";
 import {
   sameUsageLimitCommandCoverage,
@@ -3826,20 +3833,43 @@ export const layer = Layer.unwrap(
             ),
           ),
         );
-        const framedRpcWebSocketHttpEffect = url.value.searchParams.has(
-          SOCKET_FRAME_PARTS_QUERY_PARAM,
-        )
-          ? rpcWebSocketHttpEffect.pipe(
-              Effect.provideService(
-                HttpServerRequest.HttpServerRequest,
-                // The RPC server upgrades the request itself, so its socket is
-                // wrapped through the request it reads.
-                Object.create(request, {
-                  upgrade: { value: Effect.map(request.upgrade, splitLargeSocketFrames) },
-                }),
-              ),
-            )
-          : rpcWebSocketHttpEffect;
+        const wrapServerWireFraming = (socket: Socket.Socket, binaryOut: boolean): Socket.Socket => {
+          const reader = Effect.map(socket.reader, (base) => ({
+            upgrade: base.upgrade,
+            pull: Effect.map(base.pull, decodeWireChunks),
+          }));
+          if (!binaryOut) return Socket.make({ reader, writer: socket.writer });
+          return Socket.make({
+            reader,
+            writer: Effect.map(socket.writer, (writer) => ({
+              write: (chunk) => writer.write(encodeWireChunk(chunk)),
+              writeAll: (chunks) => {
+                const frame = encodeWireChunks(chunks);
+                return frame === null ? Effect.void : writer.write(frame);
+              },
+            })),
+          });
+        };
+        const useFrameParts = url.value.searchParams.has(SOCKET_FRAME_PARTS_QUERY_PARAM);
+        const useBinaryWireFrame = url.value.searchParams.has(WIRE_FRAME_QUERY_PARAM);
+        const transformSocket = (socket: Socket.Socket): Socket.Socket =>
+          wrapServerWireFraming(
+            useFrameParts ? splitLargeSocketFrames(socket) : socket,
+            useBinaryWireFrame,
+          );
+        const framedRpcWebSocketHttpEffect =
+          useFrameParts || useBinaryWireFrame
+            ? rpcWebSocketHttpEffect.pipe(
+                Effect.provideService(
+                  HttpServerRequest.HttpServerRequest,
+                  // The RPC server upgrades the request itself, so its socket is
+                  // wrapped through the request it reads.
+                  Object.create(request, {
+                    upgrade: { value: Effect.map(request.upgrade, transformSocket) },
+                  }),
+                ),
+              )
+            : rpcWebSocketHttpEffect;
         return yield* Effect.acquireUseRelease(
           sessions.markConnected(session.sessionId),
           () =>

@@ -4,7 +4,7 @@ import {
   monitorHoldsWakeCompletion,
 } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../i18n/messages";
 import type { SidebarThreadSummary } from "../types";

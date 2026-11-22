@@ -1,4 +1,4 @@
-import { msg, T, Var } from "gt-react";
+import { msg, T, Var } from "@t3tools/shared/i18n/react";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { TRIAGE_CLI_COMMAND } from "~/hooks/useStartTriage";
 

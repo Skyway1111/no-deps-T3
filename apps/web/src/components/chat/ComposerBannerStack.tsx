@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { InfoIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { InfoIcon } from "~/ui-core/icons";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "../ui/button";

@@ -6,8 +6,8 @@ import type {
   DesktopPreviewAnnotationVoiceEvent,
   ScopedThreadRef,
 } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
-import { useGT, useMessages } from "gt-react";
+import { useNavigate } from "~/ui-core/router";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef } from "react";
 
 import { resolveSpeechPresentation } from "~/components/chat/ComposerSpeechButton";

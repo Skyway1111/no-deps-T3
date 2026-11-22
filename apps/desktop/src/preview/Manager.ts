@@ -61,7 +61,7 @@ import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { m } from "../i18n/messages.ts";

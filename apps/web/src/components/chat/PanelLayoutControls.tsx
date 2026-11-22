@@ -4,8 +4,8 @@ import {
   SquareMenuIcon,
   Maximize2Icon,
   Minimize2Icon,
-} from "lucide-react";
-import { useGT } from "gt-react";
+} from "~/ui-core/icons";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";

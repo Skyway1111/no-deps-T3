@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Texture, Vector3 } from "three";
+import { PerspectiveCamera, Texture, Vector3 } from "./webglEngine.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { createAndroidFoldScene } from "./androidFoldScene.ts";
 import { phoneDisplayLayout } from "./phoneScene.ts";

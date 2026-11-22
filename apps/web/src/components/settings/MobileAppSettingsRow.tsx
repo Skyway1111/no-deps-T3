@@ -1,4 +1,4 @@
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import { AndroidIcon, AppleIcon } from "../Icons";
 import { Button } from "../ui/button";

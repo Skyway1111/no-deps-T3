@@ -55,9 +55,9 @@ import {
   Trash2Icon,
   UnlinkIcon,
   XIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useLocale, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { supportsAppleSpeechLocale, useAppleSpeechLocales } from "../../speech/appleSpeech";

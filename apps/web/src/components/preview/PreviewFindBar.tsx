@@ -1,6 +1,6 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, XIcon } from "~/ui-core/icons";
 import { Button } from "../ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { cn } from "~/lib/utils";

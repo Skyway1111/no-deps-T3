@@ -8,8 +8,8 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
 import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
-import { T, useGT } from "gt-react";
-import { Trash2Icon, XIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { Trash2Icon, XIcon } from "~/ui-core/icons";
 import { useEffect, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";

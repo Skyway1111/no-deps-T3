@@ -1,6 +1,6 @@
 import { Discovery } from "@t3tools/client-runtime/relay";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { useRelayEnvironmentDiscovery } from "../../state/environments";

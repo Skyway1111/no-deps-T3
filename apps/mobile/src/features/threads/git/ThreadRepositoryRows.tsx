@@ -23,7 +23,7 @@ import {
   type ScopedThreadRef,
   type TaskFolder,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useState } from "react";
 
 import { AppText as Text } from "../../../components/ui/AppText";

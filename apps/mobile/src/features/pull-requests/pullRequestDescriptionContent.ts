@@ -1,5 +1,5 @@
 import type { PullRequestBodySegment } from "@t3tools/client-runtime/pull-request-markdown";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { MarkdownNode } from "../../lib/markdownDocument";
 import { m, type MessageResolver } from "../../i18n/messages";
 

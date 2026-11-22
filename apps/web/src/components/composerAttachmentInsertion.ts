@@ -1,81 +1,122 @@
-import type { Editor, EditorEvents } from "@tiptap/core";
-import {
-  flatToMarkdown,
-  flatToPm,
-  markdownToFlat,
-  pmToFlat,
-  serializeEditorDoc,
-} from "../composer-rich-text-doc";
+import { flatToMarkdown, markdownToFlat, serializeEditorDoc } from "../composer-rich-text-doc";
 import {
   type ComposerContextReference,
   formatInlineContextReference,
   inlineContextReferenceReplacement,
 } from "../lib/composerContextReferences";
-import { markAsClipboardEdit } from "../composer-undo-grouping";
+import {
+  type ComposerDocChangeEvent,
+  type ComposerEditorController,
+  type ComposerInline,
+  collapsedSelection,
+  inlinesFlatLength,
+  normalizeInlines,
+  resolveFlatOffset,
+  selectionFrom,
+  selectionTo,
+  sliceInlines,
+} from "./composer/types";
 
-const INSERTION_ORDER_META = "composerAttachmentInsertionOrder";
 let nextInsertionOrder = 0;
 
-export function captureComposerAttachmentInsertion(editor: Editor) {
+function mapOffset(pos: number, e: ComposerDocChangeEvent, bias: -1 | 1) {
+  const delta = e.insertedLength - (e.to - e.from);
+  if (e.from === pos && e.to === pos) {
+    return { pos: bias === 1 ? pos + e.insertedLength : pos, deletedAcross: false, deletedBefore: false, deletedAfter: false };
+  }
+  if (e.to <= pos) {
+    return { pos: pos + delta, deletedAcross: false, deletedBefore: e.to === pos && e.from < e.to, deletedAfter: false };
+  }
+  if (e.from >= pos) {
+    return { pos, deletedAcross: false, deletedBefore: false, deletedAfter: e.from === pos && e.to > e.from };
+  }
+  return { pos: bias === 1 ? e.from + e.insertedLength : e.from, deletedAcross: true, deletedBefore: true, deletedAfter: true };
+}
+
+export function captureComposerAttachmentInsertion(editor: ComposerEditorController) {
   const order = nextInsertionOrder++;
-  let { from, to } = editor.state.selection;
+  let from = selectionFrom(editor.getState().selection);
+  let to = selectionTo(editor.getState().selection);
   let lost = false;
-  const track = ({ transaction, appendedTransactions }: EditorEvents["transaction"]) => {
-    for (const tr of [transaction, ...appendedTransactions]) {
-      // Stay before text typed at the paste point, but after an earlier capture's references.
-      const insertion: { order: number; from: number; end: number } | undefined =
-        tr.getMeta(INSERTION_ORDER_META);
-      const followsEarlier = insertion !== undefined && insertion.order < order;
-      const start = tr.mapping.mapResult(from, followsEarlier ? 1 : -1);
-      const end = tr.mapping.mapResult(to, followsEarlier ? 1 : -1);
-      // Replacing the following space maps its start left regardless of association.
-      if (followsEarlier && from === to && from === insertion.from) {
-        from = to = insertion.end;
-        continue;
-      }
-      // A replacement spanning the paste point (such as a controlled setContent) leaves no
-      // position to keep, so the caller falls back to the current caret.
-      lost ||= start.deletedAcross || end.deletedAcross;
-      from = start.pos;
-      to = start.deletedAfter || end.deletedBefore ? from : end.pos;
+
+  const dispose = editor.subscribeChanges((event) => {
+    if (event.replacedWholeDoc) {
+      lost = true;
+      return;
     }
-  };
-  editor.on("transaction", track);
-  const dispose = () => {
-    editor.off("transaction", track);
-  };
+    const ins = event.insertionOrder;
+    const followsEarlier = ins !== undefined && ins.order < order;
+    if (followsEarlier && from === to && from === ins.from) {
+      from = to = ins.end;
+      return;
+    }
+    const bias: -1 | 1 = followsEarlier ? 1 : -1;
+    const start = mapOffset(from, event, bias);
+    const end = mapOffset(to, event, bias);
+    lost ||= start.deletedAcross || end.deletedAcross;
+    from = start.pos;
+    to = start.deletedAfter || end.deletedBefore ? from : end.pos;
+  });
+
   return {
     insert: (references: ReadonlyArray<ComposerContextReference>): boolean => {
       dispose();
-      if (lost || editor.isDestroyed || references.length === 0) return false;
-      const nodeType = editor.schema.nodes["composer-context-reference"];
-      if (!nodeType) return false;
-      const map = serializeEditorDoc(editor.state.doc);
+      if (lost || editor.isDestroyed() || references.length === 0) return false;
+      const { doc } = editor.getState();
+      const map = serializeEditorDoc(doc);
       const edit = inlineContextReferenceReplacement(
         map.value,
-        {
-          start: flatToMarkdown(map, pmToFlat(map, from)),
-          end: flatToMarkdown(map, pmToFlat(map, to)),
-        },
+        { start: flatToMarkdown(map, from), end: flatToMarkdown(map, to) },
         references,
       );
-      const acceptsReference =
-        editor.state.doc.resolve(from).parent.type.contentMatch.matchType(nodeType) !== null;
-      const content = acceptsReference
-        ? references.flatMap((reference) => [
-            nodeType.create({ ...reference, source: formatInlineContextReference(reference) }),
-            editor.schema.text(" "),
-          ])
-        : [editor.schema.text(edit.text)];
-      if (acceptsReference && edit.text.startsWith(" ")) content.unshift(editor.schema.text(" "));
-      const replaceEnd = flatToPm(map, markdownToFlat(map, edit.end));
-      const tr = editor.state.tr.replaceWith(from, replaceEnd, content);
-      editor.view.dispatch(
-        markAsClipboardEdit(tr, "paste").setMeta(INSERTION_ORDER_META, {
-          order,
-          from,
-          end: tr.mapping.map(replaceEnd, 1),
-        }),
+      const replaceEnd = markdownToFlat(map, edit.end);
+      const startRes = resolveFlatOffset(doc, from);
+      const endRes = resolveFlatOffset(doc, replaceEnd);
+      if (startRes.blockIndex !== endRes.blockIndex || startRes.block.kind === "horizontalRule") return false;
+
+      if (startRes.block.kind === "codeBlock") {
+        const nextCode =
+          startRes.block.code.slice(0, from - startRes.start) +
+          edit.text +
+          startRes.block.code.slice(replaceEnd - startRes.start);
+        const insertedLength = edit.text.length;
+        editor.applyEdit(
+          {
+            doc: { blocks: doc.blocks.map((b, i) => (i === startRes.blockIndex ? { ...startRes.block, code: nextCode } : b)) },
+            selection: collapsedSelection(from + insertedLength),
+            changeKind: "other",
+          },
+          {
+            clipboardEvent: "paste",
+            changeEvent: { from, to: replaceEnd, insertedLength, insertionOrder: { order, from, end: from + insertedLength } },
+          },
+        );
+        return true;
+      }
+
+      const content: ComposerInline[] = edit.text.startsWith(" ") ? [{ kind: "text", text: " ", marks: [] }] : [];
+      for (const ref of references) {
+        content.push(
+          { kind: "composer-context-reference", refKind: ref.kind, contextId: ref.contextId, label: ref.label, source: formatInlineContextReference(ref) },
+          { kind: "text", text: " ", marks: [] },
+        );
+      }
+      const nextInlines = normalizeInlines([
+        ...sliceInlines(startRes.block.inlines, 0, from - startRes.start),
+        ...content,
+        ...sliceInlines(startRes.block.inlines, replaceEnd - startRes.start, startRes.end - startRes.start),
+      ]);
+      const insertedLength = inlinesFlatLength(content);
+      editor.applyEdit(
+        {
+          doc: { blocks: doc.blocks.map((b, i) => (i === startRes.blockIndex ? { ...startRes.block, inlines: nextInlines } : b)) },
+          selection: collapsedSelection(from + insertedLength),
+          changeKind: "other",
+        },
+        {
+          clipboardEvent: "paste",
+          changeEvent: { from, to: replaceEnd, insertedLength, insertionOrder: { order, from, end: from + insertedLength } },
+        },
       );
       return true;
     },

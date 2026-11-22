@@ -1,6 +1,6 @@
-import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
-import { useGT } from "gt-react";
-import { XIcon } from "lucide-react";
+import { Dialog as SheetPrimitive } from "~/ui-core/popups";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { XIcon } from "~/ui-core/icons";
 import type { CSSProperties } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "~/ui-core/router";
 
 import { SnapShotSettings } from "../components/settings/SnapShotSettings";
 

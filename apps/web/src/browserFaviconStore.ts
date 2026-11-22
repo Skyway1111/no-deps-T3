@@ -6,8 +6,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import type { DesktopPreviewFavicon, ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { create, createJSONStorage, persist } from "@t3tools/shared/core/react";
 
 import { normalizeHostname } from "~/browser/browserTargetResolver";
 import { readThreadShell, useQuietThreadShell } from "~/state/entities";

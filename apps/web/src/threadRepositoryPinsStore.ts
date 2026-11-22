@@ -4,7 +4,7 @@ import {
   type PinnedThreadRepository,
 } from "@t3tools/client-runtime/state/thread-repositories";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 const NO_PINS: ReadonlyArray<PinnedThreadRepository> = Object.freeze([]);
 

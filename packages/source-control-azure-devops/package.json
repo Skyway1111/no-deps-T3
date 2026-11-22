@@ -20,7 +20,6 @@
     "@t3tools/contracts": "workspace:*",
     "@t3tools/shared": "workspace:*",
     "@t3tools/source-control-core": "workspace:*",
-    "diff": "8.0.3",
     "effect": "catalog:"
   },
   "devDependencies": {

@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { AppState, Platform } from "react-native";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import {
   type RelayDeviceRegistrationRequest,

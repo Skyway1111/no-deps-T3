@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { CodeIcon, WorkflowIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { CodeIcon, WorkflowIcon } from "~/ui-core/icons";
 import { Suspense, use, useState, type ReactNode } from "react";
 
 import { RenderErrorBoundary } from "../RenderErrorBoundary";

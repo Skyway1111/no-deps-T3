@@ -1,6 +1,6 @@
 // @effect-diagnostics globalTimers:off -- Poll TCC only while the native permission helper is open.
 import * as Electron from "electron";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 import { m } from "../i18n/messages.ts";
 import { MAC_PERMISSION_HELPER_CHANNEL } from "../ipc/channels.ts";

@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 
 import type { AppBarMenu } from "../../../components/ui/AppBar.types";

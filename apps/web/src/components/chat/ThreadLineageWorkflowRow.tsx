@@ -6,8 +6,8 @@ import {
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import { useSideThreadTrigger } from "../../hooks/useSideThreadTrigger";
 import type { ProviderDriverKind, ProviderInstanceId, ServerProvider } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { ChevronDownIcon, SquareIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ChevronDownIcon, SquareIcon } from "~/ui-core/icons";
 import { useState, type ReactNode } from "react";
 
 import { AgentElapsed } from "./AgentElapsed";

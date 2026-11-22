@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { TerminalIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { TerminalIcon } from "~/ui-core/icons";
 
 import type { ContextPresentationCapability } from "../contextPresentationRegistry";
 import { ContextChipPopover, ContextChipShell } from "../contextChipParts";

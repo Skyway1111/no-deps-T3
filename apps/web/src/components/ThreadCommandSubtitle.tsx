@@ -1,6 +1,6 @@
 import type { ProviderDriverKind } from "@t3tools/contracts";
-import { T } from "gt-react";
-import { FolderGit2Icon, FolderIcon, GitBranchIcon } from "lucide-react";
+import { T } from "@t3tools/shared/i18n/react";
+import { FolderGit2Icon, FolderIcon, GitBranchIcon } from "~/ui-core/icons";
 import { ProjectFavicon, type ProjectFaviconProject } from "./ProjectFavicon";
 import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
 import { cn } from "~/lib/utils";

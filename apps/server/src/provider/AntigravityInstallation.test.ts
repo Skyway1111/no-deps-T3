@@ -1586,7 +1586,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
               ? yield* secondServer.installation.resolve(externalSymlink).pipe(Effect.forkScoped)
               : null;
           yield* Deferred.await(resolversEntered);
-          expect(yield* fs.exists(`${managedDir}.lock`)).toBe(true);
+          expect(yield* fs.exists(`${managedDir}.flock`)).toBe(true);
           expect(yield* fs.exists(releaseDir)).toBe(false);
           expect(acquireFiber.pollUnsafe()).toBeUndefined();
           if (symlinkResolveFiber !== null) {

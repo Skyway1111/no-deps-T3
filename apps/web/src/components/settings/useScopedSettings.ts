@@ -7,7 +7,7 @@ import {
 import { readEnvironmentScope } from "../../state/session";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import {
   DEFAULT_SERVER_SETTINGS,
   type EnvironmentId,

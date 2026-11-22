@@ -1,10 +1,10 @@
 import { startPaletteThreadDrag } from "./CommandPalette.drag";
-import { useLegendListRef } from "~/hooks/useLegendListRef";
+import { useVirtualListRef } from "~/hooks/useVirtualListRef";
 import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import { ChevronRightIcon } from "lucide-react";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
+import { ChevronRightIcon } from "~/ui-core/icons";
 import { type ReactNode, type RefObject, useState } from "react";
-import { T } from "gt-react";
+import { T } from "@t3tools/shared/i18n/react";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { shortcutLabelForCommand } from "../keybindings";
@@ -82,7 +82,7 @@ export function CommandPaletteResults(props: CommandPaletteResultsProps) {
 }
 
 export function scrollCommandPaletteRowIntoView(
-  list: LegendListRef | null,
+  list: VirtualListRef | null,
   rowIndex: number,
   isFirstItem: boolean,
 ) {
@@ -99,7 +99,7 @@ export function scrollCommandPaletteRowIntoView(
 
 interface CommandPaletteVirtualizedResultsProps extends Omit<CommandPaletteResultsProps, "groups"> {
   rows: ReadonlyArray<CommandPaletteRow>;
-  listRef: RefObject<LegendListRef | null>;
+  listRef: RefObject<VirtualListRef | null>;
 }
 
 /** Pass flat items with virtualized to Command, scroll highlights via listRef, and handle Enter for
@@ -116,7 +116,7 @@ export function CommandPaletteVirtualizedResults(props: CommandPaletteVirtualize
       current.top === top && current.bottom === bottom ? current : { top, bottom },
     );
   };
-  const scrollRef = useLegendListRef(listRef, updateScrollFade);
+  const scrollRef = useVirtualListRef(listRef, updateScrollFade);
 
   if (props.rows.length === 0) {
     return <CommandPaletteEmptyState {...props} />;
@@ -124,7 +124,7 @@ export function CommandPaletteVirtualizedResults(props: CommandPaletteVirtualize
 
   return (
     <CommandListVirtualized>
-      <LegendList<CommandPaletteRow>
+      <VirtualList<CommandPaletteRow>
         ref={scrollRef}
         data={props.rows}
         initialScrollOffset={0}
@@ -153,7 +153,6 @@ export function CommandPaletteVirtualizedResults(props: CommandPaletteVirtualize
         onLayout={updateScrollFade}
         onScroll={updateScrollFade}
         onReady={updateScrollFade}
-        // Legend counts style padding (not class padding) in its size, end state and row positions.
         style={{ paddingTop: 8, paddingBottom: 8 }}
         contentContainerClassName="px-2"
         className={cn(

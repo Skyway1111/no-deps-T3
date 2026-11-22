@@ -4,8 +4,14 @@ import type {
   PullRequestMergeMethod,
   PullRequestUpdateMethod,
 } from "@t3tools/contracts";
-import { CheckIcon, ChevronDownIcon, FolderGit2Icon, GitBranchIcon, PlayIcon } from "lucide-react";
-import { Branch, T, useGT } from "gt-react";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  FolderGit2Icon,
+  GitBranchIcon,
+  PlayIcon,
+} from "~/ui-core/icons";
+import { Branch, T, useGT } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 
 import { AnimatedWidth } from "~/components/AnimatedWidth";

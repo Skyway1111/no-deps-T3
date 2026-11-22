@@ -2195,7 +2195,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     });
     yield* Effect.gen(function* () {
       // Interactive shells ignore SIGTERM but pass SIGHUP to their background jobs, skipping nohup'd and disowned ones.
-      // Windows ignores the signal and node-pty kills the whole tree there.
+      // Windows ignores the signal and the PTY helper terminates the process there.
       if (platform !== "win32") {
         yield* Effect.sync(() => {
           try {
@@ -2790,7 +2790,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
               .map((entry) => path.resolve(session.cwd, entry.replace(/^"+|"+$/g, "")))
               .join(":"),
           };
-    // POSIX node-pty can return a PTY before exec fails, so validate before accepting a candidate.
+    // Resolve up front so the agent scope wraps an absolute path.
     const executable =
       platform !== "win32"
         ? resolveExecutable(

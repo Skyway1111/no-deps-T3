@@ -6,7 +6,7 @@ import * as Hex from "effect/encoding/Hex";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as ExpoCrypto from "expo-crypto";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import * as SecureStore from "expo-secure-store";

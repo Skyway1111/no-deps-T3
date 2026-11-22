@@ -1,4 +1,4 @@
-import { diffWordsWithSpace } from "diff";
+import { diffWordsWithSpace } from "@t3tools/shared/diff";
 
 import type { ReviewHighlightedToken } from "./reviewHighlightedToken.types";
 
@@ -134,10 +134,7 @@ export function computeWordAltDiffRanges(input: {
     return { deletion: [], addition: [] };
   }
 
-  const operations = diffWordsWithSpace(
-    deletionLine,
-    additionLine,
-  ) as ReadonlyArray<ReviewDiffOperation>;
+  const operations = diffWordsWithSpace(deletionLine, additionLine);
   const deletionSpans: Array<[0 | 1, string]> = [];
   const additionSpans: Array<[0 | 1, string]> = [];
   const lastOperation = operations.at(-1);

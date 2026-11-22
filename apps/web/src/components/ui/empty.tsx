@@ -1,4 +1,4 @@
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
 
 import { cn } from "~/lib/utils";
 

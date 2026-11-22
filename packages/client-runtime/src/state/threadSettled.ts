@@ -3,8 +3,7 @@ import * as DateTime from "effect/DateTime";
 import { DEFAULT_SNOOZE_PRESETS, type SnoozePresetSetting } from "@t3tools/contracts/settings";
 
 import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 interface SettlementRunLike {
   readonly turnId?: unknown;

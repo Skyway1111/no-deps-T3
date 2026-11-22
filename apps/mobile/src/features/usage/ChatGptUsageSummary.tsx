@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { CHATGPT_USAGE_URL } from "@t3tools/shared/usageLimits";
 import { collectExternalUsageLinks } from "@t3tools/shared/usageLimitsCopy";
-import { T, useMessages, Var } from "gt-react-native";
+import { T, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { Pressable, View } from "react-native";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { AppText as Text } from "../../components/ui/AppText";

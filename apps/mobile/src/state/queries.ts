@@ -42,7 +42,7 @@ import { orchestrationEnvironment } from "./orchestration";
 import { olderSettledThreads, threadFamilies } from "./threads";
 import { projectEnvironment } from "./projects";
 import { useEnvironmentQuery } from "./query";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { vcsEnvironment } from "./vcs";
 import { composerPullRequests } from "./pull-requests";
 import {

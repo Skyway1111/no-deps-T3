@@ -12,7 +12,7 @@ import {
   newestCliReleaseVersion,
 } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import * as Schema from "effect/Schema";
 
 import { m } from "../../i18n/messages";

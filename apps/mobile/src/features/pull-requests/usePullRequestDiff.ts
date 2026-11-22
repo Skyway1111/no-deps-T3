@@ -7,7 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { RegistryContext, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Atom, type AsyncResult } from "effect/reactivity";
-import { useLocale, useMessages } from "gt-react-native";
+import { useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { useContext, useLayoutEffect, useMemo, useState } from "react";
 
 import { composerPullRequests } from "../../state/pull-requests";

@@ -1,4 +1,4 @@
-import { createMemoryHistory } from "@tanstack/react-router";
+import { createMemoryHistory } from "~/ui-core/router";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   EnvironmentId,

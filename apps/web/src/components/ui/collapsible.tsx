@@ -1,4 +1,4 @@
-import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
+import { Collapsible as CollapsiblePrimitive } from "~/ui-core/primitives";
 
 import { cn } from "~/lib/utils";
 

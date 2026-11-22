@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { converter } from "culori/fn";
+import { toOklab, toOklch, toRgb as parseRgb } from "@t3tools/shared/ui/color";
 import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
 
 import { CONTEXT_CHIP_ACCENTS, contextChipColorVariable } from "./lib/contextChipAccents";
@@ -78,7 +78,6 @@ describe("theme files", () => {
   });
 
   it("keeps built-in and standard search pairs readable and distinct from inline code", () => {
-    const toOklab = converter("oklab");
     const distance = (first: string, second: string) => {
       const a = toOklab(first)!;
       const b = toOklab(second)!;
@@ -598,16 +597,14 @@ describe("context chip colors", () => {
     },
   );
 
-  const toOklch = converter("oklch");
-  const toRgb = converter("rgb");
   // Surfaces stay unrounded, as CSS paints them; the chip is the 8-bit hex the solver returns.
   const paintedContrastRatio = (chip: string, surface: string, canvas: string) => {
     const channels = (value: string) => {
-      const rgb = toRgb(value)!;
+      const rgb = parseRgb(value)!;
       return [rgb.r, rgb.g, rgb.b].map((channel) => Math.min(1, Math.max(0, channel)));
     };
     const back = channels(canvas);
-    const alpha = toRgb(surface)!.alpha ?? 1;
+    const alpha = parseRgb(surface)!.alpha ?? 1;
     const painted = channels(surface).map(
       (channel, index) => back[index]! * (1 - alpha) + channel * alpha,
     );

@@ -27,7 +27,7 @@ vi.mock(import("../state/server"), async (original) => {
   ]);
   return { ...actual, primaryServerKeybindingsAtom: Atom.make(compiled) };
 });
-vi.mock(import("@tanstack/react-router"), async (original) => ({
+vi.mock(import("~/ui-core/router"), async (original) => ({
   ...(await original()),
   useNavigate: (() => state.navigate) as never,
 }));

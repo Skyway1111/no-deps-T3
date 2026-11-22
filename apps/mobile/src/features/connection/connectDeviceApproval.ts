@@ -1,5 +1,5 @@
 import type { AuthClientMetadata, AuthPairingLink } from "@t3tools/contracts";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 

@@ -14,7 +14,7 @@ import {
 } from "@t3tools/contracts";
 import type { AttachmentUploadStatus } from "@t3tools/client-runtime/state/attachment-uploads";
 import type { DocumentPickerResult } from "expo-document-picker";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import { estimateBase64ByteSize } from "./base64";
 import {

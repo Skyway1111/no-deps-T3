@@ -1,7 +1,7 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useEffect, useRef } from "react";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 import {
   composerTargetKey,

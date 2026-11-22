@@ -14,7 +14,7 @@ import type {
   PullRequestReactionContent,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { T, useGT, useLocale, useMessages } from "gt-react-native";
+import { T, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { SymbolView } from "../../components/ui/AppSymbol";

@@ -7,7 +7,7 @@ import {
   clampFileAttachmentUploadBytes,
   fileAttachmentTooLargeMessage,
 } from "@t3tools/client-runtime/state/attachments";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import type { ComposerFileAttachment, ComposerImageAttachment } from "../../composerDraftStore";
 import { m, type MessageResolver } from "../../i18n/messages";

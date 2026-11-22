@@ -1,6 +1,6 @@
 import type { PullRequestReviewGuideStop } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react";
-import { CheckIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { CheckIcon } from "~/ui-core/icons";
 
 import { cn } from "~/lib/utils";
 

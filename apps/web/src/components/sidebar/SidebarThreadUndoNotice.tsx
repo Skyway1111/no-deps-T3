@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { msg, useMessages } from "gt-react";
-import { Undo2Icon } from "lucide-react";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
+import { Undo2Icon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import {

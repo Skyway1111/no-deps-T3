@@ -1,4 +1,4 @@
-import { useMessages } from "gt-react-native";
+import { useMessages } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 

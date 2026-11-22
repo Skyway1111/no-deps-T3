@@ -1,4 +1,4 @@
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { LegendList } from "@legendapp/list/react-native";
 import { useAtomValue } from "@effect/atom-react";

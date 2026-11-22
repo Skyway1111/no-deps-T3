@@ -9,11 +9,11 @@ import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { promptLinkAppPath } from "@t3tools/shared/promptLinks";
 import { readPairingAppLink, resolveRemotePairingTarget } from "@t3tools/shared/remote";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter } from "~/ui-core/router";
 import * as Effect from "effect/Effect";
 import { AtomRegistry } from "effect/reactivity";
 import * as Stream from "effect/Stream";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { openFileInPreview, openUrlInPreview } from "../../browser/openFileInPreview";

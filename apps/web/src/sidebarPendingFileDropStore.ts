@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 import type { ScopedThreadRef } from "@t3tools/contracts";
 

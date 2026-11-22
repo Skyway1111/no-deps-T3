@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { AsyncResult } from "effect/reactivity";
 import { Platform } from "react-native";
 import {

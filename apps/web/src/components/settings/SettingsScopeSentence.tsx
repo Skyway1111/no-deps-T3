@@ -1,9 +1,9 @@
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 import { fileDisplayName } from "@t3tools/shared/path";
-import { useLocation } from "@tanstack/react-router";
-import { CheckIcon, ChevronDownIcon, FolderIcon, LayersIcon } from "lucide-react";
+import { useLocation } from "~/ui-core/router";
+import { CheckIcon, ChevronDownIcon, FolderIcon, LayersIcon } from "~/ui-core/icons";
 import { Fragment, useState, type ReactNode } from "react";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useEnvironments, type EnvironmentPresentation } from "../../state/environments";

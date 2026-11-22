@@ -3,7 +3,7 @@ import {
   readHostCredentialSettings,
   sourceControlClients,
 } from "@t3tools/client-runtime/source-control-clients";
-import { T, Var } from "gt-react-native";
+import { T, Var } from "@t3tools/shared/i18n/react";
 import { Pressable, View } from "react-native";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 

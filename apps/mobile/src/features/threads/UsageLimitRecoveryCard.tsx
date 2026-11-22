@@ -11,7 +11,7 @@ import {
   CHATGPT_WORKSPACE_USAGE_LIMIT_CODE,
 } from "@t3tools/shared/usageLimits";
 import * as Clipboard from "expo-clipboard";
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 import { useState } from "react";
 import { Pressable, View } from "react-native";

@@ -1,4 +1,4 @@
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useLocale, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtomValue } from "@effect/atom-react";

@@ -14,7 +14,7 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import * as Result from "effect/Result";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useId, useRef, useState } from "react";
 
 import { useEnvironments } from "~/state/environments";

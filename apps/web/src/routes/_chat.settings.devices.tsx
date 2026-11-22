@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "~/ui-core/router";
 import { DevicesSettingsPanel } from "../components/settings/IntegrationsSettings";
 
 export const Route = createFileRoute("/_chat/settings/devices")({

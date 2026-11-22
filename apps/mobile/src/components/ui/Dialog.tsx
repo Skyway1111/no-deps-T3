@@ -1,4 +1,4 @@
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { Alert } from "react-native";
 
 import { m } from "../../i18n/messages";

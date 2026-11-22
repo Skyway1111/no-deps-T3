@@ -11,10 +11,14 @@ import {
   remainingPercent,
   type ResetCreditChoice,
 } from "@t3tools/shared/usageLimits";
-import { T, useGT, useMessages } from "gt-react";
-import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import type { Popover as PopoverPrimitive } from "~/ui-core/popups";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
-import { AlertTriangleIcon, ExternalLinkIcon, TicketIcon } from "lucide-react";
+import {
+  TriangleAlertIcon as AlertTriangleIcon,
+  ExternalLinkIcon,
+  TicketIcon,
+} from "~/ui-core/icons";
 import {
   createContext,
   Fragment,

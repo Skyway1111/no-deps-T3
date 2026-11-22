@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "~/ui-core/router";
 
 import { SecretsSettingsPanel } from "../components/settings/SecretsSettings";
 import { useHasSecretProvidersEnvironment } from "../components/settings/useAvailableSettingsSearchItems";

@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { InfoIcon, RotateCwIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { InfoIcon, RotateCwIcon } from "~/ui-core/icons";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 

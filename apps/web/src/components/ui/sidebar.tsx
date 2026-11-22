@@ -1,8 +1,7 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
-import { T, useGT } from "gt-react";
-import { PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { PanelLeftCloseIcon, PanelLeftIcon } from "~/ui-core/icons";
 import * as React from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -799,7 +798,7 @@ function SidebarMenuButton({
 
   const buttonProps = mergeProps<"button">(defaultProps, props);
 
-  const buttonElement = useRender({
+  const buttonElement = renderElement({
     defaultTagName: "button",
     props: buttonProps,
     render,
@@ -879,7 +878,7 @@ function SidebarMenuSubButton({
     "data-slot": "sidebar-menu-sub-button",
   };
 
-  return useRender({
+  return renderElement({
     defaultTagName: "a",
     props: mergeProps<"a">(defaultProps, props),
     render,

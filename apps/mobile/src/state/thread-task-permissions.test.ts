@@ -92,8 +92,8 @@ vi.mock("react", () => ({
   ],
 }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "uuid" }));
-vi.mock("gt-react-native", async (importOriginal) => {
-  const gt = await importOriginal<typeof import("gt-react-native")>();
+vi.mock("@t3tools/shared/i18n/react", async (importOriginal) => {
+  const gt = await importOriginal<typeof import("@t3tools/shared/i18n/react")>();
   return {
     ...gt,
     useGT: () => gt.mFallback,

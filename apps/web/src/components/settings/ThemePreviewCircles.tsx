@@ -1,5 +1,5 @@
-import { useGT } from "gt-react";
-import { MoonIcon, SunIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { MoonIcon, SunIcon } from "~/ui-core/icons";
 import type { CSSProperties } from "react";
 import {
   STANDARD_THEME_PREVIEW_COLORS as SHARED_STANDARD_THEME_PREVIEW_COLORS,

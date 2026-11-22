@@ -7,7 +7,7 @@ import {
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 import * as Dialog from "../../components/ui/Dialog";

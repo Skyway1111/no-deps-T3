@@ -1,5 +1,5 @@
 import type * as DateTime from "effect/DateTime";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentProject,

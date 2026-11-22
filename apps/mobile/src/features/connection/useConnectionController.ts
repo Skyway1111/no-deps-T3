@@ -9,7 +9,7 @@ import type {
   RelayEnvironmentStatusResponse,
 } from "@t3tools/contracts/relay";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { useMessages } from "gt-react-native";
+import { useMessages } from "@t3tools/shared/i18n/react";
 import * as Option from "effect/Option";
 import { useMemo } from "react";
 

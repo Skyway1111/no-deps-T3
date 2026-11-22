@@ -14,7 +14,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import type * as Electron from "electron";
 
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";

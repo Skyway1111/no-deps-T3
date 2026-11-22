@@ -4,7 +4,7 @@ import {
   type ManagedPolicySummary,
   type RuntimeMode,
 } from "@t3tools/contracts";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { View } from "react-native";
 
 import { AppText } from "../../components/ui/AppText";

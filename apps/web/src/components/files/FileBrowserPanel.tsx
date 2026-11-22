@@ -11,8 +11,8 @@ import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
-import { T, useGT, useMessages } from "gt-react";
-import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "~/ui-core/icons";
 import { type Ref, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";

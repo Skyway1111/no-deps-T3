@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";

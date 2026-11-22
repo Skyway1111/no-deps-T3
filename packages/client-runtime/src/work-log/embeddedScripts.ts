@@ -1,12 +1,11 @@
 import { getFiletypeFromFileName } from "@pierre/diffs/utils/getFiletypeFromFileName";
 import {
-  parse,
-  type Command,
-  type DoubleQuotedChild,
-  type HereDoc,
-  type Word,
-  type WordPart,
-} from "unbash";
+  parseShellCommands,
+  type ShellCommand as Command,
+  type ShellQuotedChild,
+  type ShellRedirect,
+  type ShellWord as Word,
+} from "@t3tools/shared/parsers/bashScripts";
 
 /** starts[i]..ends[i] spans the original spelling of text[i], including escapes. */
 export interface EmbeddedScript {
@@ -191,11 +190,11 @@ export function embeddedScripts(command: string): EmbeddedScript[] {
   );
 }
 
+type HereDoc = Extract<ShellRedirect, { type: "HereDoc" }>;
+
 function scriptsIn(source: MappedText, depth: number): EmbeddedScript[] {
-  const script = parse(source.text);
-  if (script.errors?.length) return [];
   const found: EmbeddedScript[] = [];
-  forEachCommand(script.commands, (command) => {
+  for (const command of parseShellCommands(source.text) ?? []) {
     for (const { language, mapped } of commandScripts(command, source.text)) {
       if (mapped.text.trim() === "") continue;
       const embedded: EmbeddedScript = {
@@ -209,43 +208,8 @@ function scriptsIn(source: MappedText, depth: number): EmbeddedScript[] {
         found.push(...scriptsIn(embedded, depth + 1));
       }
     }
-  });
+  }
   return found;
-}
-
-function isNode(value: unknown): value is { readonly type: string } {
-  return typeof value === "object" && value !== null && "type" in value;
-}
-
-function forEachCommand(
-  node: unknown,
-  visit: (command: Command) => void,
-  seen = new WeakSet<object>(),
-): void {
-  if (Array.isArray(node)) {
-    for (const child of node) forEachCommand(child, visit, seen);
-    return;
-  }
-  if (!isNode(node) || seen.has(node)) return;
-  seen.add(node);
-  switch (node.type) {
-    case "Command":
-      visit(node as Command);
-      break;
-    case "CommandExpansion":
-    case "ProcessSubstitution": {
-      const { script } = node as Extract<WordPart, { type: "CommandExpansion" }>;
-      if (script && !script.errors?.length && script.source === undefined) {
-        forEachCommand(script.commands, visit, seen);
-      }
-      return;
-    }
-  }
-  // Word parts are lazy getters, which Object.values skips.
-  if ("parts" in node) forEachCommand(node.parts, visit, seen);
-  for (const value of Object.values(node)) {
-    if (typeof value === "object") forEachCommand(value, visit, seen);
-  }
 }
 
 function programName(word: Word): string {
@@ -287,7 +251,7 @@ function commandScripts(
   source: string,
 ): Array<{ language: string; mapped: MappedText }> {
   if (!command.name) return [];
-  const words = [command.name, ...command.args.filter((arg): arg is Word => arg.type === "Word")];
+  const words = [command.name, ...command.args];
   const index = programIndex(words);
   const program = words[index];
   if (!program) return [];
@@ -312,8 +276,8 @@ function commandScripts(
   const stdinLanguage = readsStdinScript ? interpreter?.language : undefined;
   const writtenLanguage = writtenFileLanguage(name, command, args);
   for (const redirect of command.redirects) {
-    const toStdin = isDescriptor(redirect.descriptor, 0);
-    if (redirect.type === "HereString" && toStdin && stdinLanguage && redirect.target) {
+    const toStdin = isDescriptor(redirect.fd, 0);
+    if (redirect.type === "HereString" && toStdin && stdinLanguage) {
       const mapped = wordText(redirect.target, source);
       if (mapped) scripts.push({ language: stdinLanguage, mapped });
     }
@@ -326,10 +290,8 @@ function commandScripts(
   return scripts;
 }
 
-function isDescriptor(descriptor: HereDoc["descriptor"], fd: number): boolean {
-  return (
-    descriptor === undefined || (descriptor.type === "FileDescriptor" && descriptor.value === fd)
-  );
+function isDescriptor(descriptor: number | undefined, fd: number): boolean {
+  return descriptor === undefined || descriptor === fd;
 }
 
 interface ScriptArgument {
@@ -410,9 +372,9 @@ function writtenFileLanguage(
       if (
         redirect.type === "Redirect" &&
         [">", ">>", ">|", "&>", "&>>"].includes(redirect.operator) &&
-        isDescriptor(redirect.descriptor, 1)
+        isDescriptor(redirect.fd, 1)
       ) {
-        path = redirect.target?.value;
+        path = redirect.target.value;
       }
     }
   } else if (name === "tee") {
@@ -424,7 +386,7 @@ function writtenFileLanguage(
 }
 
 function delimiterLanguage(hereDoc: HereDoc): string | undefined {
-  const name = hereDoc.delimiter?.value.toLowerCase();
+  const name = hereDoc.delimiter.toLowerCase();
   return name && Object.hasOwn(DELIMITER_LANGUAGES, name) ? DELIMITER_LANGUAGES[name] : undefined;
 }
 
@@ -441,10 +403,7 @@ function hereDocText(hereDoc: HereDoc, source: string): MappedText {
 // Preserve literal expansions; return undefined for unmappable spellings.
 function wordText(word: Word, source: string): MappedText | undefined {
   const builder = new MappedTextBuilder();
-  const parts: ReadonlyArray<WordPart> = word.parts ?? [
-    { type: "Literal", pos: word.pos, end: word.end, text: word.text, value: word.value },
-  ];
-  for (const part of parts) {
+  for (const part of word.parts) {
     switch (part.type) {
       case "Literal":
         if (!builder.addEscaped(part, false)) return undefined;
@@ -453,7 +412,6 @@ function wordText(word: Word, source: string): MappedText | undefined {
         builder.addRaw(part.value, part.pos + 1);
         break;
       case "DoubleQuoted":
-      case "LocaleString":
         for (const child of part.parts) {
           if (!builder.addDoubleQuotedChild(child)) return undefined;
         }
@@ -479,7 +437,7 @@ class MappedTextBuilder {
     for (let index = 0; index < text.length; index += 1) this.push(text[index]!, pos + index, 1);
   }
 
-  addDoubleQuotedChild(child: DoubleQuotedChild): boolean {
+  addDoubleQuotedChild(child: ShellQuotedChild): boolean {
     if (child.type === "Literal") return this.addEscaped(child, true);
     this.addRaw(child.text, child.pos);
     return true;

@@ -4,8 +4,8 @@ import {
   htmlRenderFrameHeight,
   type HtmlRenderReference,
 } from "@t3tools/shared/htmlRender";
-import { useGT } from "gt-react";
-import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { MinusIcon, PlusIcon, XIcon } from "~/ui-core/icons";
 import { useRef, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";

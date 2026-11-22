@@ -1,5 +1,5 @@
 import * as DateTime from "effect/DateTime";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import {
@@ -7,7 +7,7 @@ import {
   waitingOnSubagentsLabel,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import * as Equal from "effect/Equal";
-import { shallow } from "zustand/vanilla/shallow";
+import { shallow } from "@t3tools/shared/core/signal";
 import { claudeResumeCompactionAge } from "@t3tools/shared/claudeCompaction";
 import {
   IDLE_COMPACTING_LABELS,
@@ -366,7 +366,7 @@ export function resolveTimelineIsAtEnd(state: TimelineEndState | undefined): boo
   if (contentLength === undefined || scroll === undefined || scrollLength === undefined) {
     return state.isAtEnd;
   }
-  // LegendList double-subtracts the composer inset, so its isAtEnd is only a fallback.
+  // VirtualList double-subtracts the composer inset, so its isAtEnd is only a fallback.
   return contentLength - scroll - scrollLength <= TIMELINE_FOLLOW_REARM_THRESHOLD_PX;
 }
 
@@ -399,7 +399,7 @@ export function resolveTimelineMinimapIndexFromPointer(input: {
   return Math.max(0, Math.min(input.itemCount - 1, Math.round(progress * (input.itemCount - 1))));
 }
 
-/** Recheck the rendered buffer: LegendList's unbuffered range can lag during scrolling. */
+/** Recheck the rendered buffer: VirtualList's unbuffered range can lag during scrolling. */
 export function resolveTimelineMinimapVisibleRange(state: {
   readonly startBuffered: number | null | undefined;
   readonly endBuffered: number | null | undefined;

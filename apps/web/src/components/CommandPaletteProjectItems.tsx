@@ -1,5 +1,5 @@
 import type { EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../i18n/messages";
 import type { SidebarProjectSnapshot } from "../sidebarProjectGrouping";

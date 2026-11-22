@@ -4,9 +4,9 @@ import {
   type ServerProvider,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useRef, useState, useSyncExternalStore } from "react";
-import { InfoIcon, XIcon } from "lucide-react";
+import { InfoIcon, XIcon } from "~/ui-core/icons";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button, InlineButton } from "../ui/button";
 import { m, type MessageResolver } from "../../i18n/messages";

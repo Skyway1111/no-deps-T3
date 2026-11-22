@@ -16,7 +16,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as SynchronizedRef from "effect/SynchronizedRef";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 import * as FileSystem from "effect/FileSystem";
 import { HttpClient } from "effect/http";

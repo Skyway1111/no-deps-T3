@@ -11,7 +11,7 @@ import {
   type ResolvedSharePayload,
   type SharePayload,
 } from "expo-sharing";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
 import { CommonActions } from "@react-navigation/native";

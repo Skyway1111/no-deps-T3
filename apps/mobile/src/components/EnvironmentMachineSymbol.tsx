@@ -1,5 +1,5 @@
 import type { EnvironmentMachineKind } from "@t3tools/contracts";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 
 import { SymbolView, type AppSymbolName } from "./ui/AppSymbol";
 

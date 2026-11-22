@@ -1,7 +1,7 @@
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { EnvironmentId, PullRequestLabelCandidate, PullRequestRef } from "@t3tools/contracts";
-import { CheckIcon, TagIcon } from "lucide-react";
-import { msg, useGT, useMessages } from "gt-react";
+import { CheckIcon, TagIcon } from "~/ui-core/icons";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { m } from "~/i18n/messages";

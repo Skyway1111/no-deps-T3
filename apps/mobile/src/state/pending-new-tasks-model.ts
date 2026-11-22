@@ -1,7 +1,7 @@
 import type { EnvironmentShellStatus } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId, MessageId, ProjectId } from "@t3tools/contracts";
 
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { deriveThreadTitleFromPrompt } from "../lib/projectThreadStartTurn";
 import {

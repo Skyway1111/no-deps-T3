@@ -1,9 +1,9 @@
 import { DeviceHostUpdates } from "./DeviceHostUpdates";
 import type { DevicePlatform, DeviceServiceState, EnvironmentId } from "@t3tools/contracts";
-import { Check, CircleAlert } from "lucide-react";
+import { CheckIcon as Check, CircleAlertIcon as CircleAlert } from "~/ui-core/icons";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { useAtomMount } from "@effect/atom-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";

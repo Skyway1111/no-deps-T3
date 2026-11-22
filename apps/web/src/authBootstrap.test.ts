@@ -5,7 +5,7 @@ import {
   type AuthSessionState,
   type DesktopBridge,
 } from "@t3tools/contracts";
-import { createBrowserHistory } from "@tanstack/react-router";
+import { createBrowserHistory } from "~/ui-core/router";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import { HttpClientError, HttpClientRequest } from "effect/http";

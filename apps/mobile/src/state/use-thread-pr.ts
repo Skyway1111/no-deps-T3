@@ -7,7 +7,7 @@ import {
 import type { EnvironmentId, PullRequestSummary } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { Atom } from "effect/reactivity";
-import { useMessages } from "gt-react-native";
+import { useMessages } from "@t3tools/shared/i18n/react";
 import { use, useMemo } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";

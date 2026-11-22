@@ -1,7 +1,7 @@
 import { deriveProjectIdentity } from "../../projectIdentity";
 import { ProjectMonogram } from "../ProjectMonogram";
 import type { ProjectIconColor, ProjectIconOverride } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { createElement, useState } from "react";
 import {
   filterProjectIconNames,

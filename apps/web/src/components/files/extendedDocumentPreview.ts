@@ -3,9 +3,10 @@ import {
   IMAGE_DIMENSIONS_HEADER_BYTES,
   readImageDimensions,
 } from "@t3tools/shared/imageDimensions";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
-import { decodeHTMLAttribute, decodeHTMLStrict as decodeEntities } from "entities";
-import type JSZip from "jszip";
+import { XmlError, XmlStreamParser } from "@t3tools/shared/parsers/xml";
+import { decodeHtmlEntities } from "@t3tools/shared/markdown";
+const decodeHTMLAttribute = (value: string) => decodeHtmlEntities(value, { attribute: true });
+import type { ZipArchiveReadable } from "@t3tools/client-runtime/zip/native-zip";
 import { terminalOutputPlainText } from "@t3tools/shared/terminalOutput";
 
 import { type OfficeWorkerResult, type NotebookCell } from "./officePreviewProtocol";
@@ -16,7 +17,6 @@ const TABLE_PREVIEW_MAX_COLUMNS = 50;
 
 // `text` and `attrs` hold decoded values: escaped text is decoded once, CDATA stays literal.
 type XmlNode = { name: string; attrs: Record<string, string>; children: XmlNode[]; text: string };
-type OrderedXml = { [key: string]: OrderedXml[] | Record<string, string> | string };
 const escape = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -36,89 +36,46 @@ const namespacePrefixes: Record<string, string> = {
   "urn:oasis:names:tc:opendocument:xmlns:container": "",
 };
 function parseXml(source: string): XmlNode {
-  // EPUB XHTML commonly declares an external DTD: discard it without resolving it. Any other
-  // declaration is rejected; CDATA, comments and processing instructions pass through untouched.
-  let declares = false;
-  source = source.replaceAll(
-    /<\?[\s\S]*?(?:\?>|$)|<!\[CDATA\[[\s\S]*?(?:]]>|$)|<!--[\s\S]*?(?:-->|$)|(<!DOCTYPE\s+[^<>[\]]*>)|(<!\s*(?:DOCTYPE|ENTITY))/gi,
-    (markup, externalDoctype?: string, declaration?: string) => {
-      if (declaration) declares = true;
-      return externalDoctype ? " " : markup;
-    },
-  );
-  if (source.length > 8 * 1024 * 1024 || declares || XMLValidator.validate(source) !== true)
-    throw new PreviewError({ code: "xml-invalid" });
-  const parser = new XMLParser({
-    preserveOrder: true,
-    ignoreAttributes: false,
-    attributeNamePrefix: "",
-    processEntities: false,
-    trimValues: false,
-    parseTagValue: false,
-    cdataPropName: "#cdata",
-  });
-  const ordered = parser.parse(source) as OrderedXml[];
+  if (source.length > 8 * 1024 * 1024) throw new PreviewError({ code: "xml-invalid" });
+  const root: XmlNode = { name: "root", attrs: {}, children: [], text: "" };
+  const stack = [root];
   let count = 0;
-  function convert(
-    items: OrderedXml[],
-    depth: number,
-    inherited: Record<string, string>,
-  ): XmlNode[] {
-    if (depth > 100) throw new PreviewError({ code: "xml-too-deep" });
-    return items.map((item) => {
-      if (++count > 100_000) throw new PreviewError({ code: "xml-too-much-content" });
-      const name = Object.keys(item).find((key) => key !== ":@") ?? "#text";
-      const value = item[name];
-      if (name === "#cdata") {
-        const literal = Array.isArray(value)
-          ? value.map((part) => part["#text"] ?? "").join("")
-          : "";
-        return { name: "#text", attrs: {}, children: [], text: literal };
-      }
-      const attrs = Object.fromEntries(
-        Object.entries((item[":@"] ?? {}) as Record<string, string>).map(([key, value]) => {
-          // fast-xml-parser accepts raw '<' in element attributes, which can mask declarations
-          // above. Processing instructions end at their first '?>', so their data may hold '<'.
-          if (!name.startsWith("?") && value.includes("<"))
-            throw new PreviewError({ code: "xml-invalid" });
-          return [key, decodeEntities(value)];
-        }),
-      );
-      const namespaces = Object.create(inherited) as Record<string, string>;
-      for (const [key, value] of Object.entries(attrs)) {
-        if (key === "xmlns") namespaces[""] = value;
-        else if (key.startsWith("xmlns:")) namespaces[key.slice(6)] = value;
-      }
-      const expanded = (name: string, attribute = false) => {
-        if (name.startsWith("#")) return name;
-        const colon = name.indexOf(":");
-        if (colon < 0 && attribute) return name;
-        const uri = namespaces[colon < 0 ? "" : name.slice(0, colon)];
-        if (!uri) return name;
-        const prefix = Object.hasOwn(namespacePrefixes, uri) ? namespacePrefixes[uri] : undefined;
-        const local = name.slice(colon + 1);
-        return prefix === undefined
-          ? "{" + uri + "}" + local
-          : prefix
-            ? prefix + ":" + local
-            : local;
-      };
-      return {
-        name: expanded(name),
-        attrs: Object.fromEntries(
-          Object.entries(attrs).map(([key, value]) => [expanded(key, true), value]),
-        ),
-        children: Array.isArray(value) ? convert(value, depth + 1, namespaces) : [],
-        text: typeof value === "string" ? decodeEntities(value) : "",
-      };
-    });
-  }
-  return {
-    name: "root",
-    attrs: {},
-    children: convert(ordered, 0, Object.create(null) as Record<string, string>),
-    text: "",
+  const add = (node: XmlNode) => {
+    if (++count > 100_000) throw new PreviewError({ code: "xml-too-much-content" });
+    if (stack.length > 101) throw new PreviewError({ code: "xml-too-deep" });
+    stack.at(-1)!.children.push(node);
+    return node;
   };
+  const expanded = (qname: string, prefix: string, local: string, uri: string) => {
+    if (!uri || prefix === "xml" || prefix === "xmlns") return qname;
+    const known = Object.hasOwn(namespacePrefixes, uri) ? namespacePrefixes[uri] : undefined;
+    return known === undefined ? `{${uri}}${local}` : known ? `${known}:${local}` : local;
+  };
+  const text = (value: string) => void add({ name: "#text", attrs: {}, children: [], text: value });
+  // EPUB XHTML commonly declares an external DTD, which is never resolved; an internal subset could
+  // declare entities, so it is rejected.
+  const parser = new XmlStreamParser({ htmlEntities: true })
+    .on("doctype", (doctype) => {
+      if (doctype.includes("[")) throw new PreviewError({ code: "xml-invalid" });
+    })
+    .on("opentag", (tag) => {
+      const attrs: Record<string, string> = {};
+      for (const attribute of Object.values(tag.attributes)) {
+        const { name, prefix, local, uri } = attribute;
+        attrs[prefix ? expanded(name, prefix, local, uri) : name] = attribute.value;
+      }
+      const name = expanded(tag.name, tag.prefix, tag.local, tag.uri);
+      stack.push(add({ name, attrs, children: [], text: "" }));
+    })
+    .on("closetag", () => void stack.pop())
+    .on("text", text)
+    .on("cdata", text);
+  try {
+    parser.write(source).close();
+  } catch (error) {
+    throw error instanceof XmlError ? new PreviewError({ code: "xml-invalid" }) : error;
+  }
+  return root;
 }
 function find(node: XmlNode, name: string, skip?: string): XmlNode[] {
   return node.children.flatMap((child) =>
@@ -178,7 +135,7 @@ function htmlImagesFit(html: string) {
     if (!base64ImageFits(match[1]!)) return false;
   return true;
 }
-async function imageData(archive: JSZip, path: string | null): Promise<string> {
+async function imageData(archive: ZipArchiveReadable, path: string | null): Promise<string> {
   if (!path) return "";
   const mime = (
     { png: "png", jpg: "jpeg", jpeg: "jpeg", gif: "gif", webp: "webp" } as Record<string, string>
@@ -238,7 +195,7 @@ const HTML_TAGS = new Set([
   "dt",
   "dd",
 ]);
-async function epubHtml(node: XmlNode, archive: JSZip, base: string): Promise<string> {
+async function epubHtml(node: XmlNode, archive: ZipArchiveReadable, base: string): Promise<string> {
   if (node.name === "#text") return pipe(text(node), escape, boundedMarkup);
   const tag =
     node.name
@@ -266,7 +223,7 @@ async function epubHtml(node: XmlNode, archive: JSZip, base: string): Promise<st
   reserveMarkup(tag.length * 2 + spans.length + 5);
   return `<${tag}${spans}>${children}</${tag}>`;
 }
-async function odfHtml(node: XmlNode, archive: JSZip): Promise<string> {
+async function odfHtml(node: XmlNode, archive: ZipArchiveReadable): Promise<string> {
   if (node.name === "#text") return pipe(text(node), escape, boundedMarkup);
   if (node.name === "text:s" || node.name === "text:tab")
     return boundedMarkup(
@@ -329,7 +286,7 @@ function repeat(value: string | undefined, max: number) {
   return Math.min(count, max);
 }
 export async function openDocument(
-  archive: JSZip,
+  archive: ZipArchiveReadable,
   kind: "odt" | "ods" | "odp",
 ): Promise<OfficeWorkerResult> {
   markupBytes = 0;
@@ -409,7 +366,7 @@ export async function openDocument(
   }
   return { type: "document", navigation: kind === "odp" ? "slide" : "page", pages: rendered };
 }
-export async function openEpub(archive: JSZip): Promise<OfficeWorkerResult> {
+export async function openEpub(archive: ZipArchiveReadable): Promise<OfficeWorkerResult> {
   markupBytes = 0;
   const container = parseXml((await archive.file("META-INF/container.xml")?.async("string")) ?? "");
   const rootfile = find(container, "rootfile")[0]?.attrs["full-path"];

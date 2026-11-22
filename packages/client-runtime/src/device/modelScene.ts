@@ -1,34 +1,7 @@
 // @effect-diagnostics globalFetch:off - This browser-only renderer owns abortable asset requests without an Effect runtime, like the live stream.
-import { Box3, Group, Mesh, MeshBasicMaterial, Texture, type Material, type Object3D } from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { Box3, disposeObject, Group, Mesh, MeshBasicMaterial, parseGlb, type Texture } from "./webglEngine.ts";
 import type { DeviceAssetSource } from "./model.ts";
 import { createDisplayProjection, updateDisplayUv, type PhoneDisplayLayout } from "./phoneScene.ts";
-
-/** GLB resources belong to one viewer; the live framebuffer texture belongs to its stream presentation. */
-export function disposeDeviceModel(root: Object3D) {
-  const geometries = new Set<Mesh["geometry"]>();
-  const materials = new Set<Material>();
-  const textures = new Set<Texture>();
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    geometries.add(object.geometry);
-    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-      materials.add(material);
-      for (const value of Object.values(material)) {
-        if (value instanceof Texture) textures.add(value);
-      }
-    }
-  });
-  for (const geometry of geometries) geometry.dispose();
-  for (const material of materials) material.dispose();
-  const images = new Set<ImageBitmap>();
-  for (const texture of textures) {
-    texture.dispose();
-    if (typeof ImageBitmap !== "undefined" && texture.image instanceof ImageBitmap)
-      images.add(texture.image);
-  }
-  for (const image of images) image.close();
-}
 
 export function createImportedPhoneScene(
   asset: Group,
@@ -64,7 +37,7 @@ export function createImportedPhoneScene(
     throw new Error("Device model display is not normalized");
   updateDisplayUv(display.geometry, screenWidth, screenHeight, initial);
   const originalMaterial = display.material;
-  const screenMaterial = new MeshBasicMaterial({ map: texture, toneMapped: false });
+  const screenMaterial = new MeshBasicMaterial({ map: texture });
   display.material = screenMaterial;
   const root = new Group();
   const orientation = new Group();
@@ -105,13 +78,10 @@ export async function loadDeviceModel(source: DeviceAssetSource, signal: AbortSi
   if (!response.ok) throw new Error(`Device model request failed: ${response.status}`);
   const data = await response.arrayBuffer();
   signal.throwIfAborted();
-  const gltf = await new GLTFLoader().parseAsync(
-    data,
-    new URL(".", new URL(source.url, globalThis.location.href)).href,
-  );
+  const asset = await parseGlb(data);
   if (signal.aborted) {
-    disposeDeviceModel(gltf.scene);
+    disposeObject(asset);
     signal.throwIfAborted();
   }
-  return { asset: gltf.scene, dispose: () => disposeDeviceModel(gltf.scene) };
+  return { asset, dispose: () => disposeObject(asset) };
 }

@@ -1,4 +1,4 @@
-import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
+import { Popover as PopoverPrimitive } from "~/ui-core/popups";
 
 import { cn } from "~/lib/utils";
 

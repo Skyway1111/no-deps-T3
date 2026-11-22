@@ -3,7 +3,7 @@ import {
   type SavedViewIdentity as SavedViewIdentitySchema,
   savedViewNameError,
 } from "@t3tools/client-runtime/saved-views";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { Alert } from "react-native";

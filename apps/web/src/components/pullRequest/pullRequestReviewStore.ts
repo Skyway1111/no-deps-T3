@@ -1,5 +1,5 @@
 import type { PullRequestRef, PullRequestReviewCommentDraft } from "@t3tools/contracts";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 export type PendingReviewComment = PullRequestReviewCommentDraft & { readonly id: string };
 

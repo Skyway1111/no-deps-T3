@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 /**
  * Whole sentences for each T3 MCP tool row, keyed by the tool's labels from

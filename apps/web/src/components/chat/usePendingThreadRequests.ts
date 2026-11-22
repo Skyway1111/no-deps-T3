@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
@@ -21,7 +21,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { useRef, useState, type RefObject, type SetStateAction } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "@t3tools/shared/core/react";
 import {
   type ComposerThreadDraftState,
   type DraftId,

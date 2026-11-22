@@ -1,5 +1,4 @@
-import { Radio as RadioPrimitive } from "@base-ui/react/radio";
-import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group";
+import { Radio as RadioPrimitive, RadioGroup as RadioGroupPrimitive } from "~/ui-core/primitives";
 
 import { cn } from "~/lib/utils";
 

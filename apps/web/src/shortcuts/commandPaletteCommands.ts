@@ -1,5 +1,5 @@
-import type { AnyRouter } from "@tanstack/react-router";
-import { msg } from "gt-react";
+import type { AnyRouter } from "~/ui-core/router";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import {
   dispatchCommandPalette,

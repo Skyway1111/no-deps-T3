@@ -1,5 +1,5 @@
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, StarIcon, XIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, StarIcon, XIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useEffect, useRef, useState } from "react";
 import {
   ProviderDriverKind,

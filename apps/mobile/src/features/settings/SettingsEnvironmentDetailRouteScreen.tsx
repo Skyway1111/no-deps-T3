@@ -1,6 +1,6 @@
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { serverUpdateFailureText } from "@t3tools/client-runtime/state/server";
-import { T, useGT, useMessages, Var } from "gt-react-native";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";

@@ -5,7 +5,7 @@ import type {
 import type { Discovery } from "@t3tools/client-runtime/relay";
 import type { RelayManagedEndpoint } from "@t3tools/contracts/relay";
 
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { isManagedTunnelActive, t3ConnectMcpUrl } from "~/cloud/t3ConnectState";
 import { m, type MessageResolver } from "~/i18n/messages";

@@ -89,7 +89,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 import {
   AppState,

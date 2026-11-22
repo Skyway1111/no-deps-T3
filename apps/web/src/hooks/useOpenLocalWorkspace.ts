@@ -5,7 +5,7 @@ import {
 } from "@t3tools/client-runtime/state/projects";
 import { useAtomValue } from "@effect/atom-react";
 import type { DesktopAppActivationRequest } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { handleDesktopAppActivationRequest } from "../desktopAppActivation";
 import { m } from "../i18n/messages";

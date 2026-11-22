@@ -1,4 +1,4 @@
-import { T, Var, useGT } from "gt-react";
+import { T, Var, useGT } from "@t3tools/shared/i18n/react";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
 import type { EnvironmentId, OrchestrationV2ProjectedTurnItem } from "@t3tools/contracts";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@t3tools/client-runtime/work-log/item-detail";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { isJavaScriptReplTool } from "@t3tools/shared/toolActivity";
-import { ExternalLinkIcon } from "lucide-react";
+import { ExternalLinkIcon } from "~/ui-core/icons";
 import { memo, type ReactNode, Suspense, use } from "react";
 
 import { useRenderedAppearance } from "../../hooks/useTheme";

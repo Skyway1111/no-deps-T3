@@ -3,7 +3,6 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeZlib from "node:zlib";
 
 import react from "@vitejs/plugin-react";
-import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import compression from "compression";
 import { playwright } from "vite-plus/test/browser-playwright";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
@@ -11,7 +10,6 @@ import "vite-plus/test/config";
 import { defineConfig, type Connect, type Plugin } from "vite-plus";
 import * as Hash from "effect/Hash";
 import pkg from "./package.json" with { type: "json" };
-import pdfjsPkg from "pdfjs-dist/package.json" with { type: "json" };
 
 import {
   DEV_PROXIED_ORIGIN_PRESERVING_PREFIXES,
@@ -110,24 +108,6 @@ const browserTestProject = {
   optimizeDeps: {
     include: [
       "vite-plus/test/browser",
-      "@base-ui/react/autocomplete",
-      "saxes",
-      "@betteroffice/docx/editor",
-      "@betteroffice/docx/layout",
-      "@betteroffice/docx/layout/render",
-      "@betteroffice/docx/yrs",
-      "@betteroffice/fonts",
-      "@betteroffice/pptx",
-      "@betteroffice/xlsx",
-      "@betteroffice/xlsx/headless",
-      "fast-xml-parser",
-      "entities",
-      "dompurify",
-      "heic-to/csp",
-      "jszip",
-      "pdfjs-dist",
-      "sql.js",
-      "tiff",
     ],
   },
   test: {
@@ -283,7 +263,7 @@ function bootstrapTitlePlugin(): Plugin {
         hostedAppChannel: configuredHostedAppChannel,
         development,
       });
-      const title = formatAppDisplayName({ baseName: "T3 Code", stageLabel });
+      const title = formatAppDisplayName({ baseName: "no-deps-T3", stageLabel });
       return html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
     },
   };
@@ -330,7 +310,6 @@ export default defineConfig(({ command }) => {
               { bundle: "desktop", path: new URL("../desktop/package.json", import.meta.url) },
             ],
           }),
-      tanstackRouter({ autoCodeSplitting: true }),
       react({ compiler: true }),
       tailwindPlugins(bundledDev),
       warmBundledDevPlugin(),
@@ -428,11 +407,7 @@ export default defineConfig(({ command }) => {
       ...(builtDev ? { watch: { exclude: rolldownWatchExclude } } : {}),
       rolldownOptions: {
         output: {
-          // PDF.js resolves decoder modules and ICC data relative to wasmUrl.
-          assetFileNames: (asset) =>
-            asset.originalFileNames.some((path) => /[/\\]pdfjs-dist[/\\]wasm[/\\]/.test(path))
-              ? `assets/pdfjs-${pdfjsPkg.version}/[name][extname]`
-              : "assets/[name]-[hash][extname]",
+          assetFileNames: "assets/[name]-[hash][extname]",
         },
       },
     },

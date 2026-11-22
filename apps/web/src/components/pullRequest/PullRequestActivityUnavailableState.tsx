@@ -1,4 +1,4 @@
-import { Branch, T } from "gt-react";
+import { Branch, T } from "@t3tools/shared/i18n/react";
 
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 

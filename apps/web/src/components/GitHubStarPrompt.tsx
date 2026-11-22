@@ -1,8 +1,8 @@
 import { type EnvironmentId, SourceControlProviderKind } from "@t3tools/contracts";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import * as Schema from "effect/Schema";
-import { msg } from "gt-react";
-import { StarIcon } from "lucide-react";
+import { msg } from "@t3tools/shared/i18n/react";
+import { StarIcon } from "~/ui-core/icons";
 
 import { m } from "../i18n/messages";
 import { getLocalStorageItem, setLocalStorageItem } from "../hooks/useLocalStorage";
@@ -75,10 +75,10 @@ function showStarPrompt(environmentId: EnvironmentId) {
   });
 }
 
-// One burst out of the toast. The library loads only here, and its canvas stops when done.
+// One burst out of the toast. The module loads only here, and its canvas is removed when done.
 function celebrate() {
-  void import("canvas-confetti")
-    .then(({ default: confetti }) =>
+  void import("@t3tools/shared/ui/confetti")
+    .then(({ confetti }) =>
       confetti({
         particleCount: 160,
         spread: 360,

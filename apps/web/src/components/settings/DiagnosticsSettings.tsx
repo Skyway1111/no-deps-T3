@@ -8,19 +8,19 @@ import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { AuthEnvironmentMaintainScope } from "@t3tools/contracts";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
-  AlertTriangleIcon,
+  TriangleAlertIcon as AlertTriangleIcon,
   CopyIcon,
   FolderOpenIcon,
   InfoIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { useRef, useState, type ReactNode } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { MessageResolver } from "../../i18n/messages";
 import type {
   ServerProcessDiagnosticsEntry,

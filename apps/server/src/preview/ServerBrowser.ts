@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalTimers:off - Playwright callbacks run outside the Effect runtime.
+// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalTimers:off - CDP callbacks run outside the Effect runtime.
 // Screencasts ignore emulated device scale; real 2x keeps captures sharp.
 // --disable-gpu uses cheaper software compositing while preserving SwiftShader WebGL.
 import {
@@ -73,14 +73,14 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type {
-  BrowserContext,
-  CDPSession,
-  Dialog,
-  Download,
-  FileChooser,
-  Frame,
-  Page,
-} from "playwright-core";
+  CdpBrowserContext as BrowserContext,
+  CdpDialog as Dialog,
+  CdpDownload as Download,
+  CdpFileChooser as FileChooser,
+  CdpFrame as Frame,
+  CdpPage as Page,
+  CdpSession as CDPSession,
+} from "@t3tools/shared/cdp";
 
 import { PENDING_ATTACHMENT_THREAD_SEGMENT } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -623,15 +623,14 @@ const make = Effect.gen(function* () {
       await NodeFSP.writeFile(launcher, agentScopeLauncherScript(launch), { mode: 0o700 });
       return { path: launcher, release: () => NodeFSP.rm(launcher, { force: true }) };
     },
-    // Playwright's launch error drops Chrome's own output; its sandbox note survives.
     diagnose: (executable, cause) =>
       Effect.runPromiseWith(launchServices)(
         PreviewBrowserHost.diagnoseLaunchFailure({
           executable,
           setupCommand,
-          output: /sandboxing failed/i.test(String(cause))
+          output: /sandboxing failed|no usable sandbox/i.test(String(cause))
             ? PreviewBrowserHost.NO_SANDBOX_SIGNATURE
-            : "",
+            : String(cause),
         }),
       ),
     onContextClose: (context) => {

@@ -22,9 +22,9 @@ import {
   PackageIcon,
   SettingsIcon,
   UserRoundIcon,
-  type LucideIcon,
-} from "lucide-react";
-import { msg, useGT, useMessages } from "gt-react";
+  type IconComponent,
+} from "~/ui-core/icons";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useLayoutEffect, useRef, useState } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
@@ -316,7 +316,7 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
   skill: msg("Skills"),
 };
 
-const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {
+const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, IconComponent> = {
   app: BlocksIcon,
   repo: FolderIcon,
   project: FolderIcon,

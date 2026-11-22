@@ -1,5 +1,4 @@
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 /** "A, B, and C" in `locale`. Hermes ships without Intl.ListFormat, so it joins with `resolve`. */
 export function formatConjunctionList(

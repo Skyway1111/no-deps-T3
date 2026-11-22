@@ -3,7 +3,7 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Atom, AsyncResult } from "effect/reactivity";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { View } from "react-native";
 import Pdf from "react-native-pdf-jsi";

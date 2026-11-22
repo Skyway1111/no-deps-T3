@@ -1,6 +1,5 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
 
 import { cn } from "~/lib/utils";
 
@@ -49,7 +48,7 @@ function Badge({ className, variant, size, render, ...props }: BadgeProps) {
     "data-slot": "badge",
   };
 
-  return useRender({
+  return renderElement({
     defaultTagName: "span",
     props: mergeProps<"span">(defaultProps, props),
     render,

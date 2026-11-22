@@ -1,6 +1,6 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { useNavigation } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 
 import * as Dialog from "../../components/ui/Dialog";

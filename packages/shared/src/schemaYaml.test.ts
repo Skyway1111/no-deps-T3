@@ -19,7 +19,9 @@ describe("schemaYaml helpers", () => {
     if (!Schema.isSchemaError(error)) {
       throw new Error("Expected a schema error");
     }
-    expect(error.message).toBe("Invalid YAML (code=BLOCK_AS_IMPLICIT_KEY, line=1, column=7).");
+    expect(error.message).toBe(
+      "Invalid YAML at line 2, column 13: nested mapping in a plain scalar.",
+    );
     expect(error.message).not.toContain(secret);
   });
 

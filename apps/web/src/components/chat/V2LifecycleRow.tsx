@@ -1,4 +1,4 @@
-import { T, Var, msg, useGT, useMessages } from "gt-react";
+import { T, Var, msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { AgentElapsed } from "./AgentElapsed";
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -50,7 +50,7 @@ import {
   EraserIcon,
   GitForkIcon,
   MessageSquareIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import {

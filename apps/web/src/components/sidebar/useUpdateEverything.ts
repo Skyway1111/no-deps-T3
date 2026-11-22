@@ -1,4 +1,4 @@
-import { msg, useMessages } from "gt-react";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 

@@ -1,5 +1,5 @@
-import { T } from "gt-react";
-import { ChevronRightIcon } from "lucide-react";
+import { T } from "@t3tools/shared/i18n/react";
+import { ChevronRightIcon } from "~/ui-core/icons";
 import { type ReactNode, useState } from "react";
 
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";

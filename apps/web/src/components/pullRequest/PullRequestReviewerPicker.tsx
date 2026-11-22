@@ -16,8 +16,8 @@ import {
   selectionChanges,
   toggleSelection,
 } from "@t3tools/client-runtime/pull-request-selection";
-import { CheckIcon, UserPlusIcon } from "lucide-react";
-import { msg, useGT, useMessages } from "gt-react";
+import { CheckIcon, UserPlusIcon } from "~/ui-core/icons";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { m, type MessageResolver } from "~/i18n/messages";

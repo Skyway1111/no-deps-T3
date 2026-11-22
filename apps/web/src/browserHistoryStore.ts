@@ -10,8 +10,7 @@ import {
   type ScopedProjectRef,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { create } from "zustand";
-import { useShallow } from "zustand/react/shallow";
+import { create, useShallow } from "@t3tools/shared/core/react";
 
 import { normalizePreviewUrl } from "@t3tools/shared/preview";
 import {

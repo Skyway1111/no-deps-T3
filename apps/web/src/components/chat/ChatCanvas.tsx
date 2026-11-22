@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties } from "react";
-import { useStore } from "zustand";
+import { useStore } from "@t3tools/shared/core/react";
 import { ChatCanvasContext } from "./ChatCanvasContext";
 import type { ChatCanvasPreview } from "./chatCanvasLayout";
 import { resolveChatCanvasModel, type ChatCanvasStore } from "./canvasStore";

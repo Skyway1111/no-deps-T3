@@ -13,7 +13,7 @@ import type {
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useNavigation } from "@react-navigation/native";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 import { tryOpenExternalUrl } from "../../../lib/openExternalUrl";

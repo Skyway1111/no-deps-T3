@@ -2,11 +2,11 @@ import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime
 import { m as resolveMessage } from "~/i18n/messages";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { SessionPermissions } from "./SessionPermissions";
-import { useSearch } from "@tanstack/react-router";
-import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
+import { useSearch } from "~/ui-core/router";
+import { ChevronRightIcon, EllipsisIcon } from "~/ui-core/icons";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { type ReactNode, useState } from "react";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,

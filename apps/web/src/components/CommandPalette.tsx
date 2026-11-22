@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { decodeMsg, msg, T, useGT, useMessages, Var } from "gt-react";
+import { decodeMsg, msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
@@ -58,7 +58,7 @@ import {
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "~/ui-core/router";
 import {
   ArrowLeftIcon,
   BugIcon,
@@ -83,7 +83,7 @@ import {
   SquarePenIcon,
   TextSearchIcon,
   UserPlusIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { openThreadFind } from "./chat/threadFindStore";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
 import { previewBridge } from "./preview/previewBridge";
@@ -97,7 +97,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import type { LegendListRef } from "@legendapp/list/react";
+import type { VirtualListRef } from "~/ui-core/virtualList";
 import { useAtomValue } from "@effect/atom-react";
 
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
@@ -462,7 +462,7 @@ function OpenCommandPaletteDialog(props: {
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = deferredQuery.startsWith(">");
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
-  const resultListRef = useRef<LegendListRef | null>(null);
+  const resultListRef = useRef<VirtualListRef | null>(null);
   // A pushed view drops the typed highlight until the user moves it again.
   const highlightClearedRef = useRef(viewStack.length > 0);
   // Entering or leaving browse mode remounts the input; carry the caret across it.

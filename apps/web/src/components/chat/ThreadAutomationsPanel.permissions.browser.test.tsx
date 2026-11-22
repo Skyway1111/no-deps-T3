@@ -11,7 +11,7 @@ vi.mock(import("@effect/atom-react"), async (importOriginal) => ({
   ...(await importOriginal()),
   useAtomValue: (() => state.allowed) as never,
 }));
-vi.mock(import("@tanstack/react-router"), async (importOriginal) => ({
+vi.mock(import("~/ui-core/router"), async (importOriginal) => ({
   ...(await importOriginal()),
   useNavigate: () => vi.fn(),
 }));

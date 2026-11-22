@@ -1,5 +1,5 @@
 import { MarkedText, markedTextEnglish, translatableMessage } from "../errors/translatable.ts";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import {
   EnvironmentHttpApi,
   EnvironmentHttpCommonError,

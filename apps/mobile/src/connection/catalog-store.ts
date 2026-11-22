@@ -5,7 +5,7 @@ import {
 } from "@t3tools/client-runtime/platform";
 import { ConnectionTransientError } from "@t3tools/client-runtime/connection";
 import * as Effect from "effect/Effect";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";

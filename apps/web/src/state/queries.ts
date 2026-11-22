@@ -1,6 +1,6 @@
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { useAtomValue } from "@effect/atom-react";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import {
   type CheckpointDiffTarget,
   type ComposerPathSearchTarget,

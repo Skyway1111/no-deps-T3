@@ -9,9 +9,9 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "../i18n/messages";
-import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useDebouncedValue } from "~/ui-core/pacer";
 import { useRef, useState } from "react";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 
 import {
@@ -84,11 +84,7 @@ export function PullRequestThreadDialog({
   const [checkoutError, setCheckoutError] = useState<{ target: string; message: string } | null>(
     null,
   );
-  const [debouncedReference, referenceDebouncer] = useDebouncedValue(
-    reference,
-    { wait: 450 },
-    (debouncerState) => ({ isPending: debouncerState.isPending }),
-  );
+  const [debouncedReference, referenceDebouncer] = useDebouncedValue(reference, { wait: 450 });
   const { data: gitStatus } = useEnvironmentQuery(
     cwd === null
       ? null

@@ -2,7 +2,7 @@ import { FitSheet } from "../../../components/ui/FitSheet";
 import { SheetHeader } from "../../../components/ui/SheetHeader";
 import { Button } from "../../../components/ui/Button";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";

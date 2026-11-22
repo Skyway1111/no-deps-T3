@@ -16,7 +16,7 @@ import {
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, PaperclipIcon, XIcon } from "~/ui-core/icons";
 import {
   useEffect,
   useReducer,
@@ -26,7 +26,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { m } from "~/i18n/messages";
 

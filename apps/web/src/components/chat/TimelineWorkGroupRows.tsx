@@ -12,13 +12,13 @@ import { useAssetUrls } from "~/assets/assetUrls";
 import { observeResize } from "~/lib/observeResize";
 import { tickTextContent } from "~/lib/tickTextContent";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { memo, use, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
 import { workEntryDisplayIndicatesToolFailure } from "../../session-logic";
 import ChatMarkdown from "../ChatMarkdown";
 import { assetMediaActionsSource } from "./ChatMarkdownMedia";
-import { Minimize2Icon, XIcon } from "lucide-react";
+import { Minimize2Icon, XIcon } from "~/ui-core/icons";
 import { Button } from "../ui/button";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
@@ -207,7 +207,7 @@ function ExpandedWorkGroupEntries({
     resolveWorkGroupScrollIndex(entries, viewState.scrollPositions.get(anchorKey)),
   );
   const [restoringPosition, setRestoringPosition] = useState(initialScrollIndex !== undefined);
-  const listRef = useRef<LegendListRef>(null);
+  const listRef = useRef<VirtualListRef>(null);
   const [expandedContentHeight, setExpandedContentHeight] = useState(0);
   const [fades, setFades] = useState({ top: false, bottom: false, viewportHeight: 0 });
   const [appendState, setAppendState] = useState({ entries, follow: false });
@@ -301,13 +301,13 @@ function ExpandedWorkGroupEntries({
     setExpandedContentHeight(height);
   };
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads expanded row sizes from LegendList's measured state after layout
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads expanded row sizes from VirtualList's measured state after layout
   useLayoutEffect(updateExpandedContentHeight, [entries, updateExpandedContentHeight]);
 
   return (
     <WorkGroupViewCtx value={groupView}>
       <WorkLogList>
-        <LegendList
+        <VirtualList
           ref={listRef}
           data={entries}
           extraData={workspaceRoot}

@@ -1,6 +1,6 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { T, useGT } from "gt-react";
-import { ExternalLinkIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { ExternalLinkIcon } from "~/ui-core/icons";
 
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";

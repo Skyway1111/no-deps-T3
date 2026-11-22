@@ -1,7 +1,6 @@
 import { parseScopedThreadKey, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { type ScopedThreadRef } from "@t3tools/contracts";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { create, createJSONStorage, persist } from "@t3tools/shared/core/react";
 import { resolveStorage } from "./lib/storage";
 import {
   DEFAULT_THREAD_TERMINAL_HEIGHT,

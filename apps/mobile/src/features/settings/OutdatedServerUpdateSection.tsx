@@ -1,4 +1,4 @@
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { serverUpdateFailureText } from "@t3tools/client-runtime/state/server";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";

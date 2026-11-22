@@ -6,7 +6,7 @@ import {
   type EnvironmentId,
   type ServerConfig,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";

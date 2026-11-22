@@ -1,7 +1,7 @@
 import { resolveEnvironmentMachineKind, type EnvironmentId } from "@t3tools/contracts";
-import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useGT } from "gt-react";
-import { ChevronRightIcon, LayersIcon } from "lucide-react";
+import { useLocation, useNavigate } from "~/ui-core/router";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { ChevronRightIcon, LayersIcon } from "~/ui-core/icons";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";

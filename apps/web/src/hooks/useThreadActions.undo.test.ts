@@ -45,7 +45,7 @@ vi.mock("react", async (original) => ({
   useMemo: (create: () => unknown) => create(),
   useRef: (value: unknown) => ({ current: value }),
 }));
-vi.mock("@tanstack/react-router", () => ({ useRouter: () => router }));
+vi.mock("~/ui-core/router", () => ({ useRouter: () => router }));
 vi.mock("./useSettings", () => ({ useClientSettings: () => false }));
 vi.mock("./useHandleNewThread", () => ({
   useNewThreadHandler: () => async () => {

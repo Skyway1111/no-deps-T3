@@ -1,5 +1,5 @@
 import { Button } from "../../../components/ui/Button";
-import { T, useGT, useMessages, Var } from "gt-react-native";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { View } from "react-native";
 import Animated, { FadeIn, ReduceMotion } from "react-native-reanimated";
 import { AppText as Text } from "../../../components/ui/AppText";

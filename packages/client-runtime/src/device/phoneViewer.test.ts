@@ -1,4 +1,4 @@
-import type { PerspectiveCamera, Scene, Object3D } from "three";
+import type { PerspectiveCamera, Scene, Object3D } from "./webglEngine.ts";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 const gpu = vi.hoisted(() => ({
@@ -18,12 +18,11 @@ const gpu = vi.hoisted(() => ({
   }[],
 }));
 
-vi.mock("three", async () => {
-  const actual = await vi.importActual<typeof import("three")>("three");
+vi.mock("./webglEngine.ts", async () => {
+  const actual = await vi.importActual<typeof import("./webglEngine.ts")>("./webglEngine.ts");
   return {
     ...actual,
     WebGLRenderer: class {
-      outputColorSpace = "";
       state: (typeof gpu.instances)[number] = {
         blank: true,
         allocations: 0,
@@ -68,7 +67,7 @@ vi.mock("three", async () => {
 const models = vi.hoisted(() => ({
   pending: [] as {
     signal: AbortSignal;
-    resolve: (model: { asset: import("three").Group; dispose: () => void }) => void;
+    resolve: (model: { asset: import("./webglEngine.ts").Group; dispose: () => void }) => void;
   }[],
 }));
 vi.mock("./modelScene.ts", async () => {
@@ -80,7 +79,7 @@ vi.mock("./modelScene.ts", async () => {
   };
 });
 
-import { Group, Quaternion } from "three";
+import { Group, Quaternion } from "./webglEngine.ts";
 import { createPhoneViewer } from "./phoneViewer.ts";
 import { type DeviceShapeProfile } from "./shapeProfile.ts";
 

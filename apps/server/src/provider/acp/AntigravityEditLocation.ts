@@ -2,7 +2,7 @@
 import * as NodeFS from "node:fs";
 
 import { PositiveInt } from "@t3tools/contracts";
-import { FILE_HEADERS_ONLY, formatPatch, structuredPatch, type StructuredPatchHunk } from "diff";
+import { formatPatch, structuredPatch, type StructuredPatchHunk } from "@t3tools/shared/diff";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -206,16 +206,13 @@ export function antigravityEditPatch(input: {
   const section = (hunks: StructuredPatchHunk[]) =>
     hunks.length === 0
       ? ""
-      : formatPatch(
-          {
-            oldFileName: input.path,
-            newFileName: input.path,
-            oldHeader: undefined,
-            newHeader: undefined,
-            hunks,
-          },
-          FILE_HEADERS_ONLY,
-        );
+      : formatPatch({
+          oldFileName: input.path,
+          newFileName: input.path,
+          oldHeader: undefined,
+          newHeader: undefined,
+          hunks,
+        });
   const patch = [
     section(placedHunks),
     section(snippets).replace(/^@@ .* @@$/gm, `$&${SNIPPET_LABEL}`),

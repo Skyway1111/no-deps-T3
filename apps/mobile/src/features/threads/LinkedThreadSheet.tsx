@@ -16,7 +16,7 @@ import {
   turnItemOutputText,
 } from "@t3tools/client-runtime/work-log/item-detail";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { T, useGT, useLocale, useMessages } from "gt-react-native";
+import { T, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type * as React from "react";
 import { AppState, Pressable, ScrollView, View } from "react-native";

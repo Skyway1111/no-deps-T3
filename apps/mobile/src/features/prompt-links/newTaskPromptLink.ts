@@ -27,7 +27,7 @@ import type {
 } from "@t3tools/shared/promptLinks";
 import { parseNewThreadLink } from "@t3tools/shared/promptLinksCopy";
 import { Atom, type AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import { findLinkedRoute, findStackRoute, updateLinkedRoute } from "../../lib/appLinking";

@@ -1,8 +1,8 @@
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import * as Option from "effect/Option";
 import type { SshDeviceHostConfig } from "@t3tools/contracts";
-import { CheckIcon, ChevronDownIcon, MonitorIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, MonitorIcon, XIcon } from "~/ui-core/icons";
 import { Button, InlineButton } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { Input } from "../ui/input";

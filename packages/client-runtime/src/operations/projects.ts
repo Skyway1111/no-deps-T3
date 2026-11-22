@@ -30,8 +30,7 @@ import {
 import type { EnvironmentProject } from "../state/models.ts";
 import { sourceControlClients } from "../sourceControlClients.ts";
 import type { SourceControlDefinition } from "../sourceControlClients.ts";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 import { sourceControlInstallHintText } from "../contractLabels.ts";
 
 export type AddProjectRemoteSource = SourceControlProviderKind | "url";

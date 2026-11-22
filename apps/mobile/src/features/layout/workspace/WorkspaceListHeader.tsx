@@ -1,4 +1,4 @@
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useRef } from "react";
 import type { SearchBarCommands } from "react-native-screens";
 

@@ -6,8 +6,7 @@ import {
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { create, createJSONStorage, persist } from "@t3tools/shared/core/react";
 
 import { decodeLinkedThreadSurface } from "./linkedThreadSurface";
 import { resolveStorage } from "./lib/storage";

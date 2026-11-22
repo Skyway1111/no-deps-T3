@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
@@ -17,16 +17,16 @@ import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import {
   DndContext,
-  useSensor,
-  useSensors,
+  type SensorDescriptor,
   type AutoScrollOptions,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
   type Modifier,
-} from "@dnd-kit/core";
-import { SortableContext } from "@dnd-kit/sortable";
-import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+  SortableContext,
+  restrictToFirstScrollableAncestor,
+  restrictToVerticalAxis,
+} from "~/ui-core/dnd";
 import {
   canSnooze,
   effectiveSnoozed,
@@ -75,7 +75,7 @@ import {
   ListFilterIcon,
   PlusIcon,
   SettingsIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import {
   useEffect,
   useLayoutEffect,
@@ -87,7 +87,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { type AnyRouter, useRouter } from "@tanstack/react-router";
+import { type AnyRouter, useRouter } from "~/ui-core/router";
 
 import {
   isAtomCommandInterrupted,
@@ -1797,7 +1797,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     dropThreadContext(point, contextDragThreads());
     return true;
   };
-  // useSensor memoizes options identity; fresh options rebuild DndContext and every sortable row.
   const pointerSensorOptions = {
     distance: SIDEBAR_DRAG_DISTANCE,
     onAttach: attachDragSensor,
@@ -1805,7 +1804,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     onMove: moveThreadContextDrag,
     onDrop: dropThreadContextDrag,
   };
-  const dndSensors = useSensors(useSensor(SidebarPointerSensor, pointerSensorOptions));
+  const dndSensors: SensorDescriptor[] = [
+    { sensor: SidebarPointerSensor, options: pointerSensorOptions },
+  ];
   const sectionByThreadKeyRef = useRef(sectionByThreadKey);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes committed list data to refs read by stable drag and sweep callbacks
   useLayoutEffect(() => {

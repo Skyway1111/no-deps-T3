@@ -10,7 +10,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import * as Schema from "effect/Schema";
 import { useState } from "react";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { toastManager } from "../components/ui/toast";
 import { m } from "../i18n/messages";

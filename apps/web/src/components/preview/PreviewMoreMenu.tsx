@@ -1,6 +1,11 @@
 import type { DesktopPreviewColorScheme } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
+import {
+  MinusIcon as Minus,
+  EllipsisVerticalIcon as MoreVertical,
+  PlusIcon,
+  RotateCcwIcon as RotateCcw,
+} from "~/ui-core/icons";
 
 import { Button } from "~/components/ui/button";
 import {

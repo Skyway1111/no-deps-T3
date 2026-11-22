@@ -15,11 +15,11 @@ import {
   EyeIcon,
   EyeOffIcon,
   LinkIcon,
-  MoreHorizontalIcon,
+  EllipsisIcon as MoreHorizontalIcon,
   PlusIcon,
-} from "lucide-react";
-import { LegendList } from "@legendapp/list/react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { VirtualList } from "~/ui-core/virtualList";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { memo, useState } from "react";
 
 import {
@@ -427,7 +427,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
     .toSorted((left, right) =>
       left.id === thread?.projectId ? -1 : right.id === thread?.projectId ? 1 : 0,
     );
-  // Derive lines before later hooks to preserve compiler caching and avoid LegendList renders.
+  // Derive lines before later hooks to preserve compiler caching and avoid VirtualList renders.
   const links = visibleThreadPullRequests(thread?.pullRequests ?? []);
   const lines = pullRequestListLines(resolveThreadPullRequestChains(links));
   const openCount = links.filter(
@@ -536,7 +536,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
       <div className="flex h-full min-h-0 flex-col">
         {/* Threads that run a stack or a sweep link hundreds of pull requests; only the rows in
           view are mounted. */}
-        <LegendList<PullRequestListLine>
+        <VirtualList<PullRequestListLine>
           data={lines}
           keyExtractor={lineKey}
           extraData={rowInputs}

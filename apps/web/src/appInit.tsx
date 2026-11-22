@@ -5,7 +5,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { ClientSettings } from "@t3tools/contracts/settings";
-import { createBrowserHistory, createHashHistory } from "@tanstack/react-router";
+import { createBrowserHistory, createHashHistory } from "~/ui-core/router";
 import * as Schema from "effect/Schema";
 
 import { applyAppearanceContrast } from "./appearanceContrast";

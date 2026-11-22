@@ -2,7 +2,7 @@ import * as Dialog from "../../components/ui/Dialog";
 import { sessionHasLegacyPermissions } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import * as SecureStore from "expo-secure-store";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import { whenProtectedDataAvailable } from "../../lib/protectedData";

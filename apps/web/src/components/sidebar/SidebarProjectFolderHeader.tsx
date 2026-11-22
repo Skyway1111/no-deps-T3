@@ -1,8 +1,8 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ContextMenuSource } from "@t3tools/contracts";
-import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { ChevronDownIcon, SquarePenIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";

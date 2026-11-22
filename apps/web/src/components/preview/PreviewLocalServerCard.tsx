@@ -1,5 +1,5 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { msg, useMessages } from "gt-react";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 
 import type { MessageResolver } from "../../i18n/messages";
 import { DiscoveryListRow } from "../ui/discovery-list";

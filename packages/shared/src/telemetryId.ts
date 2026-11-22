@@ -1,4 +1,4 @@
-import { sha256 } from "@noble/hashes/sha2";
+import { sha256 } from "./parsers/crypto.ts";
 import * as Hex from "effect/encoding/Hex";
 
 /**

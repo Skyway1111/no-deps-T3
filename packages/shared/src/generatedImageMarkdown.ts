@@ -1,11 +1,7 @@
-import remarkParse from "remark-parse";
-import { unified } from "unified";
-
+import { parseMarkdown } from "./markdown/index.ts";
 import { markdownDestinationHostPath } from "./markdownLinks.ts";
 import { chatMarkdownImageSources } from "./markdownPipeline.ts";
 import { isUncPath, isWindowsDrivePath, normalizeProjectPathForComparison } from "./path.ts";
-
-const parser = unified().use(remarkParse);
 
 function imageEmbed(path: string): string {
   // Forward slashes read the same in every client parser; UNC paths also need file: to
@@ -24,7 +20,7 @@ function imageEmbed(path: string): string {
 // An unclosed fence or raw HTML block swallows the rest of the reply. Only a root-level block
 // can swallow appended embeds; nested ones end with their container.
 function unclosedBlockEnd(text: string): string | undefined {
-  const last = parser.parse(text).children.at(-1);
+  const last = parseMarkdown(text).children.at(-1);
   const source = text.slice(last?.position?.start.offset, last?.position?.end.offset);
   if (last?.type === "html") {
     const tag = /^ {0,3}<(script|pre|style|textarea)(?=[\s>]|$)/i.exec(source)?.[1];

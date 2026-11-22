@@ -1,5 +1,5 @@
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { T, useGT, useLocale, Var } from "gt-react-native";
+import { T, useGT, useLocale, Var } from "@t3tools/shared/i18n/react";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
 import {

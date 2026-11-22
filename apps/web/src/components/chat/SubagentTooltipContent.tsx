@@ -14,7 +14,7 @@ import {
 import { readSelectedEffortValue } from "@t3tools/client-runtime/state/thread-execution";
 import { resolveSelectableModel } from "@t3tools/shared/model";
 import { getTraitsSpeedDisplay, TraitsSpeedIcon } from "./TraitsSpeed";
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import {
   BotIcon,
@@ -24,7 +24,7 @@ import {
   FolderIcon,
   GitBranchIcon,
   TerminalIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { ThreadHoverCard } from "../ThreadHoverCard";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";

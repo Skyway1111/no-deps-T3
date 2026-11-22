@@ -19,8 +19,8 @@ import { peerLinkHealth, type PeerLinkHealth } from "@t3tools/client-runtime/sta
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import { PlusIcon } from "lucide-react";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { PlusIcon } from "~/ui-core/icons";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useId, useRef, useState } from "react";
 
 import { requestConfirmDialog } from "~/confirmDialog";

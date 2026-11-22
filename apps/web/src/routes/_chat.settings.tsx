@@ -1,8 +1,8 @@
 import { workspaceAreaProps } from "../lib/workspaceFocus";
-import { Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useLocation } from "~/ui-core/router";
 import { useState, type ReactNode } from "react";
-import { T, useGT, useMessages, Var } from "gt-react";
-import { RotateCcwIcon } from "lucide-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
+import { RotateCcwIcon } from "~/ui-core/icons";
 import { Button } from "../components/ui/button";
 import { useSettingsRestore } from "../components/settings/SettingsPanels";
 

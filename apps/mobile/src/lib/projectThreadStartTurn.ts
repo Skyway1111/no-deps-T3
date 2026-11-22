@@ -13,7 +13,7 @@ import {
   deriveThreadTitleSeed,
   threadTitleTextFromPrompt,
 } from "@t3tools/client-runtime/operations";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 import type { UploadedMobileAttachment } from "./attachmentUpload";

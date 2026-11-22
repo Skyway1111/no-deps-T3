@@ -1,7 +1,7 @@
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { useRender } from "@base-ui/react/use-render";
-import { useGT } from "gt-react";
-import { XIcon } from "lucide-react";
+import { Dialog as DialogPrimitive } from "~/ui-core/popups";
+import { renderElement } from "~/ui-core/primitives";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { XIcon } from "~/ui-core/icons";
 import {
   type ComponentProps,
   type CSSProperties,
@@ -123,7 +123,7 @@ function DialogPopup({
 }) {
   const gt = useGT();
   const { popupRef, initialFocus } = useDialogActionInitialFocus();
-  const popup = useRender({
+  const popup = renderElement({
     ref: popupRef,
     render: (
       <DialogPrimitive.Popup

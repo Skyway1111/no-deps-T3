@@ -7,7 +7,7 @@ import {
   resolveLinkedThreadOpen,
 } from "@t3tools/client-runtime/linked-thread";
 import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "~/ui-core/router";
 import { AsyncResult, Atom } from "effect/reactivity";
 
 import type { TurnItemSource } from "../components/chat/timelineRowContext";

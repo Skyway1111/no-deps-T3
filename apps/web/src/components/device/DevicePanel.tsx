@@ -5,9 +5,15 @@ import type {
   DeviceSummary,
   ScopedThreadRef,
 } from "@t3tools/contracts";
-import { ArrowUpRight, CircleAlert, Play, Smartphone, X } from "lucide-react";
+import {
+  ArrowUpRightIcon as ArrowUpRight,
+  CircleAlertIcon as CircleAlert,
+  PlayIcon as Play,
+  SmartphoneIcon as Smartphone,
+  XIcon as X,
+} from "~/ui-core/icons";
 import { useAtomMount } from "@effect/atom-react";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useState } from "react";
 
 import { usePreviewMiniPlayerStore } from "~/previewMiniPlayerStore";

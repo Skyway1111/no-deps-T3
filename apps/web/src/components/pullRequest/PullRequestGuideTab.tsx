@@ -1,6 +1,6 @@
 import type { EnvironmentId, PullRequestRef, PullRequestReviewGuideStop } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { ScrollTextIcon, TriangleAlertIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ScrollTextIcon, TriangleAlertIcon } from "~/ui-core/icons";
 import { useEffect, useEffectEvent } from "react";
 
 import type { ReviewCommentContext } from "~/reviewCommentContext";

@@ -22,8 +22,8 @@ import {
   CopyIcon,
   EyeIcon,
   Table2Icon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { m, type MessageResolver } from "~/i18n/messages";
 

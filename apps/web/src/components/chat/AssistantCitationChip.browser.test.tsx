@@ -18,7 +18,7 @@ vi.mock(import("./AssistantCitationSource"), async (importOriginal) => ({
   ...(await importOriginal()),
   observeAssistantCitationCommentSource: mocks.observeSource,
 }));
-vi.mock(import("@tanstack/react-router"), async (importOriginal) => ({
+vi.mock(import("~/ui-core/router"), async (importOriginal) => ({
   ...(await importOriginal()),
   useNavigate: () => vi.fn(),
   Link: (({ children }: { children: ReactNode }) => <a>{children}</a>) as never,

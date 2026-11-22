@@ -1,5 +1,5 @@
-import { T, useGT, useLocale, useMessages } from "gt-react";
-import { useLegendListRef } from "~/hooks/useLegendListRef";
+import { T, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
+import { useVirtualListRef } from "~/hooks/useVirtualListRef";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
@@ -15,8 +15,8 @@ import {
   providerUpdateChannelLags,
 } from "@t3tools/client-runtime/providerUpdateRequiredModels";
 import { groupModelsBySubProvider } from "@t3tools/client-runtime/providerSubProviders";
-import { useNavigate } from "@tanstack/react-router";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { useNavigate } from "~/ui-core/router";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
 import {
   memo,
   useState,
@@ -27,7 +27,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "~/ui-core/icons";
 import { ModelListRow } from "./ModelListRow";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
 import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
@@ -280,7 +280,7 @@ function ModelPickerList({
   extraData,
   renderItem,
 }: {
-  listRef: RefObject<LegendListRef | null>;
+  listRef: RefObject<VirtualListRef | null>;
   itemKeys: ReadonlyArray<string>;
   extraData: unknown;
   renderItem: (props: { item: string; index: number }) => ReactNode;
@@ -293,7 +293,7 @@ function ModelPickerList({
     setShowTopScrollFade(!metrics.isAtStart);
     setShowBottomScrollFade(!metrics.isAtEnd);
   };
-  const scrollRef = useLegendListRef(listRef, updateScrollFades);
+  const scrollRef = useVirtualListRef(listRef, updateScrollFades);
 
   return (
     <div
@@ -303,7 +303,7 @@ function ModelPickerList({
       )}
     >
       <ComboboxListVirtualized>
-        <LegendList<string>
+        <VirtualList<string>
           ref={scrollRef}
           data={itemKeys}
           extraData={extraData}
@@ -386,7 +386,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     onOpenProviderSetup,
   } = props;
   const [searchQuery, setSearchQuery] = useState("");
-  const modelListRef = useRef<LegendListRef | null>(null);
+  const modelListRef = useRef<VirtualListRef | null>(null);
   const pickerContentRef = useRef<HTMLDivElement>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes this picker's mount to global keydown handlers
   useLayoutEffect(() => registerModelPickerContent(), []);

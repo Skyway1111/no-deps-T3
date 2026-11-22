@@ -5,8 +5,8 @@ import {
   htmlRenderFrameHeight,
   type HtmlRenderReference,
 } from "@t3tools/shared/htmlRender";
-import { T, useGT, Var } from "gt-react";
-import { Maximize2Icon } from "lucide-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { Maximize2Icon } from "~/ui-core/icons";
 import { useEffect, useState } from "react";
 
 import { useAssetUrlRefresh } from "~/assets/assetUrls";

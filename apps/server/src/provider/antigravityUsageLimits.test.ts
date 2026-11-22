@@ -1,6 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { deleteSecret, getSecret, setSecret } from "@t3tools/shared/sys/keyring";
 import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -14,7 +15,6 @@ import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
 import {
   decodeGoKeyringSecret,
   makeAntigravityUsageProbe,
-  readWindowsCliCredential,
 } from "./antigravityUsageLimits.ts";
 
 const summary = {
@@ -732,21 +732,19 @@ describe("Antigravity subscription limits", () => {
     (ctx) =>
       Effect.gen(function* () {
         // Never overwrite a real sign-in on a developer's machine.
-        if (readWindowsCliCredential(HostProcess.Architecture.defaultValue())) return ctx.skip();
+        if (yield* Effect.promise(() => getSecret("gemini", "antigravity"))) return ctx.skip();
         yield* TestClock.setTime(
           DateTime.toEpochMillis(DateTime.makeUnsafe("2026-10-09T12:00:00Z")),
         );
-        const { AsyncEntry } = yield* Effect.promise(() => import("@napi-rs/keyring"));
         // go-keyring writes the UTF-8 JSON at `<service>:<user>`.
-        const target = AsyncEntry.withTarget("gemini:antigravity", "gemini", "antigravity");
         const stored = new TextEncoder().encode(
           JSON.stringify({
             token: { access_token: "access-token", expiry: "2026-10-09T14:00:00Z" },
           }),
         );
         yield* Effect.acquireRelease(
-          Effect.promise(() => target.setSecret(stored)),
-          () => Effect.promise(() => target.deleteCredential()),
+          Effect.promise(() => setSecret("gemini", "antigravity", stored)),
+          () => Effect.promise(() => deleteSecret("gemini", "antigravity")),
         );
         const { probe } = yield* fixture({
           authMethod: "oauth-business",
@@ -756,7 +754,7 @@ describe("Antigravity subscription limits", () => {
         const limits = yield* probe;
         expect(limits.unavailable).toBeUndefined();
         expect(limits.windows).toHaveLength(4);
-        expect(readWindowsCliCredential(HostProcess.Architecture.defaultValue())).toEqual(
+        expect(yield* Effect.promise(() => getSecret("gemini", "antigravity"))).toEqual(
           Buffer.from(stored),
         );
       }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),

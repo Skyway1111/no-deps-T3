@@ -1,6 +1,5 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { create, createJSONStorage, persist } from "@t3tools/shared/core/react";
 
 import { resolveStorage } from "./lib/storage";
 

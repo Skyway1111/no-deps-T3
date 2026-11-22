@@ -2,7 +2,7 @@ import { uuidv4 } from "../../lib/uuid";
 import * as Dialog from "../../components/ui/Dialog";
 import { useNavigation } from "@react-navigation/native";
 import { vcsActionLabelText } from "@t3tools/client-runtime/state/vcs";
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 import { AuthFilesystemReadScope, AuthSourceControlWriteScope } from "@t3tools/contracts";

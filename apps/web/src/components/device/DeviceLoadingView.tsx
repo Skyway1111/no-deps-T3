@@ -1,6 +1,6 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
-import { Smartphone } from "lucide-react";
+import { SmartphoneIcon as Smartphone } from "~/ui-core/icons";
 
 import { Spinner } from "~/components/ui/spinner";
 

@@ -20,8 +20,8 @@ import {
   UserCheckIcon,
   UserRoundIcon,
   UserRoundXIcon,
-} from "lucide-react";
-import { msg, useGT, useMessages } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { Children, type CSSProperties, isValidElement, type ReactNode, useState } from "react";
 
 import { m, type MessageResolver } from "~/i18n/messages";

@@ -20,7 +20,7 @@ import {
   threadRecentUse,
 } from "@t3tools/shared/paletteSearch";
 import { searchMatchHintLabel } from "@t3tools/shared/paletteSearchCopy";
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,

@@ -3,7 +3,7 @@ import {
   AUTH_SCOPE_OPTIONS,
   sessionPermissionsUnavailableMessage,
 } from "@t3tools/shared/authScopeOptions";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEnvironmentSessionState } from "~/state/session";
 
 export function SessionPermissions({

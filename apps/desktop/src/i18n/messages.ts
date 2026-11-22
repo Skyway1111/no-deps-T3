@@ -1,13 +1,11 @@
 import { resolveLocale } from "@t3tools/client-runtime/locales";
+import { DEFAULT_LOCALE, getLocale, setLocale, type Catalog } from "@t3tools/shared/i18n";
 import * as Effect from "effect/Effect";
-import { decodeOptions, gtFallback } from "gt-i18n";
-import { hashMessage } from "gt-i18n/internal";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 
-type Catalog = Readonly<Record<string, string>>;
-
-const DEFAULT_LOCALE = "en";
+/** `m` resolves a `msg()` string in the active UI language at call time. */
+export { m, subscribeI18n as onLocaleChange } from "@t3tools/shared/i18n";
 
 // English is the source text and loads nothing. Keep the keys in step with gt.config.json.
 const CATALOGS: Readonly<Record<string, () => Promise<{ readonly default: Catalog }>>> = {
@@ -23,43 +21,14 @@ const CATALOGS: Readonly<Record<string, () => Promise<{ readonly default: Catalo
 };
 const SUPPORTED_LOCALES = [DEFAULT_LOCALE, ...Object.keys(CATALOGS)];
 
-const loadedCatalogs = new Map<string, Catalog>([[DEFAULT_LOCALE, {}]]);
-const listeners = new Set<() => void>();
-let activeLocale = DEFAULT_LOCALE;
-let activeCatalog: Catalog = {};
+const loadedCatalogs = new Map<string, Catalog>();
 let requestedLocale = DEFAULT_LOCALE;
 
-/**
- * Resolves a `msg()` string in the active UI language at call time. Variables are strings so
- * ICU never reformats a number (a PID of 12345 would print "12,345").
- */
-export function m(message: string, variables: Readonly<Record<string, string>> = {}): string {
-  const decoded = decodeOptions(message);
-  const source = typeof decoded?.$_source === "string" ? decoded.$_source : message;
-  const options = typeof decoded?.$_source === "string" ? decoded : variables;
-  const target =
-    activeLocale === DEFAULT_LOCALE
-      ? undefined
-      : activeCatalog[hashMessage(source, { ...options, $format: "ICU" })];
-  // Untranslated text is English, so it takes English plural rules.
-  return target === undefined
-    ? gtFallback(source, { ...options, $locale: DEFAULT_LOCALE })
-    : gtFallback(target, { ...options, $locale: activeLocale, $_fallback: source });
-}
-
-/** Runs `listener` after each switch to a different UI language. */
-export function onLocaleChange(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-const loadCatalog = async (locale: string): Promise<Catalog> => {
-  const loaded = loadedCatalogs.get(locale);
-  if (loaded) return loaded;
-  const catalog = (await CATALOGS[locale]!()).default;
-  loadedCatalogs.set(locale, catalog);
+const loadCatalog = async (locale: string): Promise<Catalog | undefined> => {
+  const load = CATALOGS[locale];
+  if (!load) return undefined;
+  let catalog = loadedCatalogs.get(locale);
+  if (!catalog) loadedCatalogs.set(locale, (catalog = (await load()).default));
   return catalog;
 };
 
@@ -73,11 +42,9 @@ export const applyLanguage = Effect.fn("desktop.i18n.applyLanguage")(function* (
     DEFAULT_LOCALE,
   );
   requestedLocale = locale;
-  if (locale === activeLocale) return;
+  if (locale === getLocale()) return;
   const catalog = yield* Effect.promise(() => loadCatalog(locale));
   // A later call may have asked for another language while this catalog loaded.
   if (requestedLocale !== locale) return;
-  activeLocale = locale;
-  activeCatalog = catalog;
-  for (const listener of listeners) listener();
+  setLocale(locale, catalog);
 });

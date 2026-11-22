@@ -1,6 +1,6 @@
 import type { RelayClientDeviceRecord } from "@t3tools/contracts/relay";
-import { T, useGT, useMessages } from "gt-react";
-import { SmartphoneIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { SmartphoneIcon } from "~/ui-core/icons";
 
 import { useManagedRelayDevices } from "../../cloud/managedRelayState";
 import { Badge } from "../ui/badge";

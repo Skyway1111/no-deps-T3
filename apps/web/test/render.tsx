@@ -4,7 +4,7 @@ import {
   createRouter,
   RouterProvider,
   type AnyRouter,
-} from "@tanstack/react-router";
+} from "~/ui-core/router";
 import { act as reactAct, createContext, use, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { vi } from "vite-plus/test";

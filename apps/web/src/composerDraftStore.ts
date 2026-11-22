@@ -92,9 +92,7 @@ import {
   threadContextReference,
   environmentContextReference,
 } from "./lib/composerContextRecords";
-import { create } from "zustand";
-import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
-import { useShallow } from "zustand/react/shallow";
+import { create, persist, type PersistStorage, type StorageValue, useShallow } from "@t3tools/shared/core/react";
 import { draftModelSelectionApplies } from "./lib/chatThreadActions";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
 import { getDefaultServerModel } from "./providerModels";

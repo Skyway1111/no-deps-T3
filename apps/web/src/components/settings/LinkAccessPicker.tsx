@@ -1,5 +1,5 @@
 import { AuthMcpClientAccess } from "@t3tools/contracts";
-import { T, useMessages } from "gt-react";
+import { T, useMessages } from "@t3tools/shared/i18n/react";
 import { useId } from "react";
 
 import { accessConfig } from "../auth/ConnectAgentSurface";

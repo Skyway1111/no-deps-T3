@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { DraftInput, type DraftInputProps } from "../ui/draft-input";
 import { Input, type InputProps } from "../ui/input";

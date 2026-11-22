@@ -1,5 +1,5 @@
-import { msg } from "gt-react";
-import { EraserIcon } from "lucide-react";
+import { msg } from "@t3tools/shared/i18n/react";
+import { EraserIcon } from "~/ui-core/icons";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 

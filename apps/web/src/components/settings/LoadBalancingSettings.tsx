@@ -1,5 +1,5 @@
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import {
   useClientSettings,

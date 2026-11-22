@@ -21,7 +21,7 @@ import { findErrorTraceId } from "@t3tools/client-runtime/errors";
 import { ManagedRelay, relayRequestFailureDetail } from "@t3tools/client-runtime/relay";
 
 import { executeConnectedEnvironmentHttpRequest } from "@t3tools/client-runtime/state/environmentHttpAuth";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import * as MobileStorage from "../../persistence/mobile-storage";

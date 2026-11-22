@@ -18,7 +18,7 @@ import {
   type SessionGrantInput,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { useRef, useState, type ReactElement } from "react";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";

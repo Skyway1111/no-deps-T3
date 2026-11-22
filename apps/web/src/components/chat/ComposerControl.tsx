@@ -1,6 +1,5 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { useRender } from "@base-ui/react/use-render";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { Select as SelectPrimitive } from "~/ui-core/popups";
 import type { ComponentType, SVGProps } from "react";
 
 import { cn } from "~/lib/utils";
@@ -33,7 +32,7 @@ export function ComposerControl({
     className: composerControlClassName(size, className),
     type: render ? undefined : ("button" as const),
   };
-  return useRender({
+  return renderElement({
     defaultTagName: "button",
     props: mergeProps<"button">(defaultProps, props),
     render,

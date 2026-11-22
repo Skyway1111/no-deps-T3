@@ -1,6 +1,6 @@
-import type { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+import type { PreviewCard as PreviewCardPrimitive } from "~/ui-core/popups";
 import type { EnvironmentId, IssueDetail, IssueRef } from "@t3tools/contracts";
-import { T, Var } from "gt-react";
+import { T, Var } from "@t3tools/shared/i18n/react";
 import { useRef, useState, type ComponentPropsWithoutRef, type ReactElement } from "react";
 
 import { RelativeTime } from "~/components/RelativeTime";

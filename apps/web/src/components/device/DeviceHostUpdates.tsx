@@ -1,5 +1,5 @@
 import type { DeviceServiceState, EnvironmentId } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { deviceEnvironment } from "~/state/device";

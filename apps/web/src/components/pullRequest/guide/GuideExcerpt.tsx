@@ -6,8 +6,8 @@ import type {
 } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import type { PullRequestReviewGuideExcerpt, PullRequestReviewPosition } from "@t3tools/contracts";
-import { ArrowUpRightIcon } from "lucide-react";
-import { T, useGT, Var } from "gt-react";
+import { ArrowUpRightIcon } from "~/ui-core/icons";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { useRenderedAppearance } from "~/hooks/useTheme";

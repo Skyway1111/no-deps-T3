@@ -14,7 +14,7 @@ import {
   type ProjectTrackedFolder,
   type WorkspaceFolderState,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Pressable } from "react-native";
 

@@ -1,6 +1,6 @@
 import { sessionHasLegacyPermissions, type EnvironmentId } from "@t3tools/contracts";
-import type { AnyRouter } from "@tanstack/react-router";
-import { msg } from "gt-react";
+import type { AnyRouter } from "~/ui-core/router";
+import { msg } from "@t3tools/shared/i18n/react";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
 

@@ -11,7 +11,7 @@ import {
   RequestNameReply,
   Variant,
   type MessageBus,
-} from "dbus-next";
+} from "@t3tools/shared/sys/dbus";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 const { connect, resize, imageSize } = vi.hoisted(() => ({
@@ -19,8 +19,8 @@ const { connect, resize, imageSize } = vi.hoisted(() => ({
   resize: vi.fn(() => ({ toPNG: () => Buffer.from("resized") })),
   imageSize: { width: 800, height: 600 },
 }));
-vi.mock("dbus-next", async (original) => ({
-  ...(await original<typeof import("dbus-next")>()),
+vi.mock("@t3tools/shared/sys/dbus", async (original) => ({
+  ...(await original<typeof import("@t3tools/shared/sys/dbus")>()),
   sessionBus: connect,
 }));
 vi.mock("electron", () => ({
@@ -85,7 +85,7 @@ class FakeBus extends NodeEvents.EventEmitter {
     const reply = (body: unknown[]) =>
       new Message({
         type: MessageType.METHOD_RETURN,
-        replySerial: "1",
+        replySerial: 1,
         destination: ":1.23",
         body,
       });

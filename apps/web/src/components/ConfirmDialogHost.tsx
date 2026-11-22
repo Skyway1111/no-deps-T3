@@ -1,4 +1,4 @@
-import { msg, T, useMessages } from "gt-react";
+import { msg, T, useMessages } from "@t3tools/shared/i18n/react";
 import { useSyncExternalStore } from "react";
 
 import {

@@ -23,7 +23,7 @@ import * as Schema from "effect/Schema";
 import { readAppleSpeechLocales, resolveAppleSpeechLocale } from "./appleSpeech";
 import { createBrowserPcmCapture } from "./browserPcmCapture";
 import { runEnvironmentSpeech } from "./runEnvironmentSpeech";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 
 const isVoiceTranscriptionError = Schema.is(VoiceTranscriptionError);

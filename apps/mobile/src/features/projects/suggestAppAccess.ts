@@ -5,7 +5,7 @@ import type {
 } from "@t3tools/contracts";
 import { appSignInTargetForRemote } from "@t3tools/client-runtime/source-control-clients";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 
 import * as Dialog from "../../components/ui/Dialog";

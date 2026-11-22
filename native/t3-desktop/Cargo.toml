@@ -1,0 +1,7 @@
+[package]
+name = "t3-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-dependency native OS WebView desktop shell for T3 Code"
+
+[dependencies]

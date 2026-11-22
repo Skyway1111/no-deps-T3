@@ -1,6 +1,6 @@
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { useParams } from "@tanstack/react-router";
+import { useParams } from "~/ui-core/router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   getAddProjectInitialQuery,
@@ -19,10 +19,10 @@ import {
   cloneUrlForProtocol,
   cloneUrlProtocol,
 } from "@t3tools/shared/cloneUrl";
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon } from "~/ui-core/icons";
 import { useId, useState } from "react";
-import { T, useGT, Var } from "gt-react";
-import { create } from "zustand";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { create } from "@t3tools/shared/core/react";
 
 import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { useAddProjectTargets } from "../hooks/useAddProjectTargets";

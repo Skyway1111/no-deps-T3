@@ -1,14 +1,8 @@
-import type { ListItem, Nodes } from "mdast";
-import remarkGfm from "remark-gfm";
-import remarkParse from "remark-parse";
-import { unified } from "unified";
-
+import { parseMarkdown, type MdListItem, type MdNode } from "./markdown/index.ts";
 import { taskListMarkerOffset } from "./markdownTaskEdits.ts";
 
-const parser = unified().use(remarkParse).use(remarkGfm);
-
 /** Hard breaks as U+2028, as iOS draws them; soft breaks stay "\n". */
-function plainText(node: Nodes): string {
+function plainText(node: MdNode): string {
   if (node.type === "text" || node.type === "inlineCode") return node.value;
   if (node.type === "break" || (node.type === "html" && /^<br\b/i.test(node.value))) {
     return "\u2028";
@@ -19,7 +13,7 @@ function plainText(node: Nodes): string {
 const lettersAndDigits = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, "");
 
 /** iOS sends the first paragraph whole. Android cuts it at a hard break, or any break with hard breaks on. */
-function renderedTexts(item: ListItem): string[] {
+function renderedTexts(item: MdListItem): string[] {
   const first = item.children[0];
   const text = first?.type === "paragraph" ? plainText(first) : "";
   return [text, text.replace(/\u2028[^]*$/, ""), text.replace(/[\u2028\n][^]*$/, "")].map(
@@ -43,13 +37,13 @@ export function markdownTaskMarkerOffset(
 ): number | null {
   // Native attachments replace their labels, so the remaining text could name another task.
   if (renderedText.includes("\uFFFC")) return null;
-  const tasks: ListItem[] = [];
-  const collect = (node: Nodes) => {
+  const tasks: MdListItem[] = [];
+  const collect = (node: MdNode) => {
     if (node.type === "listItem" && typeof node.checked === "boolean") tasks.push(node);
     if ("children" in node) node.children.forEach(collect);
   };
   const viewStarts = new Set([0]);
-  for (const block of parser.parse(markdown).children) {
+  for (const block of parseMarkdown(markdown, { gfm: true }).children) {
     const before = tasks.length;
     collect(block);
     if (sharedViewBlocks.has(block.type)) continue;

@@ -1,5 +1,5 @@
 import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,
@@ -53,7 +53,7 @@ import {
 import { m, type MessageResolver } from "./i18n/messages";
 import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
-import { shallow } from "zustand/vanilla/shallow";
+import { shallow } from "@t3tools/shared/core/signal";
 
 export {
   workEntryDisplayIndicatesToolFailure,

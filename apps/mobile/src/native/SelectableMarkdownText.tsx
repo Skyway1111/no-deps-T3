@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import { useState } from "react";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { AssistantCitation } from "@t3tools/contracts";
 import { parseAssistantCitationHref } from "@t3tools/shared/assistantCitations";
 import { AssistantCitationSheet } from "../components/AssistantCitationSheet";

@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { SettingsLegalDocumentRouteScreen } from "./components/SettingsLegalDocumentRouteScreen";
 import { LEGAL_URL } from "./lib/legal-document-url";
 

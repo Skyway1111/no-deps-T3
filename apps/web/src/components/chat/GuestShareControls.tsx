@@ -10,8 +10,8 @@ import {
   type ScopedThreadRef,
   type ThreadGuestShare,
 } from "@t3tools/contracts";
-import { msg, T, useGT } from "gt-react";
-import { CheckIcon, CopyIcon, UserIcon } from "lucide-react";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
+import { CheckIcon, CopyIcon, UserIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";

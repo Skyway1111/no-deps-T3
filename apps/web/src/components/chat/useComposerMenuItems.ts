@@ -1,4 +1,4 @@
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   legacyThreadPullRequestKey,
   threadPullRequestKeyOf,

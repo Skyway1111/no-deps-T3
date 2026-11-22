@@ -32,7 +32,7 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Schema from "effect/Schema";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 
 import { createDebugLogger } from "../lib/debugLog";

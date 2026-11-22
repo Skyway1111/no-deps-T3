@@ -9,7 +9,7 @@ import {
 import * as Schema from "effect/Schema";
 import { requestMicrophone } from "./requestMicrophone";
 import workletUrl from "./pcmWorklet.ts?worker&url";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 
 const isVoiceTranscriptionError = Schema.is(VoiceTranscriptionError);

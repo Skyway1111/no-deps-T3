@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 
 import type { DesktopUpdateChannel } from "@t3tools/contracts";
 import * as Electron from "electron";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";

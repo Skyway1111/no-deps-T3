@@ -1,6 +1,6 @@
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import type { UsageProviderKind } from "@t3tools/contracts";
-import { T, useGT, useLocale, useMessages } from "gt-react";
+import { T, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { DailyTotals, HourlyTotals } from "@t3tools/shared/usageMerge";

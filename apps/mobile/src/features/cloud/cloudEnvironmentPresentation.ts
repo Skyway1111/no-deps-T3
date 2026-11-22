@@ -5,7 +5,7 @@ import {
 } from "@t3tools/client-runtime/connection";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { relayOfflineReasonMessage } from "@t3tools/client-runtime/relay";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 

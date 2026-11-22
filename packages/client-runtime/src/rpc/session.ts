@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { translatableDetail } from "../errors/translatable.ts";
 import {
   type ServerConfig,
@@ -32,7 +32,14 @@ import * as RpcClientError from "effect/rpc/RpcClientError";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as Socket from "effect/socket/Socket";
 
-import { makeWsRpcProtocolClient, PING_TIMEOUT, type WsRpcProtocolClient } from "./protocol.ts";
+import {
+  makeWsRpcProtocolClient,
+  PING_TIMEOUT,
+  WIRE_FRAME_QUERY_PARAM,
+  withWsRpcFraming,
+  type WsRpcFramingMode,
+  type WsRpcProtocolClient,
+} from "./protocol.ts";
 import { NETWORK_BLOCKING_HINT, UNRESPONSIVE_HOST_HINT } from "../errors/network.ts";
 import type {
   ConnectionAttemptError,
@@ -73,6 +80,8 @@ export interface RpcSessionOptions {
   readonly providerCatalogsOnDemand?: boolean;
   readonly providerCatalogDigests?: boolean;
   readonly providerStatusDeltas?: boolean;
+  /** Opt-in compact binary wire framing (`"binary"`), preserving JSON fallback (`"json"` default). */
+  readonly framing?: WsRpcFramingMode;
 }
 
 export class RpcSessionFactory extends Context.Service<
@@ -248,11 +257,17 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
       });
       return socket;
     };
+    const framingMode: WsRpcFramingMode = options.framing ?? "json";
     const socketUrl = new URL(connection.socketUrl);
     socketUrl.searchParams.set(SOCKET_FRAME_PARTS_QUERY_PARAM, "1");
+    if (framingMode === "binary") {
+      socketUrl.searchParams.set(WIRE_FRAME_QUERY_PARAM, "1");
+    }
     const layerSocket = Layer.effect(
       Socket.Socket,
-      Effect.map(Effect.service(Socket.Socket), joinSocketFrameParts),
+      Effect.map(Effect.service(Socket.Socket), (socket) =>
+        withWsRpcFraming(joinSocketFrameParts(socket), framingMode),
+      ),
     ).pipe(
       Layer.provide(
         Socket.layerWebSocket(socketUrl.toString(), {

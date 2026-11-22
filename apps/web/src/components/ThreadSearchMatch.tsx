@@ -1,4 +1,4 @@
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { searchMatchHintLabel } from "@t3tools/shared/paletteSearchCopy";
 import {
   findSearchTokenRanges,

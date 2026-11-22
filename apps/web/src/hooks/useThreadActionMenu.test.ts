@@ -39,7 +39,7 @@ vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory(),
 }));
-vi.mock("@tanstack/react-router", () => ({
+vi.mock("~/ui-core/router", () => ({
   useRouter: () => ({ navigate: async () => recordEffect("project-settings") }),
 }));
 vi.mock("../state/session", () => ({

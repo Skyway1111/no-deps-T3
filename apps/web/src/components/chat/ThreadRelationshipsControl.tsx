@@ -44,7 +44,7 @@ import {
 import { deriveSubagentElapsedMs } from "@t3tools/shared/orchestrationTiming";
 import { groupBy } from "effect/Array";
 import * as DateTime from "effect/DateTime";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "~/ui-core/router";
 import {
   ArrowRightIcon,
   BotIcon,
@@ -52,12 +52,12 @@ import {
   CornerLeftUpIcon,
   GitForkIcon,
   MessagesSquareIcon,
-  MoreHorizontalIcon,
+  EllipsisIcon as MoreHorizontalIcon,
   PlusIcon,
   SquareIcon,
   UnplugIcon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useRef, useState, type ReactNode } from "react";
 import type { MessageResolver } from "~/i18n/messages";
 

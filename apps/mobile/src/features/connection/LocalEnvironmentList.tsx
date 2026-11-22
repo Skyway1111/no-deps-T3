@@ -1,4 +1,4 @@
-import { T } from "gt-react-native";
+import { T } from "@t3tools/shared/i18n/react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { ComponentProps } from "react";
 import { View } from "react-native";

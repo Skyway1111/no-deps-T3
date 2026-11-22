@@ -1,4 +1,4 @@
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { Platform } from "react-native";
 import type { PullRequestDetail } from "@t3tools/contracts";
 import {

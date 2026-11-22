@@ -1,4 +1,4 @@
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useSearchToolbarInset } from "../../components/ui/useBarInset";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";

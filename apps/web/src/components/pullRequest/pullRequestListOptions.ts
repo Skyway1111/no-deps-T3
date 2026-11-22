@@ -10,8 +10,8 @@ import {
   Minimize2Icon,
   PenLineIcon,
   UserLockIcon,
-} from "lucide-react";
-import { msg } from "gt-react";
+} from "~/ui-core/icons";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import type { MessageResolver } from "~/i18n/messages";
 

@@ -46,7 +46,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as HttpClientError from "effect/http/HttpClientError";
 import type * as HttpMethod from "effect/http/HttpMethod";
 import * as HttpApiClient from "effect/http-api/HttpApiClient";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { NETWORK_BLOCKING_HINT } from "../errors/network.ts";
 import { type MarkedText, markedTextEnglish } from "../errors/translatable.ts";
 import { relayRequestFailureText } from "./errorPresentation.ts";

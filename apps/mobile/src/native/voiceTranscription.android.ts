@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from "expo";
 import type { RecorderState, RecordingStatus } from "expo-audio";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { Platform } from "react-native";
 import type { NativeVoiceRecorder } from "../features/voice-input/lazyVoiceRecorder";
 import { m } from "../i18n/messages";

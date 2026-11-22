@@ -1,5 +1,5 @@
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { MenuAction } from "@react-native-menu/menu";
 import {
   isAtomCommandInterrupted,

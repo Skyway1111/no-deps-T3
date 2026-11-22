@@ -662,36 +662,136 @@
     "./assistantInsights": {
       "types": "./src/assistantInsights.ts",
       "import": "./src/assistantInsights.ts"
+    },
+    "./markdown": {
+      "types": "./src/markdown/index.ts",
+      "import": "./src/markdown/index.ts"
+    },
+    "./sqlite/SqliteClient": {
+      "types": "./src/sqlite/SqliteClient.ts",
+      "import": "./src/sqlite/SqliteClient.ts"
+    },
+    "./sqlite/readOnlySqliteReader": {
+      "types": "./src/sqlite/readOnlySqliteReader.ts",
+      "import": "./src/sqlite/readOnlySqliteReader.ts"
+    },
+    "./core": {
+      "types": "./src/core/index.ts",
+      "import": "./src/core/index.ts"
+    },
+    "./core/signal": {
+      "types": "./src/core/signal.ts",
+      "import": "./src/core/signal.ts"
+    },
+    "./core/react": {
+      "types": "./src/core/react.ts",
+      "import": "./src/core/react.ts"
+    },
+    "./core/codec": {
+      "types": "./src/core/codec.ts",
+      "import": "./src/core/codec.ts"
+    },
+    "./core/streamJson": {
+      "types": "./src/core/streamJson.ts",
+      "import": "./src/core/streamJson.ts"
+    },
+    "./core/async": {
+      "types": "./src/core/async.ts",
+      "import": "./src/core/async.ts"
+    },
+    "./cdp": {
+      "types": "./src/cdp/index.ts",
+      "import": "./src/cdp/index.ts"
+    },
+    "./diff": {
+      "types": "./src/diff/histogram.ts",
+      "import": "./src/diff/histogram.ts"
+    },
+    "./parsers/*": {
+      "types": "./src/parsers/*.ts",
+      "import": "./src/parsers/*.ts"
+    },
+    "./ui/twMerge": {
+      "types": "./src/ui/twMerge.ts",
+      "import": "./src/ui/twMerge.ts"
+    },
+    "./ui/color": {
+      "types": "./src/ui/color.ts",
+      "import": "./src/ui/color.ts"
+    },
+    "./ui/confetti": {
+      "types": "./src/ui/confetti.ts",
+      "import": "./src/ui/confetti.ts"
+    },
+    "./i18n": {
+      "types": "./src/i18n/core.ts",
+      "import": "./src/i18n/core.ts"
+    },
+    "./i18n/react": {
+      "types": "./src/i18n/react.ts",
+      "import": "./src/i18n/react.ts"
+    },
+    "./diagrams/mermaid": {
+      "types": "./src/diagrams/mermaid.ts",
+      "import": "./src/diagrams/mermaid.ts"
+    },
+    "./sys/binary": {
+      "types": "./src/sys/binary.ts",
+      "import": "./src/sys/binary.ts"
+    },
+    "./sys/pty": {
+      "types": "./src/sys/pty.ts",
+      "import": "./src/sys/pty.ts"
+    },
+    "./sys/fileLock": {
+      "types": "./src/sys/fileLock.ts",
+      "import": "./src/sys/fileLock.ts"
+    },
+    "./sys/fuzzyIndex": {
+      "types": "./src/sys/fuzzyIndex.ts",
+      "import": "./src/sys/fuzzyIndex.ts"
+    },
+    "./sys/dbus": {
+      "types": "./src/sys/dbus.ts",
+      "import": "./src/sys/dbus.ts"
+    },
+    "./sys/keyring": {
+      "types": "./src/sys/keyring.ts",
+      "import": "./src/sys/keyring.ts"
+    },
+    "./ui-runtime": {
+      "types": "./src/ui-runtime/index.ts",
+      "import": "./src/ui-runtime/index.ts"
+    },
+    "./ui-runtime/jsx-runtime": {
+      "types": "./src/ui-runtime/jsx-runtime.ts",
+      "import": "./src/ui-runtime/jsx-runtime.ts"
+    },
+    "./ui-runtime/client": {
+      "types": "./src/ui-runtime/client.ts",
+      "import": "./src/ui-runtime/client.ts"
+    },
+    "./ui-runtime/server": {
+      "types": "./src/ui-runtime/server.ts",
+      "import": "./src/ui-runtime/server.ts"
     }
   },
   "scripts": {
     "typecheck": "effect-tsgo tsrs --noEmit",
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "dependencies": {
-    "@noble/curves": "catalog:",
-    "@noble/hashes": "catalog:",
     "@t3tools/contracts": "workspace:*",
     "effect": "catalog:",
-    "ffi-rs": "1.3.2",
-    "get-east-asian-width": "^1.6.0",
-    "gt-i18n": "1.0.40",
-    "hast-util-sanitize": "^5.0.2",
-    "mdast-util-directive": "catalog:",
-    "mdast-util-to-hast": "^13.2.1",
-    "micromark-extension-directive": "catalog:",
-    "micromark-util-character": "catalog:",
-    "micromark-util-decode-string": "catalog:",
-    "property-information": "^7.2.0",
-    "rehype-raw": "catalog:",
-    "rehype-sanitize": "catalog:",
-    "remark-breaks": "catalog:",
-    "remark-gfm": "catalog:",
-    "remark-math": "6.0.0",
-    "remark-parse": "catalog:",
-    "remark-rehype": "catalog:",
-    "unified": "catalog:",
-    "yaml": "catalog:"
+    "ffi-rs": "1.3.2"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",
@@ -699,6 +799,7 @@
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
     "hast-util-to-html": "^9.0.5",
     "micromark-util-types": "catalog:",
     "vite-plus": "catalog:"

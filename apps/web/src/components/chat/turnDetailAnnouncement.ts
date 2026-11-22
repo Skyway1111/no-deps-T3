@@ -1,7 +1,7 @@
 import type { RunId, ScreenReaderAnnouncements } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { searchToolLabelParts } from "@t3tools/shared/toolActivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../../i18n/messages";
 import type { TimelineEntry, WorkLogEntry } from "../../session-logic";

@@ -1,6 +1,6 @@
 import type { EnvironmentId, UnifiedSettings } from "@t3tools/contracts";
-import { T, useGT, Var } from "gt-react";
-import { PlusIcon } from "lucide-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { PlusIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";

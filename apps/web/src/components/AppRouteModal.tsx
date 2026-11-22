@@ -1,6 +1,6 @@
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { T, useGT } from "gt-react";
-import { XIcon } from "lucide-react";
+import { Dialog as DialogPrimitive } from "~/ui-core/popups";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { XIcon } from "~/ui-core/icons";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { getCommandPaletteOpener } from "../commandPaletteStore";

@@ -21,7 +21,7 @@ import type {
   ServerProvider,
 } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useMemo } from "react";
 import { Pressable, View, type ColorValue } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";

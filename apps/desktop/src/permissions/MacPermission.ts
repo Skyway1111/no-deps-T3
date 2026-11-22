@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 export const MAC_PERMISSION_SETTINGS_URLS = {
   "screen-recording":

@@ -1,4 +1,4 @@
-import { RouterProvider } from "@tanstack/react-router";
+import { RouterProvider } from "~/ui-core/router";
 
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";

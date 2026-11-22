@@ -4,8 +4,8 @@ import {
   type SecretReference,
   type SettingsSecretValue,
 } from "@t3tools/contracts";
-import { T, useGT, Var } from "gt-react";
-import { ExternalLinkIcon } from "lucide-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
+import { ExternalLinkIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";

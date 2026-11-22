@@ -1,6 +1,6 @@
 import { workspaceAreaProps } from "../lib/workspaceFocus";
-import { T, useGT } from "gt-react";
-import { MessageSquareDashedIcon, PlusIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { MessageSquareDashedIcon, PlusIcon } from "~/ui-core/icons";
 
 import { openCommandPalette } from "../commandPaletteBus";
 import { isElectron } from "../env";

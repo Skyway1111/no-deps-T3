@@ -1,7 +1,7 @@
 import type { EnvironmentId, SourceControlProviderAuth } from "@t3tools/contracts";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon } from "~/ui-core/icons";
 import { useState } from "react";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { serverEnvironment } from "../../state/server";

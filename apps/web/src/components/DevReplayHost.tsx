@@ -4,9 +4,9 @@ import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { ProviderInstanceId, type ThreadId } from "@t3tools/contracts";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "~/ui-core/router";
 import { useEffect, useEffectEvent, useState } from "react";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, Var } from "@t3tools/shared/i18n/react";
 
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { useProjects, useThreadShell } from "../state/entities";

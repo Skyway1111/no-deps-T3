@@ -1,7 +1,7 @@
 import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
 
 export function formatWorkingTimerNow(startIso: string, environmentId: EnvironmentId): string {

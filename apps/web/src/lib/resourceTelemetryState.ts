@@ -6,7 +6,7 @@ import type {
   ResourceTelemetrySnapshot,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { msg, useMessages } from "gt-react";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 import { usePrimaryEnvironment } from "../state/environments";

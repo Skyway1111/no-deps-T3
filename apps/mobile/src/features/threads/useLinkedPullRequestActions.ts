@@ -20,7 +20,7 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 import { AuthOrchestrationOperateScope, type ThreadPullRequestLink } from "@t3tools/contracts";
 import * as Clipboard from "expo-clipboard";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { m } from "../../i18n/messages";

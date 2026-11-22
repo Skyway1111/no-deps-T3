@@ -1,4 +1,4 @@
-import { T, msg, useGT } from "gt-react";
+import { T, msg, useGT } from "@t3tools/shared/i18n/react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m, type MessageResolver } from "~/i18n/messages";
 import {
@@ -13,7 +13,7 @@ import {
   CHATGPT_USAGE_LIMIT_CODE,
   CHATGPT_WORKSPACE_USAGE_LIMIT_CODE,
 } from "@t3tools/shared/usageLimits";
-import { GaugeIcon } from "lucide-react";
+import { GaugeIcon } from "~/ui-core/icons";
 import { useState } from "react";
 import { useDeadlinePassed } from "../../hooks/useDeadline";
 import { OpenAI } from "../Icons";

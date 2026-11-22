@@ -11,7 +11,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { withUniwind } from "uniwind";
 
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";

@@ -9,7 +9,7 @@ import {
 } from "@t3tools/client-runtime/issue-selection";
 import { isSelected, toggleSelection } from "@t3tools/client-runtime/pull-request-selection";
 import type { IssueLabelCandidate } from "@t3tools/contracts";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useState } from "react";
 
 import { m } from "../../i18n/messages";

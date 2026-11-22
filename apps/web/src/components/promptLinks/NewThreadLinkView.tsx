@@ -24,9 +24,9 @@ import {
   promptLinkPullRequestUrl,
 } from "@t3tools/shared/promptLinks";
 import { useAtomValue } from "@effect/atom-react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "~/ui-core/router";
 import { Atom } from "effect/reactivity";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";

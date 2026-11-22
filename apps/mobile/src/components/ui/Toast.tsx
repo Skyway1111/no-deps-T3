@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { cn } from "../../lib/cn";
 import { MOBILE_MOTION, MOBILE_SHAPE } from "../../lib/designTokens";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";

@@ -1,5 +1,5 @@
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
-import { T } from "gt-react";
+import { T } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";

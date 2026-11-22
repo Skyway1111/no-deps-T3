@@ -1,4 +1,4 @@
-import { useGT, useLocale, useMessages } from "gt-react-native";
+import { useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 
 import { Toolbar } from "./Toolbar";
 import { AppActivityIndicator } from "./AppActivityIndicator";

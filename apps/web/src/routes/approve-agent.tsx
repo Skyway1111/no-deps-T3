@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "~/ui-core/router";
 
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { ApproveAgentSurface } from "../components/auth/ApproveAgentSurface";

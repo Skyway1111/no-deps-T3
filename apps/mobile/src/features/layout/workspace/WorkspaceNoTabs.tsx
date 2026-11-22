@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { View } from "react-native";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { openSettings } from "../../settings/settings-navigation";

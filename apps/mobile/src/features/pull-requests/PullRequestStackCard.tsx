@@ -1,5 +1,5 @@
 import { StackActions, useNavigation } from "@react-navigation/native";
-import { T, useGT, useMessages, Var } from "gt-react-native";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";

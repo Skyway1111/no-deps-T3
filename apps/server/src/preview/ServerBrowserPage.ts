@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalTimers:off - Playwright callbacks run outside the Effect runtime.
+// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalTimers:off - CDP callbacks run outside the Effect runtime.
 
 import {
   type BrowserRecordingFrameRate,
@@ -22,7 +22,13 @@ import {
 } from "@t3tools/contracts";
 import { constVoid } from "effect/Function";
 import * as Schema from "effect/Schema";
-import type { CDPSession, ConsoleMessage, Frame, Locator, Page } from "playwright-core";
+import type {
+  CdpConsoleMessage as ConsoleMessage,
+  CdpFrame as Frame,
+  CdpLocator as Locator,
+  CdpPage as Page,
+  CdpSession as CDPSession,
+} from "@t3tools/shared/cdp";
 import * as NodeCrypto from "node:crypto";
 import * as NodeUtil from "node:util";
 import { BrowserControlInterrupted } from "./SessionControl.ts";

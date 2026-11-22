@@ -1,6 +1,6 @@
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { clientHostEnvironmentAtom } from "../state/clientHostEnvironment";
 import { buildFileLinkParentSuffixByPath, fileLinkLabel } from "@t3tools/shared/fileLinks";
@@ -41,8 +41,8 @@ import {
   PresentationIcon,
   StarIcon,
   TriangleAlertIcon,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "~/ui-core/icons";
 import {
   AssetWorkspaceAssetNotFoundError,
   AuthPreviewOperateScope,
@@ -292,7 +292,7 @@ const ARTIFACT_TEMPLATE_ICON_BY_KIND = {
   image: ImageIcon,
   email: MailIcon,
   slack: MessageSquareIcon,
-} satisfies Record<CodexArtifactTemplateKind, LucideIcon>;
+} satisfies Record<CodexArtifactTemplateKind, IconComponent>;
 
 function CodexArtifactTemplateCard(props: {
   readonly template: CodexArtifactTemplate;

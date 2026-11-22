@@ -1,4 +1,4 @@
-import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
+import { Checkbox as CheckboxPrimitive } from "~/ui-core/primitives";
 
 import { cn } from "~/lib/utils";
 

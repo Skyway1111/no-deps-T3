@@ -1,5 +1,5 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { useMatches } from "@tanstack/react-router";
+import { useMatches } from "~/ui-core/router";
 import { useState } from "react";
 
 import {

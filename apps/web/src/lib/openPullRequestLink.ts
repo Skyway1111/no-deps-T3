@@ -2,9 +2,9 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { parsePullRequestAnchor } from "@t3tools/shared/pullRequestAnchor";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import { type MouseEvent } from "react";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import {
   resolveChangeRequestLinkTarget,

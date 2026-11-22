@@ -15,8 +15,7 @@ import {
   worktreeSetupStageLabel as contractsWorktreeSetupStageLabel,
 } from "@t3tools/contracts";
 import type { IdleCompactionMode } from "@t3tools/contracts/settings";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 // Contracts decides each stage's English label; this table only makes that text translatable.
 const WORKTREE_SETUP_STAGE_LABELS: Readonly<Record<string, string>> = {

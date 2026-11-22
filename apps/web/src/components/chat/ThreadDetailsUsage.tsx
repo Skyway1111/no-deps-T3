@@ -13,8 +13,8 @@ import {
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
-import { Link } from "@tanstack/react-router";
-import { msg, useGT, useLocale, useMessages } from "gt-react";
+import { Link } from "~/ui-core/router";
+import { msg, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";

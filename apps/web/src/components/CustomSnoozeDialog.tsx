@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
-import { T, useGT } from "gt-react";
-import { useNavigate } from "@tanstack/react-router";
-import { create } from "zustand";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { useNavigate } from "~/ui-core/router";
+import { create } from "@t3tools/shared/core/react";
 import {
   localSnoozeDate,
   localSnoozeTime,
@@ -9,7 +9,7 @@ import {
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { Button } from "./ui/button";
-import { CalendarIcon, Settings2Icon } from "lucide-react";
+import { CalendarIcon, Settings2Icon } from "~/ui-core/icons";
 import { Calendar } from "./ui/calendar";
 import { weekStartsOn } from "../timestampFormat";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -157,8 +157,6 @@ function CustomSnoozeDialog() {
                         </PopoverTrigger>
                         <PopoverPopup align="start" aria-label={gt("Choose snooze date")}>
                           <Calendar
-                            mode="single"
-                            required
                             selected={date}
                             defaultMonth={date}
                             {...(weekStartsOn === undefined ? {} : { weekStartsOn })}

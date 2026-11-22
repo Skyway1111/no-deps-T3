@@ -1,4 +1,4 @@
-import { T, useGT, useMessages, Var } from "gt-react-native";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";

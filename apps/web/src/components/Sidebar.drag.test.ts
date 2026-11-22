@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { closestCenter, type CollisionDetection } from "@dnd-kit/core";
-import type { SortingStrategy } from "@dnd-kit/sortable";
+import { closestCenter, type CollisionDetection, type SortingStrategy } from "~/ui-core/dnd";
 import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
@@ -701,10 +700,7 @@ describe("lifted card clearance", () => {
         active: null,
         activeNodeRect: null,
         over: null,
-        overlayNodeRect: null,
-        scrollableAncestors: [],
         scrollableAncestorRects: [],
-        windowRect: null,
       },
       offset,
     );

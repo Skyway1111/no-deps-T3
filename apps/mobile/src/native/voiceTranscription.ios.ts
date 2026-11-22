@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 import { requireOptionalNativeModule } from "expo";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { Settings } from "react-native";
 import { m } from "../i18n/messages";
 

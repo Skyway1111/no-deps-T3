@@ -1,6 +1,6 @@
 import { AssetWorkspaceAssetNotFoundError } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { msg, useGT } from "gt-react-native";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import * as Dialog from "./Dialog";
 import { useContext, useEffect, useEffectEvent, useState, type ComponentType } from "react";
 

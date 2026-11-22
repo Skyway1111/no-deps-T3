@@ -5,8 +5,8 @@ import type {
   OrchestrationV2NativeChildWork,
   ThreadId,
 } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
-import { ListTreeIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { ListTreeIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { orchestrationEnvironment } from "../../state/orchestration";

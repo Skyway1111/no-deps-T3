@@ -1,5 +1,5 @@
 import { expect, it } from "vite-plus/test";
-import { Quaternion, Vector3 } from "three";
+import { Quaternion, Vector3 } from "./webglEngine.ts";
 import { duoViewSnaps, nearestDuoView } from "./duoSnap.ts";
 
 const frames = [

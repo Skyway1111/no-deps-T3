@@ -7,7 +7,7 @@ import instinctLogo from "./logos/instinct.png";
 import museLogo from "./logos/muse.png";
 import openClawLogo from "./logos/openclaw.png";
 import pokeLogo from "./logos/poke.png";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "~/i18n/messages";
 

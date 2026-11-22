@@ -1,4 +1,4 @@
-import { Navigate, createFileRoute } from "@tanstack/react-router";
+import { Navigate, createFileRoute } from "~/ui-core/router";
 
 // A copied thread link. On the hosted app its chooser shows first; this opens the thread after it.
 export const Route = createFileRoute("/threads/$environmentId/$threadId")({

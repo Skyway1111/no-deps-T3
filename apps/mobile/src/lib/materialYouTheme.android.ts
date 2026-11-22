@@ -1,4 +1,4 @@
-import { Hct, argbFromHex, hexFromArgb } from "@material/material-color-utilities";
+import { argbFromHex, hexFromArgb, withTone } from "../zero-dep";
 
 import type { MobileThemeAppearance, MobileThemeVariables } from "./mobileTheme";
 import type { MaterialYouPalette } from "./materialYouPalette";
@@ -16,9 +16,7 @@ function withAlpha(color: string, alpha: number): string {
 function materialTone(color: string, tone: number): string {
   const match = /^#([\da-f]{6})(?:[\da-f]{2})?$/iu.exec(color);
   if (!match?.[1]) return color;
-
-  const source = Hct.fromInt(argbFromHex(match[1]));
-  return `${hexFromArgb(Hct.from(source.hue, source.chroma, tone).toInt()).toUpperCase()}FF`;
+  return `${hexFromArgb(withTone(argbFromHex(match[1]), tone)).toUpperCase()}FF`;
 }
 
 export function materialYouPaletteToMobileThemeVariables(

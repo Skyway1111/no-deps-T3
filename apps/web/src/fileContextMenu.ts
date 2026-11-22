@@ -17,7 +17,7 @@ import { useAtomCommand } from "./state/use-atom-command";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { toastManager } from "./components/ui/toast";
 import { useAtomValue } from "@effect/atom-react";
-import { msg, useMessages } from "gt-react";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 
 import type { MessageResolver } from "./i18n/messages";
 

@@ -11,8 +11,8 @@ import type {
   ProjectId,
   ScopedProjectRef,
 } from "@t3tools/contracts";
-import { msg } from "gt-react";
-import { create } from "zustand";
+import { msg } from "@t3tools/shared/i18n/react";
+import { create } from "@t3tools/shared/core/react";
 
 import { m } from "../i18n/messages";
 import { appAtomRegistry } from "../rpc/atomRegistry";

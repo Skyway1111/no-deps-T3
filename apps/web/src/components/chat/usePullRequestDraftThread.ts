@@ -1,11 +1,11 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { UnifiedSettings } from "@t3tools/contracts";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { newDraftId, newThreadId } from "~/lib/utils";
 import {

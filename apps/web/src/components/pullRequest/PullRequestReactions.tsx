@@ -5,8 +5,8 @@ import type {
   PullRequestReactionContent,
   PullRequestRef,
 } from "@t3tools/contracts";
-import { msg, useGT, useLocale, useMessages } from "gt-react";
-import { SmilePlusIcon } from "lucide-react";
+import { msg, useGT, useLocale, useMessages } from "@t3tools/shared/i18n/react";
+import { SmilePlusIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { m } from "~/i18n/messages";

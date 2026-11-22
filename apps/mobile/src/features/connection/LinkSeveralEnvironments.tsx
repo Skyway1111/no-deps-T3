@@ -16,7 +16,7 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import * as Result from "effect/Result";
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

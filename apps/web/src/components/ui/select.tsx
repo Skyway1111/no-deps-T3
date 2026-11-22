@@ -1,8 +1,7 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
+import { Select as SelectPrimitive } from "~/ui-core/popups";
+import { cva, type VariantProps } from "@t3tools/shared/ui/twMerge";
+import { ChevronDownIcon, ChevronUpIcon } from "~/ui-core/icons";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -70,7 +69,7 @@ function SelectButton({
     "data-slot": "select-trigger",
     type: render ? undefined : ("button" as const),
   };
-  return useRender({
+  return renderElement({
     defaultTagName: "button",
     props: {
       ...mergeProps<"button">(defaultProps, props),

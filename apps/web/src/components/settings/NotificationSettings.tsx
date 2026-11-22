@@ -1,5 +1,5 @@
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
-import { useGT, useMessages } from "gt-react";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import {

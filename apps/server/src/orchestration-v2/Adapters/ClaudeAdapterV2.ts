@@ -138,7 +138,7 @@ import {
   isDelegatedAppThread,
 } from "@t3tools/contracts";
 
-import { FILE_HEADERS_ONLY, formatPatch, structuredPatch } from "diff";
+import { formatPatch, structuredPatch } from "@t3tools/shared/diff";
 import * as Cause from "effect/Cause";
 import * as Predicate from "effect/Predicate";
 import * as Clock from "effect/Clock";
@@ -4073,7 +4073,7 @@ function claudeFileChangeText(output: ClaudeNativeToolOutput): string {
           newHeader: undefined,
           hunks: result.structuredPatch,
         };
-  return patch.hunks.length === 0 ? "" : formatPatch(patch, FILE_HEADERS_ONLY);
+  return patch.hunks.length === 0 ? "" : formatPatch(patch);
 }
 
 function claudeCommandOutputText(output: ClaudeNativeToolOutput): string {

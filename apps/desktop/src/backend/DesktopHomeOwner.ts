@@ -7,7 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { m } from "../i18n/messages.ts";

@@ -1,6 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 
 import { type LinkedThreadSurface, linkedThreadRouteParams } from "../linkedThreadSurface";
 import { type ThreadSurface, useRightPanelStore } from "../rightPanelStore";

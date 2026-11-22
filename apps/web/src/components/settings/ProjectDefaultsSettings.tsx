@@ -6,8 +6,8 @@ import {
 } from "@t3tools/contracts";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { useNavigate } from "@tanstack/react-router";
-import { T, useGT, useMessages } from "gt-react";
+import { useNavigate } from "~/ui-core/router";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { useClientSettings } from "../../hooks/useSettings";
 import {

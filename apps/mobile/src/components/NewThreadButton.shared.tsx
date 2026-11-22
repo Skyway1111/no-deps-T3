@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { Pressable, type StyleProp, type ViewStyle } from "react-native";
 
 import { cn } from "../lib/cn";

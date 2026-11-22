@@ -1,9 +1,9 @@
 import { Spinner } from "~/components/ui/spinner";
 
 import {
-  AlertTriangleIcon,
+  TriangleAlertIcon as AlertTriangleIcon,
   CheckIcon,
-  ArrowUpCircleIcon,
+  CircleArrowUpIcon as ArrowUpCircleIcon,
   CopyIcon,
   DownloadIcon,
   ExternalLinkIcon,
@@ -13,11 +13,11 @@ import {
   XIcon,
   LockIcon,
   LockOpenIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import {
   isProviderDriverKind,
   resolveProviderInstanceEnabled,

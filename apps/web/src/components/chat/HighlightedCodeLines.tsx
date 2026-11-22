@@ -1,6 +1,5 @@
-import { toHtml } from "hast-util-to-html";
-import { toJsxRuntime } from "hast-util-to-jsx-runtime";
-import { cloneElement, isValidElement, memo, type DOMAttributes } from "react";
+import { elToHtml, elToReact, type ElContent, type ElElement, type ElNode } from "@t3tools/shared/markdownHast";
+import { cloneElement, isValidElement, memo, type DOMAttributes, type ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
 import type { highlightCodeToHast } from "../../lib/incrementalHighlighting";
@@ -10,7 +9,7 @@ type HighlightedNode = HighlightedRoot["children"][number];
 const runtime = { Fragment, jsx, jsxs };
 
 function elementShell(node: Extract<HighlightedNode, { type: "element" }>) {
-  const element = toJsxRuntime({ ...node, children: [] }, runtime);
+  const element = elToReact({ ...(node as unknown as ElElement), children: [] }, runtime);
   if (!isValidElement<DOMAttributes<HTMLElement>>(element)) {
     throw new Error("Expected a highlighted code element");
   }
@@ -18,18 +17,24 @@ function elementShell(node: Extract<HighlightedNode, { type: "element" }>) {
 }
 
 const HighlightedLine = memo(function HighlightedLine({ node }: { node: HighlightedNode }) {
-  if (node.type !== "element") return toJsxRuntime(node, runtime);
+  if (node.type !== "element") return elToReact<ReactNode>(node as unknown as ElNode, runtime);
   return cloneElement(elementShell(node), {
-    dangerouslySetInnerHTML: { __html: toHtml({ type: "root", children: node.children }) },
+    dangerouslySetInnerHTML: {
+      __html: elToHtml({ type: "root", children: node.children as unknown as ElContent[] }),
+    },
   });
 });
 
 /** Preserve completed lines' DOM to avoid reparsing unchanged tokens. */
 export function HighlightedCodeLines({ root }: { root: HighlightedRoot }) {
   const pre = root.children[0];
-  if (pre?.type !== "element" || pre.tagName !== "pre") return toJsxRuntime(root, runtime);
+  if (pre?.type !== "element" || pre.tagName !== "pre") {
+    return elToReact<ReactNode>(root as unknown as ElNode, runtime);
+  }
   const code = pre.children[0];
-  if (code?.type !== "element" || code.tagName !== "code") return toJsxRuntime(root, runtime);
+  if (code?.type !== "element" || code.tagName !== "code") {
+    return elToReact<ReactNode>(root as unknown as ElNode, runtime);
+  }
   return cloneElement(
     elementShell(pre),
     undefined,

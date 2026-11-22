@@ -2,10 +2,10 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 
-import { Radio as RadioPrimitive } from "@base-ui/react/radio";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { Radio as RadioPrimitive } from "~/ui-core/primitives";
+import { CheckIcon, ChevronDownIcon } from "~/ui-core/icons";
 import { useState } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { MessageResolver } from "../../i18n/messages";
 import {
   deriveAvailableInstanceId,

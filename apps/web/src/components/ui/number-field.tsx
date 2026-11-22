@@ -1,5 +1,5 @@
-import { NumberField as NumberFieldPrimitive } from "@base-ui/react/number-field";
-import { MinusIcon, PlusIcon } from "lucide-react";
+import { NumberField as NumberFieldPrimitive } from "~/ui-core/primitives";
+import { MinusIcon, PlusIcon } from "~/ui-core/icons";
 import * as React from "react";
 import { cn } from "~/lib/utils";
 

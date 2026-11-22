@@ -12,9 +12,9 @@ import type {
   ProviderInstanceId,
   ServerProvider,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { lazy, Suspense, useRef, useState } from "react";
-import { CopyIcon } from "lucide-react";
+import { CopyIcon } from "~/ui-core/icons";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { isWebUrl } from "../../browser/webUrl";

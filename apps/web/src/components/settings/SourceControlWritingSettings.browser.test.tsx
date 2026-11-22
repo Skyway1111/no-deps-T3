@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   updateSettings: vi.fn<(patch: ScopedSettingsPatch) => void>(),
 }));
 
-vi.mock(import("@tanstack/react-router"), async (original) => ({
+vi.mock(import("~/ui-core/router"), async (original) => ({
   ...(await original()),
   useNavigate: (() => vi.fn()) as never,
 }));

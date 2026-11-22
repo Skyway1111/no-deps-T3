@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { SymbolView } from "./ui/AppSymbol";
 import { AppText } from "./ui/AppText";
 import { Image } from "expo-image";

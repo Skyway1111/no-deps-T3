@@ -1,7 +1,7 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useAtomValue } from "@effect/atom-react";
 import { Fragment, useState, type ReactNode } from "react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m as resolveNow, type MessageResolver } from "../../i18n/messages";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
@@ -17,7 +17,7 @@ import {
   type SimlockDeviceHostConfig,
   type SshDeviceHostConfig,
 } from "@t3tools/contracts";
-import { ChevronDownIcon, MoreVertical, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, EllipsisVerticalIcon as MoreVertical, PlusIcon } from "~/ui-core/icons";
 
 import { cn, randomUUID } from "../../lib/utils";
 import { deviceEnvironment } from "../../state/device";

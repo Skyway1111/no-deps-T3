@@ -11,7 +11,7 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { msg, T, useGT, Var } from "gt-react";
+import { msg, T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useState } from "react";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";

@@ -5,8 +5,8 @@ import type {
   IssueListState,
   ProjectId,
 } from "@t3tools/contracts";
-import { FolderGit2Icon, LayersIcon, ListFilterIcon, TagIcon, UserIcon } from "lucide-react";
-import { T, useGT } from "gt-react";
+import { FolderGit2Icon, LayersIcon, ListFilterIcon, TagIcon, UserIcon } from "~/ui-core/icons";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";

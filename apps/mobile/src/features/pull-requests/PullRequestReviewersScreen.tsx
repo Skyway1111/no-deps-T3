@@ -22,7 +22,7 @@ import {
   toggleSelection,
 } from "@t3tools/client-runtime/pull-request-selection";
 import type { PullRequestReviewerCandidate } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react-native";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";

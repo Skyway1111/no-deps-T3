@@ -2,9 +2,9 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { AUTH_SCOPE_OPTIONS as PAIRING_SCOPE_OPTIONS } from "@t3tools/shared/authScopeOptions";
-import { PlugIcon, PlusIcon, QrCodeIcon } from "lucide-react";
+import { PlugIcon, PlusIcon, QrCodeIcon } from "~/ui-core/icons";
 import { type ReactNode, memo, useId, useRef, useState } from "react";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   AuthAccessWriteScope,
   AuthDiagnosticsReadScope,

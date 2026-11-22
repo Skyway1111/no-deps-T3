@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import { Image } from "expo-image";
-import { msg, T, useMessages } from "gt-react-native";
+import { msg, T, useMessages } from "@t3tools/shared/i18n/react";
 import { View } from "react-native";
 
 import { AppText as Text } from "./ui/AppText";

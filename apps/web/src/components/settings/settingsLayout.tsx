@@ -3,15 +3,15 @@ import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { usePrimaryEnvironmentId, usePrimaryEnvironment } from "../../state/environments";
 import { useEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
 import { useServerConfigs } from "../../state/entities";
-import { InfoIcon, Undo2Icon } from "lucide-react";
+import { InfoIcon, Undo2Icon } from "~/ui-core/icons";
 import {
   DEFAULT_SERVER_SETTINGS,
   isManagedSettingPath,
   type ServerSettings,
 } from "@t3tools/contracts";
 import * as Equal from "effect/Equal";
-import { useGT } from "gt-react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { useLocation, useNavigate } from "~/ui-core/router";
 import { createContext, type ComponentPropsWithoutRef, type ReactNode, useContext } from "react";
 
 import {
@@ -41,7 +41,7 @@ import {
 const EMPTY_SETTING_KEYS: readonly (keyof ServerSettings)[] = [];
 const EMPTY_MANAGED_PATHS: readonly string[] = [];
 
-declare module "@tanstack/react-router" {
+declare module "~/ui-core/router" {
   interface HistoryState {
     settingsTargetHighlight?: boolean;
   }

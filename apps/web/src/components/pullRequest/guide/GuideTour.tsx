@@ -1,5 +1,5 @@
 import type { EnvironmentId, PullRequestRef, PullRequestReviewGuide } from "@t3tools/contracts";
-import { T, Var } from "gt-react";
+import { T, Var } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { createPullRequestDiffFileContentsLoader } from "~/lib/diffFileContents";

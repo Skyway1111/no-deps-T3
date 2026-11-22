@@ -1,6 +1,6 @@
 import type { ManagedPolicySummary } from "@t3tools/contracts";
-import { T, Var } from "gt-react";
-import { BuildingIcon } from "lucide-react";
+import { T, Var } from "@t3tools/shared/i18n/react";
+import { BuildingIcon } from "~/ui-core/icons";
 import type { ReactNode } from "react";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";

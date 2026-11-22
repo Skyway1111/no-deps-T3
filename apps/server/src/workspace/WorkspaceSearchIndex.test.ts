@@ -5,7 +5,7 @@ import {
   type GrepOptions,
   type GrepResult,
   type WatchEvent,
-} from "@ff-labs/fff-node";
+} from "@t3tools/shared/sys/fuzzyIndex";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { afterEach, expect, it } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";

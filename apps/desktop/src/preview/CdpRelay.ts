@@ -1,4 +1,10 @@
 // Electron allows one debugger per webContents; share the manager's attachment.
+import {
+  CDP_ERROR_CODE,
+  fitsCdpPayloadBudget,
+  isCdpCommand,
+  type CdpCommand,
+} from "@t3tools/shared/cdp";
 
 export interface CdpRelayTarget {
   readonly send: (
@@ -27,42 +33,6 @@ export interface CdpRelayConnection {
   readonly event: (method: string, params: unknown, sessionId: string | undefined) => void;
 }
 
-interface CdpCommand {
-  readonly id: number;
-  readonly method: string;
-  readonly params?: Record<string, unknown>;
-  readonly sessionId?: string;
-}
-
-const isCommand = (value: unknown): value is CdpCommand =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as { id?: unknown }).id === "number" &&
-  typeof (value as { method?: unknown }).method === "string";
-
-// CDP values are plain JSON data, so their serialized size can be bounded before
-// JSON.stringify allocates it. A string counts at its length unless it holds a
-// character JSON may escape, which can take six code units.
-const MAX_CDP_PAYLOAD_SIZE = 64 * 1024 * 1024;
-const MAY_ESCAPE = /[^\x20\x21\x23-\x5b\x5d-\ud7ff\ue000-\uffff]/;
-const serializedSize = (text: string) =>
-  (MAY_ESCAPE.test(text) ? text.length * 6 : text.length) + 3;
-
-const fitsPayloadBudget = (message: unknown) => {
-  let remaining = MAX_CDP_PAYLOAD_SIZE;
-  const visit = (value: unknown): boolean => {
-    remaining -= typeof value === "string" ? serializedSize(value) : 26;
-    if (remaining < 0) return false;
-    if (typeof value !== "object" || value === null) return true;
-    if (Array.isArray(value)) return value.every(visit);
-    return Object.entries(value).every(([key, item]) => {
-      remaining -= serializedSize(key);
-      return visit(item);
-    });
-  };
-  return visit(message);
-};
-
 const BROWSER_CONTEXT_ID = "t3-preview";
 const ANNOUNCE = Symbol("announce");
 const PAGE_SESSION_ID = "t3-preview-page";
@@ -82,17 +52,17 @@ export function createCdpRelayConnection(
   let closed = false;
   const send = (message: Record<string, unknown>) => {
     if (closed) return;
-    if (fitsPayloadBudget(message)) {
+    if (fitsCdpPayloadBudget(message)) {
       write(JSON.stringify(message));
       return;
     }
     // An error reply fails only that command. A dropped event would leave
-    // Playwright out of step with the page, so the relay closes instead.
+    // the CDP client out of step with the page, so the relay closes instead.
     if (typeof message["id"] === "number") {
       write(
         JSON.stringify({
           id: message["id"],
-          error: { code: -32000, message: "CDP payload too large" },
+          error: { code: CDP_ERROR_CODE, message: "CDP payload too large" },
           ...(message["sessionId"] === undefined ? {} : { sessionId: message["sessionId"] }),
         }),
       );
@@ -262,7 +232,7 @@ export function createCdpRelayConnection(
       } catch {
         return;
       }
-      if (!isCommand(command)) return;
+      if (!isCdpCommand(command)) return;
       const result =
         command.sessionId === undefined || sessions.get(command.sessionId) === "browser"
           ? browserCommand(command)
@@ -282,7 +252,7 @@ export function createCdpRelayConnection(
           send({
             id: command.id,
             error: {
-              code: -32000,
+              code: CDP_ERROR_CODE,
               message: cause instanceof Error ? cause.message : String(cause),
             },
             ...route,

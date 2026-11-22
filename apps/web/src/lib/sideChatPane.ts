@@ -11,7 +11,7 @@ import type {
 
 import type { ToolCallDiffTarget } from "../diffPanelStore";
 import type { LinkedThreadTarget } from "@t3tools/client-runtime/linked-thread";
-import type { useNavigate } from "@tanstack/react-router";
+import type { useNavigate } from "~/ui-core/router";
 
 import { getClientSettings } from "../hooks/useSettings";
 import { linkedThreadRouteParams } from "../linkedThreadSurface";

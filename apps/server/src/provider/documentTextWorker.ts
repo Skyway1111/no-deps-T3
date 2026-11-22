@@ -2,9 +2,9 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
-import { characterEntities } from "character-entities";
-import { SaxesParser } from "saxes";
-import * as Yauzl from "yauzl";
+import { XmlStreamParser } from "@t3tools/shared/parsers/xml";
+
+import { ZipReader } from "../zipReader.ts";
 
 const MAX_INPUT = 16 * 1024 * 1024;
 const MAX_EXPANDED = 32 * 1024 * 1024;
@@ -91,16 +91,15 @@ function xml(source: string, extension: string): XmlNode {
   const root: XmlNode = { name: "root", attrs: {}, children: [] };
   const stack = [root];
   let nodes = 0;
-  const parser = new SaxesParser();
-  if (extension === ".epub") Object.assign(parser.ENTITIES, characterEntities);
+  const parser = new XmlStreamParser({ htmlEntities: extension === ".epub" });
   parser.on("opentag", (tag) => {
     if (++nodes > 200_000 || stack.length > 128) throw new Truncation("XML structure limit");
     const node: XmlNode = {
       name: tag.name.split(":").at(-1)!,
       attrs: Object.fromEntries(
-        Object.entries(tag.attributes).flatMap(([key, value]) => [
-          [key, String(value)],
-          [key.split(":").at(-1)!, String(value)],
+        Object.entries(tag.attributes).flatMap(([key, { value }]) => [
+          [key, value],
+          [key.split(":").at(-1)!, value],
         ]),
       ),
       children: [],
@@ -305,81 +304,35 @@ function* table(node: XmlNode): Generator<TextPart, void> {
 }
 
 async function archive(path: string): Promise<Map<string, string>> {
-  const zip = await new Promise<Yauzl.ZipFile>((resolve, reject) =>
-    Yauzl.open(
-      path,
-      { lazyEntries: true, validateEntrySizes: true, strictFileNames: true },
-      (error, result) => (error || !result ? reject(error) : resolve(result)),
-    ),
-  );
-  const files = new Map<string, string>();
-  let expanded = 0;
-  let count = 0;
+  const zip = await ZipReader.open(path);
   try {
-    await new Promise<void>((resolve, reject) => {
-      zip.on("error", reject);
-      zip.on("end", resolve);
-      zip.on("entry", (entry: Yauzl.Entry) => {
-        if (++count > 2048 || zip.entryCount > 2048) {
-          reject(new Truncation("Archive limit"));
-          return;
-        }
-        if (entry.generalPurposeBitFlag & 1) {
-          reject(new Error("Encrypted archive"));
-          return;
-        }
-        if (!/\.(xml|rels|xhtml|html|htm|opf|svg)$/i.test(entry.fileName)) {
-          zip.readEntry();
-          return;
-        }
-        if (
-          entry.uncompressedSize > MAX_EXPANDED ||
-          entry.uncompressedSize > Math.max(1024, entry.compressedSize * 200)
-        ) {
-          reject(new Truncation("Archive limit"));
-          return;
-        }
-        expanded += entry.uncompressedSize;
-        if (expanded > MAX_EXPANDED) {
-          reject(new Truncation("Expanded byte limit"));
-          return;
-        }
-        zip.openReadStream(entry, (error, stream) => {
-          if (error || !stream) {
-            reject(error);
-            return;
-          }
-          const buffers: Buffer[] = [];
-          let size = 0;
-          stream.on("error", reject);
-          stream.on("data", (chunk: Buffer) => {
-            size += chunk.length;
-            if (size > entry.uncompressedSize || size > MAX_EXPANDED) {
-              stream.destroy(new Truncation("Entry byte limit"));
-              return;
-            }
-            buffers.push(chunk);
-          });
-          stream.on("end", () => {
-            const data = Buffer.concat(buffers);
-            // XML's BOM and initial '<' bytes distinguish both UTF-16 byte orders.
-            const encoding =
-              (data[0] === 0xff && data[1] === 0xfe) || (data[0] === 0x3c && data[1] === 0)
-                ? "utf-16le"
-                : (data[0] === 0xfe && data[1] === 0xff) || (data[0] === 0 && data[1] === 0x3c)
-                  ? "utf-16be"
-                  : "utf-8";
-            files.set(entry.fileName, new TextDecoder(encoding).decode(data));
-            zip.readEntry();
-          });
-        });
-      });
-      zip.readEntry();
-    });
+    if (zip.entries.length > 2048) throw new Truncation("Archive limit");
+    const files = new Map<string, string>();
+    let expanded = 0;
+    for (const entry of zip.entries) {
+      if (entry.generalPurposeBitFlag & 1) throw new Error("Encrypted archive");
+      if (!/\.(xml|rels|xhtml|html|htm|opf|svg)$/i.test(entry.fileName)) continue;
+      if (
+        entry.uncompressedSize > MAX_EXPANDED ||
+        entry.uncompressedSize > Math.max(1024, entry.compressedSize * 200)
+      )
+        throw new Truncation("Archive limit");
+      if ((expanded += entry.uncompressedSize) > MAX_EXPANDED)
+        throw new Truncation("Expanded byte limit");
+      const data = Buffer.concat(await (await zip.openReadStream(entry)).toArray());
+      // XML's BOM and initial '<' bytes distinguish both UTF-16 byte orders.
+      const encoding =
+        (data[0] === 0xff && data[1] === 0xfe) || (data[0] === 0x3c && data[1] === 0)
+          ? "utf-16le"
+          : (data[0] === 0xfe && data[1] === 0xff) || (data[0] === 0 && data[1] === 0x3c)
+            ? "utf-16be"
+            : "utf-8";
+      files.set(entry.fileName, new TextDecoder(encoding).decode(data));
+    }
+    return files;
   } finally {
-    zip.close();
+    await zip.close();
   }
-  return files;
 }
 
 const NOTEBOOK_CELL_TYPES = ["code", "markdown", "raw"];
@@ -470,7 +423,8 @@ function* rtf(source: string): Generator<string, void> {
   const hidden = () => state.skip || state.deleted;
   const symbols = new Map([
     ["endash", "–"],
-    ["emdash", characterEntities.mdash],
+    // oxlint-disable-next-line t3code/no-em-dash-copy -- Preserve the RTF document's punctuation.
+    ["emdash", "—"],
     ["enspace", "\u2002"],
     ["emspace", "\u2003"],
     ["qmspace", "\u2005"],

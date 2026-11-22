@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useId, useState } from "react";
 import { Image, Pressable, View } from "react-native";
 

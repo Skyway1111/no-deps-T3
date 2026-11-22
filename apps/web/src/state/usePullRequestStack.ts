@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { ThreadPullRequestLink, type EnvironmentId, type PullRequestRef } from "@t3tools/contracts";
-import { useMessages } from "gt-react";
+import { useMessages } from "@t3tools/shared/i18n/react";
 import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import {

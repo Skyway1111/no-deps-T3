@@ -1,5 +1,4 @@
-import { decodeMsg, decodeOptions, mFallback } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { decodeMsg, decodeOptions, mFallback, type MFunctionType } from "@t3tools/shared/i18n";
 import * as Schema from "effect/Schema";
 
 /**

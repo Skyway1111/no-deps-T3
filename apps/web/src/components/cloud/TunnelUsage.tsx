@@ -1,6 +1,6 @@
 import { T3CHAT_PLAN_TUNNEL_LIMITS } from "@t3tools/contracts/relay";
-import { TriangleAlertIcon } from "lucide-react";
-import { msg, T, useGT } from "gt-react";
+import { TriangleAlertIcon } from "~/ui-core/icons";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 
 import type { ManagedTunnelUpgrade } from "../../cloud/managedRelayState";

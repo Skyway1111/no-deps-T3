@@ -1,7 +1,7 @@
 import type { EnvironmentId, ProviderThreadId, ThreadId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { T, useGT } from "gt-react";
-import { CheckIcon, CopyIcon, ExternalLinkIcon } from "lucide-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { CheckIcon, CopyIcon, ExternalLinkIcon } from "~/ui-core/icons";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";

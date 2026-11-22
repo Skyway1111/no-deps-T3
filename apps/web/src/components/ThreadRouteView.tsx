@@ -4,7 +4,7 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { Navigate, useNavigate } from "@tanstack/react-router";
+import { Navigate, useNavigate } from "~/ui-core/router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";

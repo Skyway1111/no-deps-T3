@@ -3,7 +3,7 @@
 // and writes the counts through the writeRenderReport browser command. They mount the
 // components ChatView composes, not ChatView, which needs a live environment connection.
 import { EnvironmentId, MessageId } from "@t3tools/contracts";
-import type { LegendListRef } from "@legendapp/list/react";
+import type { VirtualListRef } from "~/ui-core/virtualList";
 import { createRef, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { commands, userEvent } from "vite-plus/test/browser";
@@ -90,7 +90,7 @@ const versionedProps = { onManualNavigation: () => {} };
 function timelineFor() {
   const props: Omit<TimelineProps, "timelineEntries" | "routeThreadKey"> = {
     isWorking: false,
-    listRef: createRef<LegendListRef | null>(),
+    listRef: createRef<VirtualListRef | null>(),
     latestRun: null,
     turnDiffSummaries: [],
     runs: [],

@@ -1,4 +1,4 @@
-import { useMessages } from "gt-react";
+import { useMessages } from "@t3tools/shared/i18n/react";
 
 import { orderItemsByPreferredIds, sortSidebarV2ProjectGroups } from "../components/Sidebar.logic";
 import {

@@ -1,4 +1,4 @@
-import { createMemoryHistory } from "@tanstack/react-router";
+import { createMemoryHistory } from "~/ui-core/router";
 import {
   ProviderDriverKind,
   ProviderInstanceId,

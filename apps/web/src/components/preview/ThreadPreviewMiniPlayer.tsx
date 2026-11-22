@@ -3,7 +3,7 @@ import { m } from "~/i18n/messages";
 import { FILL_PREVIEW_VIEWPORT, type ScopedThreadRef } from "@t3tools/contracts";
 import { previewPdfAssetUrl } from "@t3tools/shared/preview";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
-import { PanelRightIcon, PictureInPicture2, XIcon } from "lucide-react";
+import { PanelRightIcon, PictureInPicture2Icon as PictureInPicture2, XIcon } from "~/ui-core/icons";
 import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -12,8 +12,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { T, useGT } from "gt-react";
-import { create } from "zustand";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { create } from "@t3tools/shared/core/react";
 import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 

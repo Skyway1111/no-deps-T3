@@ -13,8 +13,8 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
-import { PlusIcon, XIcon } from "lucide-react";
+import { msg, T, useGT, useLocale, useMessages, Var } from "@t3tools/shared/i18n/react";
+import { PlusIcon, XIcon } from "~/ui-core/icons";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { reconcileSnoozeDraft, sortSnoozeRows } from "./SnoozePresetsSettings.logic";

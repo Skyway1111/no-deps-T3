@@ -15,7 +15,7 @@ import {
   type ReviewRenderableLineRow,
 } from "./reviewModel";
 import type { ReviewInlineComment } from "./reviewCommentSelection";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 
 const NATIVE_REVIEW_MAX_WORD_DIFF_RANGE_COUNT = 4;

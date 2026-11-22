@@ -12,7 +12,7 @@ import {
   markdownWithTableBreaks,
   markdownWithTextDirection,
 } from "../lib/markdownDocument";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { isValidElement, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { Platform, Share, StyleSheet, useWindowDimensions, View } from "react-native";
 import {

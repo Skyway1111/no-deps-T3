@@ -1,24 +1,24 @@
 import type { DeviceHostSummary, DevicePlatform } from "@t3tools/contracts";
 import {
-  Camera,
-  ChevronLeft,
-  Home,
-  Keyboard,
-  Box,
-  Maximize,
-  MoreHorizontal,
-  PictureInPicture2,
-  Power,
-  RotateCcw,
-  SlidersHorizontal,
-  Smartphone,
-  Square,
-  Type,
-  X,
+  CameraIcon as Camera,
+  ChevronLeftIcon as ChevronLeft,
+  HouseIcon as Home,
+  KeyboardIcon as Keyboard,
+  BoxIcon as Box,
+  MaximizeIcon as Maximize,
+  EllipsisIcon as MoreHorizontal,
+  PictureInPicture2Icon as PictureInPicture2,
+  PowerIcon as Power,
+  RotateCcwIcon as RotateCcw,
+  SlidersHorizontalIcon as SlidersHorizontal,
+  SmartphoneIcon as Smartphone,
+  SquareIcon as Square,
+  TypeIcon as Type,
+  XIcon as X,
   MoonIcon,
   SunIcon,
-} from "lucide-react";
-import { T, useGT, useMessages, msg } from "gt-react";
+} from "~/ui-core/icons";
+import { T, useGT, useMessages, msg } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import {

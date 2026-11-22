@@ -1,7 +1,7 @@
 import type { PullRequestAction } from "@t3tools/contracts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { T } from "gt-react";
-import { SearchIcon } from "lucide-react";
+import { T } from "@t3tools/shared/i18n/react";
+import { SearchIcon } from "~/ui-core/icons";
 import { PullRequestChangeBreakdownStat } from "./PullRequestChangeBreakdownStat";
 import { PullRequestStackPopover } from "./PullRequestStackPopover";
 import {

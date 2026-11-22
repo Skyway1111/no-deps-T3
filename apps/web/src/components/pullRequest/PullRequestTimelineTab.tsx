@@ -18,12 +18,12 @@ import {
   ChevronDownIcon,
   CircleCheckIcon,
   ExternalLinkIcon,
-  FileCode2Icon,
+  FileCodeCornerIcon as FileCode2Icon,
   GitCommitHorizontalIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 
 import { m } from "~/i18n/messages";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
@@ -72,7 +72,7 @@ import {
   type PullRequestCompletionScope,
   pullRequestCompletionScope,
 } from "./PullRequestMarkdownTextarea";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
 
 import { changeRequestTermKind, type ChangeRequestTermKind } from "./changeRequestTerm";
 
@@ -862,7 +862,7 @@ export function PullRequestTimelineTab({
   const anchor = linked
     ? resolvePullRequestReviewAnchor(linked.anchor, detail.comments, detail.reviewThreads)
     : null;
-  const listRef = useRef<LegendListRef | null>(null);
+  const listRef = useRef<VirtualListRef | null>(null);
   const matches = (event: PullRequestTimelineEvent) =>
     anchor !== null && pullRequestTimelineEventMatches(event, anchor);
 
@@ -990,8 +990,8 @@ export function PullRequestTimelineTab({
   // Virtualized: a large pull request has thousands of events, and mounting every one stalls
   // the page. The connector line is drawn by the content container, behind the rows.
   return (
-    <LegendList<PullRequestTimelineRow>
-      ref={(list: LegendListRef | null) => {
+    <VirtualList<PullRequestTimelineRow>
+      ref={(list: VirtualListRef | null) => {
         listRef.current = list;
         scrollerRef(list?.getScrollableNode() ?? null);
       }}

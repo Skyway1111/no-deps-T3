@@ -10,7 +10,7 @@ import {
 import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import type { EnvironmentThread } from "@t3tools/client-runtime/state/shell";
 import { Atom } from "effect/reactivity";
-import { T, useGT, useMessages } from "gt-react-native";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 

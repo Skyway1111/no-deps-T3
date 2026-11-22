@@ -24,9 +24,9 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { CircleArrowUpIcon } from "lucide-react";
+import { CircleArrowUpIcon } from "~/ui-core/icons";
 import { type ComponentProps, useRef, useState } from "react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 
 import { requestConfirmDialog } from "~/confirmDialog";

@@ -1,7 +1,5 @@
-import type { RootContent } from "mdast";
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import { msg } from "gt-react-native";
+import { parseMarkdown, type MdNode } from "@t3tools/shared/markdown";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 
 import { decodeHtmlEntities, markdownHtmlTags } from "./markdownDocument";
@@ -18,7 +16,6 @@ export type MarkdownDetailsSegment =
 
 type OpenFold = { start: number; openTagEnd: number; open: boolean };
 
-const parser = unified().use(remarkParse);
 const DETAILS_TAG = /^<(\/?)details\b/i;
 const SUMMARY = /^\s*<summary\b[^>]*>([\s\S]*?)<\/summary\s*>/i;
 
@@ -38,7 +35,7 @@ export function splitMarkdownDetails(
   // Asserted so the scan closure's writes are not narrowed away after the loop.
   let current = null as OpenFold | null;
   // A fold opens only at block level; once open, a tag inside a paragraph can close it.
-  const scan = (node: RootContent, inline: boolean) => {
+  const scan = (node: MdNode, inline: boolean) => {
     if (node.type !== "html") {
       if (depth > 0 && "children" in node) {
         for (const child of node.children) scan(child, true);
@@ -71,7 +68,7 @@ export function splitMarkdownDetails(
       }
     }
   };
-  for (const node of parser.parse(markdown).children) scan(node, false);
+  for (const node of parseMarkdown(markdown).children) scan(node, false);
   if (current) folds.push({ ...current, end: markdown.length, closeTagLength: 0 });
   if (folds.length === 0) return [{ kind: "markdown", markdown, sourceOffset: 0 }];
 

@@ -1,7 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { SourceControlDefinition } from "@t3tools/client-runtime/source-control-clients";
 import * as Equal from "effect/Equal";
-import { T } from "gt-react";
+import { T } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";

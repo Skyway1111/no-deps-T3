@@ -12,8 +12,8 @@ import {
   type ProviderSettingsFormSchemaAnnotation,
   type SecretReference,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { PlusIcon, XIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { PlusIcon, XIcon } from "~/ui-core/icons";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { cn } from "../../lib/utils";

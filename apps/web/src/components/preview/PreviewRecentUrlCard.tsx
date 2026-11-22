@@ -1,6 +1,6 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { X } from "lucide-react";
+import { XIcon as X } from "~/ui-core/icons";
 
 import { isValidHistoryTimestamp, type BrowserHistoryEntry } from "~/browserHistoryStore";
 import { RelativeTime } from "~/components/RelativeTime";

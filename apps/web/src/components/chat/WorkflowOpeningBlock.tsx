@@ -1,4 +1,4 @@
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import { useSideThreadTrigger } from "../../hooks/useSideThreadTrigger";
 import { useAtomValue } from "@effect/atom-react";
@@ -15,7 +15,7 @@ import type {
   ProviderInstanceId,
   ServerProvider,
 } from "@t3tools/contracts";
-import { ChevronRightIcon, WorkflowIcon } from "lucide-react";
+import { ChevronRightIcon, WorkflowIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import { cn } from "../../lib/utils";

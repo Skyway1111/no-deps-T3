@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
@@ -19,7 +19,7 @@ import {
   verifyPersistedAttachmentUpload,
   type PersistedAttachmentVerification,
 } from "@t3tools/client-runtime/state/attachments";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";

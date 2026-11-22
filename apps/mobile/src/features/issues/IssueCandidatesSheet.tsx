@@ -1,5 +1,5 @@
 import { LegendList } from "@legendapp/list/react-native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import { Platform, View } from "react-native";
 

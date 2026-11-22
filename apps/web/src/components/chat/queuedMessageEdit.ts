@@ -7,7 +7,7 @@ import {
   type ComposerImageAttachment,
   type ComposerThreadTarget,
 } from "../../composerDraftStore";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../../i18n/messages";
 import { releaseDraftAttachments } from "../../lib/attachmentUploadQueue";
 

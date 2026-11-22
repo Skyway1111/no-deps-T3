@@ -25,8 +25,8 @@ vi.mock("react", () => ({
   useState: <A>(initial: A) => [initial, () => {}],
 }));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
-vi.mock("gt-react-native", async (importOriginal) => {
-  const gt = await importOriginal<typeof import("gt-react-native")>();
+vi.mock("@t3tools/shared/i18n/react", async (importOriginal) => {
+  const gt = await importOriginal<typeof import("@t3tools/shared/i18n/react")>();
   return { ...gt, useGT: () => gt.mFallback, useMessages: () => gt.mFallback };
 });
 vi.mock("@react-navigation/native", () => ({

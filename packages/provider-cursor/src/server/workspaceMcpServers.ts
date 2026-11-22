@@ -7,7 +7,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as ChildProcess from "effect/process/ChildProcess";
 import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
-import { parse as parseJsonc, type ParseError } from "jsonc-parser";
+import { parseJsonc } from "@t3tools/shared/parsers/jsonc";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 // The SDK's own placeholder grammar: `${env:NAME}`, `${NAME}` and `${NAME:-default}`.
@@ -88,11 +88,7 @@ export const cursorWorkspaceMcpServers = Effect.fn("cursorWorkspaceMcpServers")(
   const path = yield* Path.Path;
   const readJsonc = (file: string) =>
     fileSystem.readFileString(file).pipe(
-      Effect.map((contents): unknown => {
-        const errors: ParseError[] = [];
-        const value: unknown = parseJsonc(contents, errors, { allowTrailingComma: true });
-        return errors.length === 0 ? value : null;
-      }),
+      Effect.map((contents) => parseJsonc(contents) ?? null),
       Effect.catchIf(
         (error) => error.reason._tag === "NotFound",
         () => Effect.void,

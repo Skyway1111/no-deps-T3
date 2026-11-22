@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 export interface ThreadSelectionState {
   selectedThreadKeys: ReadonlySet<string>;

@@ -3,14 +3,16 @@ import {
   type DragEndEvent,
   PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { T, useGT } from "gt-react";
-import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, XIcon } from "lucide-react";
+  sensor,
+  restrictToParentElement,
+  restrictToVerticalAxis,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  CSS,
+} from "~/ui-core/dnd";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, XIcon } from "~/ui-core/icons";
 
 import { cn } from "~/lib/utils";
 import { type BrowserMicrophone, updateMicrophoneOrder } from "../../speech/browserMicrophones";
@@ -34,7 +36,7 @@ export function MicrophoneOrderList(props: {
   const inUse = microphoneEntryKey(preferredMicrophone(order, devices));
   // Device ids stay hidden until microphone permission, so connection is unknown before it.
   const devicesKnown = devices.some((device) => device.deviceId);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const sensors = [sensor(PointerSensor, { activationConstraint: { distance: 4 } })];
   const move = (key: string, steps: number) =>
     updateMicrophoneOrder((current) => moveMicrophone(current, key, steps));
   const handleDragEnd = (event: DragEndEvent) => {
@@ -102,8 +104,9 @@ function MicrophoneRow(props: {
 }) {
   const gt = useGT();
   const { name } = props;
-  const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: props.id });
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.id,
+  });
   return (
     <li
       ref={setNodeRef}
@@ -130,7 +133,6 @@ function MicrophoneRow(props: {
         ) : null}
       </span>
       <span
-        ref={setActivatorNodeRef}
         {...listeners}
         aria-hidden
         className="hidden size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 hover:text-foreground active:cursor-grabbing @min-[32rem]/settings-row:flex"

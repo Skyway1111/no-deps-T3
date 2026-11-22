@@ -1,6 +1,6 @@
 import type { SourceControlProviderKind } from "@t3tools/contracts";
-import { T, useMessages, Var } from "gt-react";
-import { ExternalLinkIcon, TriangleAlertIcon } from "lucide-react";
+import { T, useMessages, Var } from "@t3tools/shared/i18n/react";
+import { ExternalLinkIcon, TriangleAlertIcon } from "~/ui-core/icons";
 
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 

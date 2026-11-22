@@ -1,6 +1,6 @@
 import type { SubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
 import { GlassContainer, GlassView } from "expo-glass-effect";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { type LayoutChangeEvent, Pressable, useWindowDimensions, View } from "react-native";
 import Animated, {

@@ -1,5 +1,5 @@
-import { T, useGT, useMessages } from "gt-react";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { CheckIcon, ChevronDownIcon } from "~/ui-core/icons";
 import { useState } from "react";
 
 import {

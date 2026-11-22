@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "../i18n/messages";
 import { appAtomRegistry, subscribeAtomChanges } from "../rpc/atomRegistry";

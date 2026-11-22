@@ -2,8 +2,7 @@ import type { ThreadStructureVisibleTurnItem } from "@t3tools/client-runtime/sta
 import { turnItemDetailRevision } from "@t3tools/client-runtime/work-log/item-detail";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { RunId, ScopedThreadRef, ThreadId, TurnItemId } from "@t3tools/contracts";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { create, createJSONStorage, persist } from "@t3tools/shared/core/react";
 
 import { resolveStorage } from "./lib/storage";
 

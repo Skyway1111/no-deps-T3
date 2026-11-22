@@ -1,4 +1,4 @@
-import { createMemoryHistory } from "@tanstack/react-router";
+import { createMemoryHistory } from "~/ui-core/router";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import type * as Context from "effect/Context";
 import { expect, it, vi } from "vite-plus/test";

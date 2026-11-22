@@ -15,8 +15,8 @@ import type {
   EnvironmentId,
   ProviderInstanceConfig,
 } from "@t3tools/contracts";
-import { ExternalLinkIcon, SearchIcon } from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { ExternalLinkIcon, SearchIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { type FormEvent, useState } from "react";
 
 import { useDeadlinePassed } from "../../hooks/useDeadline";

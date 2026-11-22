@@ -1,6 +1,5 @@
 import { type PointerEvent as ReactPointerEvent } from "react";
-import { type SensorProps } from "@dnd-kit/core";
-import { getOwnerDocument, getWindow } from "@dnd-kit/utilities";
+import { type SensorProps } from "~/ui-core/dnd";
 
 type Options = {
   distance: number;
@@ -28,8 +27,8 @@ export class SidebarPointerSensor {
 
   constructor(private readonly props: Omit<SensorProps<Options>, "activeNode" | "context">) {
     this.pointer = props.event as PointerEvent;
-    this.document = getOwnerDocument(this.pointer.target);
-    this.window = getWindow(this.pointer.target);
+    this.document = (this.pointer.target as Node | null)?.ownerDocument ?? document;
+    this.window = this.document.defaultView ?? window;
     this.document.addEventListener("pointermove", this.move, { passive: false, capture: true });
     this.document.addEventListener("pointerup", this.end, { capture: true });
     this.document.addEventListener("pointercancel", this.pointerCancel, { capture: true });

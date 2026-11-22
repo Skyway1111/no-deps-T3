@@ -1,4 +1,4 @@
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { ComponentProps } from "react";
 import { FloatingActionButton } from "./ui/FloatingActionButton.android";
 import { ScrollComposeButton } from "./ScrollComposeButton.android";

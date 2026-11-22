@@ -22,9 +22,9 @@ import {
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
 } from "@t3tools/shared/model";
-import { msg, T, useMessages } from "gt-react";
+import { msg, T, useMessages } from "@t3tools/shared/i18n/react";
 import { memo } from "react";
-import { GaugeIcon } from "lucide-react";
+import { GaugeIcon } from "~/ui-core/icons";
 import {
   Menu,
   MenuGroup,

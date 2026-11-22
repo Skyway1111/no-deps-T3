@@ -21,8 +21,8 @@ import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react";
-import { useRouter } from "@tanstack/react-router";
+import { msg } from "@t3tools/shared/i18n/react";
+import { useRouter } from "~/ui-core/router";
 
 import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../components/Sidebar.logic";
 import { useComposerDraftStore } from "../composerDraftStore";

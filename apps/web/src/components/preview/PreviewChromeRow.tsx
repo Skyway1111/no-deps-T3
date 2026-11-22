@@ -1,12 +1,12 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
-  ArrowLeft,
-  ArrowRight,
-  Camera,
-  ExternalLink,
-  MousePointerClick,
-  PictureInPicture2,
-} from "lucide-react";
+  ArrowLeftIcon as ArrowLeft,
+  ArrowRightIcon as ArrowRight,
+  CameraIcon as Camera,
+  ExternalLinkIcon as ExternalLink,
+  MousePointerClickIcon as MousePointerClick,
+  PictureInPicture2Icon as PictureInPicture2,
+} from "~/ui-core/icons";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -14,7 +14,7 @@ import {
   type RefObject,
   useState,
 } from "react";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";

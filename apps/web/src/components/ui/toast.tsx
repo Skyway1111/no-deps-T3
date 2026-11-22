@@ -1,7 +1,7 @@
 import { Spinner } from "~/components/ui/spinner";
 
-import { Toast } from "@base-ui/react/toast";
-import { msg, useGT } from "gt-react";
+import { Toast } from "~/ui-core/toast";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 import {
   useEffect,
   useState,
@@ -21,7 +21,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CopyIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 
 import { cn } from "~/lib/utils";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -71,40 +71,9 @@ export type ThreadToastData = {
     | "secondary";
 };
 
-type BaseToastManager = ReturnType<typeof Toast.createToastManager<ThreadToastData>>;
-type ToastManagerListener = Parameters<BaseToastManager[" subscribe"]>[0];
-type ToastManagerEvent = Parameters<ToastManagerListener>[0];
-
-/**
- * base-ui's manager drops events while no provider is subscribed. App services raise toasts
- * from before the first render (and while the root error view replaces the providers), so hold
- * those until a provider listens.
- */
-function createBufferedToastManager(): BaseToastManager {
-  const manager = Toast.createToastManager<ThreadToastData>();
-  const listeners = new Set<ToastManagerListener>();
-  const pending: ToastManagerEvent[] = [];
-  manager[" subscribe"]((event) => {
-    if (listeners.size === 0) {
-      pending.push(event);
-      return;
-    }
-    for (const listener of listeners) listener(event);
-  });
-  return {
-    ...manager,
-    " subscribe"(listener) {
-      listeners.add(listener);
-      for (const event of pending.splice(0)) listener(event);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
-}
-
-const toastManager = createBufferedToastManager();
-const anchoredToastManager = createBufferedToastManager();
+// Toasts raised before a provider mounts wait in the manager until one subscribes.
+const toastManager = Toast.createToastManager<ThreadToastData>();
+const anchoredToastManager = Toast.createToastManager<ThreadToastData>();
 type ToastId = ReturnType<typeof toastManager.add>;
 const threadToastVisibleTimeoutRemainingMs = new Map<ToastId, number>();
 

@@ -3,7 +3,7 @@ import { createRuntimeCommand } from "@t3tools/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { m } from "../../i18n/messages";

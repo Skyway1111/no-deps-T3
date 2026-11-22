@@ -8,7 +8,7 @@ import {
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import * as Haptics from "expo-haptics";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { useSyncExternalStore } from "react";
 
 import type { MessageResolver } from "../i18n/messages";

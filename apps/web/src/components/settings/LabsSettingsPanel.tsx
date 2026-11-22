@@ -1,7 +1,7 @@
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { useAuth } from "@clerk/react";
-import { Link } from "@tanstack/react-router";
-import { T, useGT, useMessages } from "gt-react";
+import { Link } from "~/ui-core/router";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";

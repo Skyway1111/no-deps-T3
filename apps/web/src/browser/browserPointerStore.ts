@@ -1,5 +1,5 @@
 import type { DesktopPreviewPointerEvent } from "@t3tools/contracts";
-import { create } from "zustand";
+import { create } from "@t3tools/shared/core/react";
 
 interface BrowserPointerStoreState {
   readonly byTabId: Record<string, DesktopPreviewPointerEvent>;

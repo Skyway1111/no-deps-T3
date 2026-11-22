@@ -1,5 +1,5 @@
 import { quoteGitPatchPath } from "@t3tools/shared/gitPatchPath";
-import { structuredPatch } from "diff";
+import { structuredPatch } from "@t3tools/shared/diff";
 
 import type { AzureDevOpsChangeEntry } from "./azureDevOpsPullRequestJson.ts";
 

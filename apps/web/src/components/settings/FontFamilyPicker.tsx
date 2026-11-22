@@ -1,7 +1,7 @@
-import { useLegendListRef } from "~/hooks/useLegendListRef";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import { T, useGT } from "gt-react";
-import { CheckIcon } from "lucide-react";
+import { useVirtualListRef } from "~/hooks/useVirtualListRef";
+import { VirtualList, type VirtualListRef } from "~/ui-core/virtualList";
+import { T, useGT } from "@t3tools/shared/i18n/react";
+import { CheckIcon } from "~/ui-core/icons";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   displayFontFamily,
@@ -110,13 +110,13 @@ export function FontFamilyPicker({
     // oxlint-disable-next-line react/set-state-in-effect -- Base UI needs one closed commit first to record the popup's entrance style.
     if (openAfterMount) setOpen(true);
   }, [openAfterMount]);
-  const listRef = useRef<LegendListRef | null>(null);
+  const listRef = useRef<VirtualListRef | null>(null);
   const [listHeight, setListHeight] = useState(288);
   const handleMetricsChange = () => {
     const metrics = listRef.current?.getState();
     if (metrics) setListHeight(Math.min(metrics.contentLength, 288));
   };
-  const scrollRef = useLegendListRef(listRef, handleMetricsChange);
+  const scrollRef = useVirtualListRef(listRef, handleMetricsChange);
   const enumeration = useFontEnumeration();
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -216,7 +216,7 @@ export function FontFamilyPicker({
           {/* Short windows cap the popup; every level down to the list must shrink or rows are clipped unreachably. */}
           <div className="relative flex min-h-0 max-h-72 w-full flex-1 flex-col overflow-hidden">
             <ComboboxListVirtualized className="flex min-h-0 flex-col">
-              <LegendList<string>
+              <VirtualList<string>
                 ref={scrollRef}
                 data={items}
                 dataKey={query}

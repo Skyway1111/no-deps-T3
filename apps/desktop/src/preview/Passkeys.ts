@@ -1,7 +1,7 @@
 // @effect-diagnostics globalTimers:off - Ceremonies settle inside IPC handlers, outside an Effect runtime.
 import type { IpcMainInvokeEvent, Session, WebContents, WebFrameMain } from "electron";
 import { app, BrowserWindow, dialog, webContents as electronWebContents } from "electron";
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";

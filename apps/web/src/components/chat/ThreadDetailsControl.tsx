@@ -1,6 +1,5 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { T, Var } from "gt-react";
+import { mergeProps, renderElement } from "~/ui-core/primitives";
+import { T, Var } from "@t3tools/shared/i18n/react";
 import type { ComponentProps } from "react";
 
 import { cn } from "~/lib/utils";
@@ -16,7 +15,7 @@ import {
   THREAD_DETAILS_PANEL_SELECT_LABEL_CLASS,
   THREAD_DETAILS_PANEL_SELECT_ICON_CLASS,
 } from "./threadDetailsPanelStyles";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon } from "~/ui-core/icons";
 
 const parts = {
   row: THREAD_DETAILS_PANEL_ROW_CLASS,
@@ -48,7 +47,7 @@ export function ThreadDetailsControl({
   multiline?: boolean;
   tone?: "default" | "muted" | "primary" | "destructive";
 }) {
-  const control = useRender({
+  const control = renderElement({
     defaultTagName: "button",
     render,
     props: mergeProps<"button">(

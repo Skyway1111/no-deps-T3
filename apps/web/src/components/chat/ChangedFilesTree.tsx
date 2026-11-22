@@ -1,6 +1,5 @@
-import { useSyncLayout } from "@legendapp/list/react";
 import { type OrchestrationV2CheckpointFileTotals, type RunId } from "@t3tools/contracts";
-import { T, useGT } from "gt-react";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { type MouseEvent, type ReactNode, memo, useLayoutEffect, useRef, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import { buildTurnDiffTree, type TurnDiffTreeNode } from "../../lib/turnDiffTree";
@@ -12,7 +11,7 @@ import {
   FolderClosedIcon,
   FolderGit2Icon,
   FolderIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
@@ -81,7 +80,6 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     onFileContextMenu,
   } = props;
   const gt = useGT();
-  const syncTimelineLayout = useSyncLayout();
   const listedFiles = groups ? groups.flatMap((group) => group.files) : files;
   const hiddenFileCount = totals.count - listedFiles.length;
   const hasDirectories = listedFiles.some((file) => /[/\\]/.test(file.path));
@@ -130,7 +128,6 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                     data-scroll-anchor-ignore
                     onClick={() => {
                       onToggleAllDirectories();
-                      syncTimelineLayout();
                     }}
                   />
                 }
@@ -224,7 +221,6 @@ function ChangedFilesGroupSection(props: {
   const { runId, group, allDirectoriesExpanded, resolvedTheme, onOpenTurnDiff, onFileContextMenu } =
     props;
   const [collapsed, setCollapsed] = useState(false);
-  const syncTimelineLayout = useSyncLayout();
   return (
     <section data-changed-files-group={group.name}>
       <button
@@ -234,7 +230,6 @@ function ChangedFilesGroupSection(props: {
         className="group flex h-7 w-full cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 pl-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={() => {
           setCollapsed(!collapsed);
-          syncTimelineLayout();
         }}
       >
         <ChevronRightIcon
@@ -292,7 +287,6 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
     key: string | null;
     overrides: Record<string, boolean>;
   }>({ key: null, overrides: {} });
-  const syncTimelineLayout = useSyncLayout();
   const treeNodes = buildTurnDiffTree(files);
   const directoryPathsKey = collectDirectoryPaths(treeNodes).join("\u0000");
   const hasDirectoryNodes = directoryPathsKey.length > 0;
@@ -313,8 +307,6 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
         },
       };
     });
-    // Measure before paint instead of waiting for LegendList's deferred shrink measurement.
-    syncTimelineLayout();
   };
 
   const rows = collectExpandedRows(treeNodes, expandedDirectories, allDirectoriesExpanded);

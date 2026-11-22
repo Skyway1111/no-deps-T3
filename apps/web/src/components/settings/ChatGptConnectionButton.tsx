@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import type { ComponentProps } from "react";
 import { OpenAI } from "../Icons";
 import { Button } from "../ui/button";

@@ -25,7 +25,7 @@ import {
 } from "@t3tools/client-runtime/scheduled-task-webhook";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import {
   resolveProjectSettings,

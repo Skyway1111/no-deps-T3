@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect } from "react";
 import { BackHandler, Keyboard } from "react-native";
 import { AppBar } from "../../../components/ui/AppBar";

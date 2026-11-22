@@ -13,7 +13,7 @@ import {
   Vector3,
   type PerspectiveCamera,
   type Texture,
-} from "three";
+} from "./webglEngine.ts";
 import type { DuoRestFrame } from "./duoSnap.ts";
 import type { DeviceScreenSize } from "./stream.ts";
 
@@ -72,8 +72,8 @@ export function createDuoScene(asset: Group, textures: Record<DuoPanelId, Textur
   const relative = new Matrix4();
   const inverse = new Matrix4();
   const materials = {
-    1: new MeshBasicMaterial({ map: textures[1], toneMapped: false }),
-    3: new MeshBasicMaterial({ map: textures[3], toneMapped: false }),
+    1: new MeshBasicMaterial({ map: textures[1] }),
+    3: new MeshBasicMaterial({ map: textures[3] }),
   };
   const originals = new Map<Mesh, Mesh["material"]>();
   for (const id of [1, 3] as const) {

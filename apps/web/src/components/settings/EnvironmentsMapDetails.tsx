@@ -7,9 +7,15 @@ import {
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { T, useGT, useMessages } from "gt-react";
-import { ArrowRightIcon, ClockAlertIcon, PlusIcon, TriangleAlertIcon, XIcon } from "lucide-react";
-import { LegendList } from "@legendapp/list/react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import {
+  ArrowRightIcon,
+  ClockAlertIcon,
+  PlusIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "~/ui-core/icons";
+import { VirtualList } from "~/ui-core/virtualList";
 import { type ReactNode, useRef, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -469,7 +475,7 @@ function StackDetails({
         className="-mx-1.5"
         style={{ height: Math.min(shown.length, MEMBER_LIST_ROWS) * MEMBER_ROW_HEIGHT }}
       >
-        <LegendList<StackMember>
+        <VirtualList<StackMember>
           data={shown}
           keyExtractor={(member) => member.id}
           estimatedItemSize={MEMBER_ROW_HEIGHT}

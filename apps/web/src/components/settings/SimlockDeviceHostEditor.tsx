@@ -11,8 +11,8 @@ import {
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { XIcon } from "lucide-react";
-import { T, useGT, useMessages } from "gt-react";
+import { XIcon } from "~/ui-core/icons";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { deviceSimlockIdentityCheck } from "../../state/device";
 import { environmentAtomList, environmentIdsKey } from "../../state/environmentAtomList";

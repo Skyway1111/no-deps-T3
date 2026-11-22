@@ -10,7 +10,7 @@ import {
   makeRevisionedAssetUrlFamily,
 } from "@t3tools/client-runtime/state/assets";
 import { executeAtomQuery, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { msg, useMessages } from "gt-react-native";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import type { AssetResource, EnvironmentId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";

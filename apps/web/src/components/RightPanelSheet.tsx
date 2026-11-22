@@ -1,4 +1,4 @@
-import { T } from "gt-react";
+import { T } from "@t3tools/shared/i18n/react";
 import { type ReactNode } from "react";
 
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "./ui/sheet";

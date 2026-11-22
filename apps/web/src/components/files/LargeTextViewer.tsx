@@ -1,4 +1,4 @@
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import { m } from "~/i18n/messages";
 import { parseDelimitedPreview } from "@t3tools/shared/delimitedPreview";

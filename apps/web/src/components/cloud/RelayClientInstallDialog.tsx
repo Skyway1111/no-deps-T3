@@ -1,5 +1,5 @@
-import { DownloadIcon } from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { DownloadIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useSyncExternalStore } from "react";
 import type { RelayClientInstallProgressStage } from "@t3tools/contracts";
 

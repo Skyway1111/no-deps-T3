@@ -22,9 +22,9 @@ import type {
   PullRequestSummary,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowDownUpIcon, LayersIcon, Plug2Icon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { useNavigate, useSearch } from "~/ui-core/router";
+import { ArrowDownUpIcon, LayersIcon, Plug2Icon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 
 import { m } from "~/i18n/messages";
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from "react";
@@ -194,7 +194,7 @@ function usePendingListEntries(
 export function PullRequestsPage() {
   const gt = useGT();
   const resolve = useMessages();
-  const search = useSearch({ from: "/_chat/pull-requests" });
+  const search = useSearch<PullRequestsSearch>({ from: "/_chat/pull-requests" });
   const sort = search.sort ?? "ready";
   const statsPolicy: PullRequestStatsPolicy =
     sort === "ready" || sort === "largest" || sort === "smallest" ? "eager" : "visible";

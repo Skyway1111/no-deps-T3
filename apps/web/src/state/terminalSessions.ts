@@ -23,7 +23,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { formatEnvironmentQueryError } from "./query";
 import { terminalEnvironment } from "./terminal";
 import { environmentSession, sessionHasScope, useEnvironmentScope } from "./session";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 
 const EMPTY_KNOWN_TERMINAL_SESSIONS = Object.freeze<ReadonlyArray<KnownTerminalSession>>([]);

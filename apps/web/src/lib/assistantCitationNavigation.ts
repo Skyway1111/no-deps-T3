@@ -6,7 +6,7 @@ import type {
   ScopedThreadRef,
   ThreadId,
 } from "@t3tools/contracts";
-import { useRouter, type AnyRouter } from "@tanstack/react-router";
+import { useRouter, type AnyRouter } from "~/ui-core/router";
 import {
   formatAssistantCitationHref,
   parseAssistantCitationHref,
@@ -19,7 +19,7 @@ import { useRightPanelStore } from "../rightPanelStore";
 import { useQuietThreadShell } from "~/state/entities";
 import { randomUUID } from "./utils";
 
-declare module "@tanstack/react-router" {
+declare module "~/ui-core/router" {
   interface HistoryState {
     assistantCitationActivation?: string;
   }

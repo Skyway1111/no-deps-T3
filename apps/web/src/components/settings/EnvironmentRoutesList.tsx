@@ -4,18 +4,16 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
+  sensor,
+  restrictToParentElement,
+  restrictToVerticalAxis,
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+  CSS,
+} from "~/ui-core/dnd";
 import {
   type ConnectionRoute,
   connectionRouteAddress,
@@ -25,8 +23,8 @@ import {
   isLearned,
   pendingRouteOrder,
 } from "@t3tools/client-runtime/connection";
-import { GripVerticalIcon, PlusIcon, XIcon } from "lucide-react";
-import { T, useGT, useMessages } from "gt-react";
+import { GripVerticalIcon, PlusIcon, XIcon } from "~/ui-core/icons";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { requestConfirmDialog } from "~/confirmDialog";
@@ -64,10 +62,10 @@ export function EnvironmentRoutesList({
       : null;
   const reorder = useAtomCommand(environmentCatalog.reorderRoutes, "Reorder routes");
   const removeRoute = useAtomCommand(environmentCatalog.removeRoute, "Remove route");
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = [
+    sensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    sensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  ];
 
   const confirmRemove = async (route: ConnectionRoute) => {
     const address = connectionRouteAddress(route);
@@ -158,15 +156,9 @@ function SortableRouteRow({
   const id = connectionRouteId(route.target);
   const label = connectionRouteLabelText(route, messages);
   const address = connectionRouteAddress(route);
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
 
   return (
     <li
@@ -205,7 +197,6 @@ function SortableRouteRow({
       </div>
       <button
         type="button"
-        ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
         aria-label={gt("Reorder {route}, position {position}", { route: label, position })}

@@ -6,8 +6,8 @@ import type {
   SnapShotSource,
 } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { T, useGT, useMessages } from "gt-react";
-import { CircleAlertIcon, ImageIcon, PaperclipIcon, PlayIcon, XIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { CircleAlertIcon, ImageIcon, PaperclipIcon, PlayIcon, XIcon } from "~/ui-core/icons";
 import { type ComponentProps, useLayoutEffect, useRef } from "react";
 
 import {

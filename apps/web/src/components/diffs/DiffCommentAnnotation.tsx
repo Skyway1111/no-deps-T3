@@ -1,7 +1,7 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { reviewCommentRangeText } from "~/lib/composerContextRecords";
-import { MessageCircle, Trash2 } from "lucide-react";
+import { MessageCircleIcon as MessageCircle, Trash2Icon as Trash2 } from "~/ui-core/icons";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";

@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 /** Bubble classes for a guest's message. A pending one has a dashed edge and no fill. */
 export function guestBubbleClassName(pending: boolean): string {

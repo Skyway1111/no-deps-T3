@@ -27,7 +27,7 @@ import {
   ProviderDriverKind,
   ThreadId,
 } from "@t3tools/contracts";
-import { Link, useBlocker } from "@tanstack/react-router";
+import { Link, useBlocker } from "~/ui-core/router";
 import * as Schema from "effect/Schema";
 import {
   CheckIcon,
@@ -36,8 +36,8 @@ import {
   PlusIcon,
   SmartphoneIcon,
   TerminalIcon,
-} from "lucide-react";
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useLocale, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";

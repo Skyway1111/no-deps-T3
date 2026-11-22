@@ -1,4 +1,4 @@
-import { useGT, useMessages } from "gt-react-native";
+import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   WORKSPACE_TAB_LABELS,
   NAVIGATION_TAB_ICONS,

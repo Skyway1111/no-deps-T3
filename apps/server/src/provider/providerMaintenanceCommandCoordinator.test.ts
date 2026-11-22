@@ -1,34 +1,24 @@
 // @effect-diagnostics nodeBuiltinImport:off - A separate Node process stands in for another server.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
-import * as NodeModule from "node:module";
-import * as NodeUtil from "node:util";
+import { once } from "node:events";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import { t3SysPath } from "@t3tools/shared/sys/binary";
 import {
   machineLockFile,
   makeProviderMaintenanceCommandCoordinator,
 } from "./providerMaintenanceCommandCoordinator.ts";
 
-const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
-const lockModule = NodeModule.createRequire(import.meta.url).resolve("proper-lockfile");
 const probe = (file: string) =>
   Effect.promise(async () => {
-    const { stdout } = await execFile(process.execPath, [
-      "-e",
-      `
-    const { lock } = require(process.argv[1]);
-    lock(process.argv[2], { realpath: false }).then(async release => {
-      await release(); process.stdout.write('acquired');
-    }, error => {
-      if (error.code === 'ELOCKED') process.stdout.write('blocked');
-      else { console.error(error); process.exitCode = 1; }
+    const child = NodeChildProcess.spawn(t3SysPath(), ["flock", `${file}.flock`], {
+      stdio: ["ignore", "pipe", "inherit"],
     });
-  `,
-      lockModule,
-      file,
-    ]);
-    return stdout;
+    let stdout = "";
+    child.stdout.on("data", (chunk: Buffer) => (stdout += chunk));
+    const [code] = await once(child, "close");
+    return code === 0 && stdout.startsWith("locked") ? "acquired" : code === 3 ? "blocked" : `failed (${code})`;
   });
 
 it.live("holds the update's lock key against other server processes while it runs", () =>

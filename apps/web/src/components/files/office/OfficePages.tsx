@@ -1,5 +1,5 @@
 /* oxlint-disable react/no-array-index-key -- A page keeps its ordinal throughout incremental layout. */
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { observeResize } from "~/lib/observeResize";
 import {
   useEffect,

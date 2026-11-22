@@ -1,5 +1,5 @@
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { Platform } from "react-native";
 
 import { brandTitleOffset, CompactBrandTitle } from "../../../components/CompactBrandTitle";

@@ -15,8 +15,8 @@ import {
   type PullRequestCompletionSupport,
   type PullRequestComposerTrigger,
 } from "@t3tools/shared/pullRequestComposerTrigger";
-import { msg, useMessages } from "gt-react";
-import { CircleCheckIcon, CircleDotIcon } from "lucide-react";
+import { msg, useMessages } from "@t3tools/shared/i18n/react";
+import { CircleCheckIcon, CircleDotIcon } from "~/ui-core/icons";
 import { useId, useState, type Ref } from "react";
 import { flushSync } from "react-dom";
 

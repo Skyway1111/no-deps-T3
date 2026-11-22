@@ -7,9 +7,9 @@ import {
   Link2Icon,
   Unlink2Icon,
   TriangleAlertIcon,
-} from "lucide-react";
+} from "~/ui-core/icons";
 import type { PullRequestState } from "@t3tools/contracts";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 export const PullRequestGlyph = {
   pullRequest: GitPullRequestArrowIcon,

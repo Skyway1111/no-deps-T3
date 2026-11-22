@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { UNKNOWN_SOURCE_CONTROL_CLIENT } from "@t3tools/client-runtime/source-control-clients";
 import * as Schema from "effect/Schema";
-import { decodeMsg } from "gt-react";
+import { decodeMsg } from "@t3tools/shared/i18n/react";
 
 import {
   filterAvailableSettingsSearchItems,

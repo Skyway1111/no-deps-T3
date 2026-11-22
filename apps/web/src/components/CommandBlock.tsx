@@ -1,5 +1,5 @@
-import { msg, useGT } from "gt-react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
+import { CheckIcon, CopyIcon } from "~/ui-core/icons";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";

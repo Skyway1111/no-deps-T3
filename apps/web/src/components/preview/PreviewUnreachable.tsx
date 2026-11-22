@@ -1,4 +1,4 @@
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";

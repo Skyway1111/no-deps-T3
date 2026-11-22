@@ -8,7 +8,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
-import { parse as parseYamlDocument } from "yaml";
+import { parseYaml as parseYamlDocument } from "@t3tools/shared/parsers/yaml";
 
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 

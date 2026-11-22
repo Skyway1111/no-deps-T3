@@ -1,78 +1,42 @@
+import type { OrchestrationV2ConversationMessage } from "@t3tools/contracts";
+
+import { parseAssistantCitationHref } from "./assistantCitations.ts";
 import { shouldPreserveAssistantLineBreaks } from "./assistantInsights.ts";
-import { THREAD_FIND_BLOCK_TAGS } from "./threadFindBlockTags.ts";
-import {
-  matchInlineSkills,
-  formatProviderSkillDisplayName,
-  type InlineSkill,
-} from "./inlineSkills.ts";
-import { renderCodexInlineDirectivesAsMarkdown } from "./codexMarkdownDirectives.ts";
 import {
   artifactTemplateFromHastProperties,
   codexArtifactTemplatePresentationLabel,
 } from "./codexArtifactTemplates.ts";
-import { buildFileLinkParentSuffixByPath, fileLinkLabel } from "./fileLinks.ts";
-import {
-  classifyMarkdownImageSource,
-  isMarkdownFileLinkLabel,
-  extractMarkdownLinkHrefs,
-  extractInlineCodeSpans,
-  inlineCodeFilePathCandidate,
-  resolveMarkdownFileLink,
-  shouldRenderMarkdownImageAsFileLink,
-} from "./markdownLinks.ts";
-import { mediaKindFromPath } from "./mediaPreview.ts";
+import { renderCodexInlineDirectivesAsMarkdown } from "./codexMarkdownDirectives.ts";
 import { upgradeLegacyContextMessage } from "./composerContextLegacy.ts";
 import {
   isAttachmentOnlyBootstrapPrompt,
   parseComposerContextHref,
 } from "./composerContextReferences.ts";
-import { parseAssistantCitationHref } from "./assistantCitations.ts";
-import type { OrchestrationV2ConversationMessage } from "@t3tools/contracts";
-import { proposedPlanTitle, stripDisplayedPlanMarkdown } from "./proposedPlanText.ts";
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import remarkRehype from "remark-rehype";
+import { buildFileLinkParentSuffixByPath, fileLinkLabel } from "./fileLinks.ts";
 import {
-  remarkAssistantInsights,
-  CHAT_MARKDOWN_REHYPE_PLUGINS,
-  CHAT_MARKDOWN_REMARK_PLUGINS,
-  CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS,
-  CHAT_USER_MARKDOWN_REMARK_PLUGINS,
+  formatProviderSkillDisplayName,
+  matchInlineSkills,
+  type InlineSkill,
+} from "./inlineSkills.ts";
+import {
   chatMarkdownImageSource,
-  decodeMarkdownLinkEscapes,
   type ChatMarkdownImageProperties,
-} from "./markdownPipeline.ts";
+} from "./markdownHast.ts";
+import {
+  classifyMarkdownImageSource,
+  extractInlineCodeSpans,
+  extractMarkdownLinkHrefs,
+  inlineCodeFilePathCandidate,
+  isMarkdownFileLinkLabel,
+  resolveMarkdownFileLink,
+  shouldRenderMarkdownImageAsFileLink,
+} from "./markdownLinks.ts";
+import { decodeMarkdownLinkEscapes, renderMarkdownToElements, type ElNode } from "./markdown/index.ts";
+import { mediaKindFromPath } from "./mediaPreview.ts";
+import { proposedPlanTitle, stripDisplayedPlanMarkdown } from "./proposedPlanText.ts";
+import { THREAD_FIND_BLOCK_TAGS } from "./threadFindBlockTags.ts";
 
 // Inline wrappers (including Shiki token spans) must not split a search phrase.
-
-function assistantTextProcessor(lineBreaks = false, renderInsights = false) {
-  return unified()
-    .use(remarkParse)
-    .use(renderInsights ? [remarkAssistantInsights] : [])
-    .use(lineBreaks ? CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS : CHAT_MARKDOWN_REMARK_PLUGINS)
-    .use(remarkRehype, { allowDangerousHtml: true })
-    .use(CHAT_MARKDOWN_REHYPE_PLUGINS);
-}
-const assistantProcessor = assistantTextProcessor();
-const assistantBreaksProcessor = assistantTextProcessor(true);
-const insightProcessor = assistantTextProcessor(false, true);
-const insightBreaksProcessor = assistantTextProcessor(true, true);
-const userProcessor = unified()
-  .use(remarkParse)
-  .use(CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS)
-  .use(CHAT_USER_MARKDOWN_REMARK_PLUGINS)
-  .use(remarkRehype, { allowDangerousHtml: true });
-
-interface TextTree {
-  readonly type: string;
-  readonly tagName?: string;
-  readonly value?: string;
-  readonly properties?: ChatMarkdownImageProperties & {
-    readonly href?: unknown;
-    readonly dataInlineCode?: unknown;
-  };
-  readonly children?: ReadonlyArray<TextTree>;
-}
 
 function markdownThreadFindText(
   markdown: string,
@@ -92,17 +56,33 @@ function markdownThreadFindText(
     theme: "dark" | "light" | undefined;
   },
 ): string[] {
-  const processor = userMessage
-    ? userProcessor
-    : lineBreaks
-      ? assistantBreaksProcessor
-      : assistantProcessor;
-  const renderer = renderInsights
-    ? lineBreaks
-      ? insightBreaksProcessor
-      : insightProcessor
-    : processor;
-  const tree = renderer.runSync(renderer.parse(markdown), markdown);
+  const tree = renderMarkdownToElements(
+    markdown,
+    {
+      gfm: true,
+      singleTilde: !userMessage,
+      directives: true,
+      insights: renderInsights && !userMessage,
+      windowsPaths: true,
+      githubAlerts: true,
+      normalizeListIndentation: true,
+      keepOrderedListNumbers: userMessage,
+      leadingWhitespace: userMessage,
+      autolinkBoundaries: true,
+    },
+    {
+      breaks: userMessage || lineBreaks,
+      rawHtmlAsText: userMessage,
+      sanitize: !userMessage,
+      preserveImageMeta: !userMessage,
+      normalizeLocalEditorLinks: !userMessage,
+      normalizeWindowsLinks: true,
+      linkFilePaths: true,
+      tagInlineCode: true,
+      breakAroundImageLines: true,
+    },
+  );
+
   const paths = [
     ...extractMarkdownLinkHrefs(renderCodexInlineDirectivesAsMarkdown(markdown)).map(
       decodeMarkdownLinkEscapes,
@@ -113,18 +93,49 @@ function markdownThreadFindText(
     return resolved ? [resolved.position.path] : [];
   });
   const parentSuffixes = buildFileLinkParentSuffixByPath(paths);
+
   const segments: string[] = [];
   let text = "";
   const flush = () => {
     if (text.trim()) segments.push(text);
     text = "";
   };
-  const visit = (node: TextTree, inPre = false, inlineSkills = false) => {
-    const href = node.properties?.href ?? node.properties?.src;
+
+  const labelText = (node: ElNode): string =>
+    node.type === "text" ? node.value : node.children.map(labelText).join("");
+
+  const visit = (node: ElNode, inPre = false, inlineSkills = false) => {
+    if (node.type === "text") {
+      let value = node.value;
+      if (inlineSkills && skills.length > 0) {
+        let cursor = 0;
+        let rendered = "";
+        for (const { start, end, skill } of matchInlineSkills(value, skills)) {
+          rendered += value.slice(cursor, start) + formatProviderSkillDisplayName(skill);
+          cursor = end;
+        }
+        value = rendered + value.slice(cursor);
+      }
+      text += inPre ? value : value.replace(/\r?\n/g, " ");
+      return;
+    }
+
+    if (node.type === "root") {
+      for (const child of node.children) visit(child, inPre, inlineSkills);
+      return;
+    }
+
+    const props = node.properties as ChatMarkdownImageProperties & {
+      readonly href?: unknown;
+      readonly dataInlineCode?: unknown;
+    };
+    const href = props.href ?? props.src;
+
     if (userMessage && typeof href === "string" && parseComposerContextHref(href)) {
       flush();
       return;
     }
+
     const citation =
       node.tagName === "a" && typeof href === "string" ? parseAssistantCitationHref(href) : null;
     if (citation) {
@@ -133,12 +144,13 @@ function markdownThreadFindText(
       text += (citation.comment ?? "").replace(/\r?\n/g, " ");
       return;
     }
+
     {
       let candidate: string | null = null;
       if (node.tagName === "a" && typeof href === "string") {
         candidate = href;
       } else if (node.tagName === "img") {
-        const source = chatMarkdownImageSource(node.properties, theme);
+        const source = chatMarkdownImageSource(props, theme);
         if (source) {
           const { authoredSrc, classifiedSrc } = source;
           if (
@@ -150,25 +162,21 @@ function markdownThreadFindText(
             candidate = authoredSrc;
           }
         }
-      } else if (
-        node.tagName === "code" &&
-        !inPre &&
-        node.properties?.dataInlineCode !== undefined
-      ) {
-        candidate = inlineCodeFilePathCandidate(
-          (node.children ?? []).map((child) => child.value ?? "").join(""),
-        );
+      } else if (node.tagName === "code" && !inPre && props.dataInlineCode !== undefined) {
+        candidate = inlineCodeFilePathCandidate(labelText(node));
       }
+
       const resolved = candidate ? resolveMarkdownFileLink(candidate, cwd) : null;
       if (candidate && resolved) {
-        const labelText = (node: TextTree): string =>
-          node.value ?? (node.children ?? []).map(labelText).join("");
         const label = labelText(node);
-        if (node.tagName === "a" && !isMarkdownFileLinkLabel(label, candidate)) text += `${label} `;
+        if (node.tagName === "a" && !isMarkdownFileLinkLabel(label, candidate)) {
+          text += `${label} `;
+        }
         text += fileLinkLabel(resolved.position, parentSuffixes);
         return;
       }
     }
+
     const template = artifactTemplateFromHastProperties(node.properties);
     if (template) {
       flush();
@@ -178,29 +186,22 @@ function markdownThreadFindText(
       );
       return;
     }
-    const block = THREAD_FIND_BLOCK_TAGS.has(node.tagName ?? "");
+
+    const block = THREAD_FIND_BLOCK_TAGS.has(node.tagName);
     if (block) flush();
-    if (node.type === "text" || (userMessage && node.type === "raw")) {
-      let value = node.value ?? "";
-      if (inlineSkills) {
-        let cursor = 0;
-        let rendered = "";
-        for (const { start, end, skill } of matchInlineSkills(value, skills)) {
-          rendered += value.slice(cursor, start) + formatProviderSkillDisplayName(skill);
-          cursor = end;
-        }
-        value = rendered + value.slice(cursor);
-      }
-      text += inPre ? value : value.replace(/\r?\n/g, " ");
-    }
+
     const renderSkills =
       node.tagName === "code" || node.tagName === "a"
         ? false
         : inlineSkills || node.tagName === "p" || node.tagName === "li";
-    for (const child of node.children ?? [])
+
+    for (const child of node.children) {
       visit(child, inPre || node.tagName === "pre", renderSkills);
+    }
+
     if (block) flush();
   };
+
   visit(tree);
   flush();
   return segments;

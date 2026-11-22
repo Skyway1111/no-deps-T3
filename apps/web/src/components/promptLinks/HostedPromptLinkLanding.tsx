@@ -4,9 +4,9 @@ import {
   promptLinkDeepLink,
 } from "@t3tools/shared/promptLinks";
 import { parseNewThreadLink, parseThreadLinkPrompt } from "@t3tools/shared/promptLinksCopy";
-import { useLocation } from "@tanstack/react-router";
+import { useLocation } from "~/ui-core/router";
 import * as Schema from "effect/Schema";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { MessageResolver } from "../../i18n/messages";

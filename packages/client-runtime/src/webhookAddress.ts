@@ -1,7 +1,6 @@
 import type { ScheduledTaskWebhookEndpoint } from "@t3tools/contracts";
 import { isLocalLoopbackHost } from "@t3tools/shared/hostClassification";
-import { mFallback, msg } from "gt-i18n";
-import type { MFunctionType } from "gt-i18n/types";
+import { mFallback, msg, type MFunctionType } from "@t3tools/shared/i18n";
 
 export interface WebhookAddress {
   readonly address: string;

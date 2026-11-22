@@ -36,7 +36,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as EffectAcpErrors from "effect-acp/errors";
-import { lock } from "proper-lockfile";
+import { lockFile } from "@t3tools/shared/sys/fileLock";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -389,7 +389,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
   );
 
   // Serialize resolve, publish, activation, pruning, and removal across server instances sharing managedDirectory.
-  // Locking managedDirectory places the lock directory beside it so remove() can delete managedDirectory safely.
+  // The lock file sits beside managedDirectory so remove() can delete managedDirectory safely.
   const withManagedLock = <A, E, R>(
     operation: "activate" | "remove" | "resolve",
     effect: Effect.Effect<A, E, R>,
@@ -397,14 +397,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
     Effect.scoped(
       Effect.acquireRelease(
         Effect.tryPromise({
-          try: () =>
-            lock(managedDirectory, {
-              realpath: false,
-              stale: 30_000,
-              update: 10_000,
-              retries: { retries: 60, minTimeout: 25, maxTimeout: 150 },
-              onCompromised: () => {},
-            }),
+          try: (signal) => lockFile(managedDirectory, { waitMs: 5_000, signal }),
           catch: (cause) =>
             installationError(
               operation,
@@ -416,7 +409,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
               cause,
             ),
         }),
-        (release) => Effect.promise(() => release().catch(() => undefined)),
+        (release) => Effect.promise(() => release()),
       ).pipe(Effect.andThen(effect)),
     );
 

@@ -1,5 +1,5 @@
-import { T } from "gt-react";
-import { HistoryIcon } from "lucide-react";
+import { T } from "@t3tools/shared/i18n/react";
+import { HistoryIcon } from "~/ui-core/icons";
 
 import { MiddleTruncate } from "./ui/middle-truncate";
 

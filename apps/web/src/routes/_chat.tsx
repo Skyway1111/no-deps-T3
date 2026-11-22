@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect } from "~/ui-core/router";
 
 import { ThreadRouteView } from "../components/ThreadRouteView";
 import { GlobalVoiceInputIndicator } from "../components/chat/GlobalVoiceInputIndicator";
@@ -30,6 +30,12 @@ function ChatRouteLayout() {
   );
 }
 
+declare module "~/ui-core/router" {
+  interface RouteContext {
+    appModalPage?: boolean;
+  }
+}
+
 export const Route = createFileRoute("/_chat")({
   beforeLoad: async ({ context, location }) => {
     if (
@@ -42,8 +48,10 @@ export const Route = createFileRoute("/_chat")({
   },
   component: ChatRouteLayout,
   // Every match carries the whole location's params, so this layout sees the thread route's too.
-  onEnter: ({ context, params }) => retainThreadFindForRouteMatch(context.appModalPage, params),
-  onStay: ({ context, params }) => retainThreadFindForRouteMatch(context.appModalPage, params),
+  onEnter: ({ context, params }) =>
+    retainThreadFindForRouteMatch(context.appModalPage === true, params),
+  onStay: ({ context, params }) =>
+    retainThreadFindForRouteMatch(context.appModalPage === true, params),
   onLeave: () => retainThreadFindForRoute({ modalPage: false, threadRef: null }),
 });
 

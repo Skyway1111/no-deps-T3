@@ -1,4 +1,4 @@
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 
 import { InlineButton } from "../ui/button";
 import { useId, useState } from "react";

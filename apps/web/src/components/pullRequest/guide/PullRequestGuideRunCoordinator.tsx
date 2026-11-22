@@ -1,7 +1,7 @@
-import { msg } from "gt-react";
-import type { AnyRouter } from "@tanstack/react-router";
+import { msg } from "@t3tools/shared/i18n/react";
+import type { AnyRouter } from "~/ui-core/router";
 import type { PullRequestReviewGuideResult } from "@t3tools/contracts";
-import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon } from "~/ui-core/icons";
 import { AsyncResult, type AtomRegistry } from "effect/reactivity";
 
 import { getClientSettings } from "~/hooks/useSettings";

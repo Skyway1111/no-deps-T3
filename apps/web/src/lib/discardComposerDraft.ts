@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { cancelPreparingComposerImages } from "../components/chat/preparingComposerImages";
 import {

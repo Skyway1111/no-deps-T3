@@ -1,59 +1,39 @@
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
-import * as Ref from "effect/Ref";
 import type * as Scope from "effect/Scope";
-import * as Semaphore from "effect/Semaphore";
+
+import { createKeyedLock } from "./core/async.ts";
 
 export interface KeyedLock<Key> {
   readonly withLock: <A, E, R>(key: Key, effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
   readonly activeKeys: Effect.Effect<ReadonlyArray<Key>>;
 }
 
-interface LockEntry {
-  readonly semaphore: Semaphore.Semaphore;
-  readonly users: number;
-}
-
 /**
  * Not reentrant: taking a key while already holding it deadlocks.
+ * Backed by the O(1) zero-copy FIFO lock in `core/async.ts`.
  */
 export const make = Effect.fn("KeyedLock.make")(function* <Key>(): Effect.fn.Return<
   KeyedLock<Key>
 > {
-  const locks = yield* Ref.make<ReadonlyMap<Key, LockEntry>>(new Map());
+  const core = createKeyedLock<Key>();
 
   const acquire = (key: Key) =>
-    Effect.flatMap(Semaphore.make(1), (candidate) =>
-      Ref.modify(locks, (current) => {
-        const existing = current.get(key);
-        const semaphore = existing?.semaphore ?? candidate;
-        const next = new Map(current);
-        next.set(key, { semaphore, users: (existing?.users ?? 0) + 1 });
-        return [semaphore, next] as const;
-      }),
-    );
-
-  const release = (key: Key) =>
-    Ref.update(locks, (current) => {
-      const existing = current.get(key);
-      if (existing === undefined) return current;
-      const next = new Map(current);
-      if (existing.users === 1) {
-        next.delete(key);
-      } else {
-        next.set(key, { ...existing, users: existing.users - 1 });
-      }
-      return next;
+    Effect.callback<() => void>((resume) => {
+      const cancel = core.acquireCallback(key, (release) => {
+        resume(Effect.succeed(release));
+      });
+      return Effect.sync(cancel);
     });
 
   return {
     withLock: (key, effect) =>
       Effect.acquireUseRelease(
         acquire(key),
-        (semaphore) => semaphore.withPermit(effect),
-        () => release(key),
+        () => effect,
+        (release) => Effect.sync(release),
       ),
-    activeKeys: Effect.map(Ref.get(locks), (current) => Array.from(current.keys())),
+    activeKeys: Effect.sync(() => core.activeKeys()),
   } satisfies KeyedLock<Key>;
 });
 
@@ -67,7 +47,7 @@ export interface KeyedRunner<Key> {
 
 /**
  * For a stream consumer whose handler waits on a per-key lock: a busy key delays only its own
- * later effects. The forked fiber starts immediately, so it queues on the key's FIFO semaphore
+ * later effects. The forked fiber starts immediately, so it queues on the key's FIFO lock
  * before `run` returns; that keeps each key's effects in `run` order.
  */
 export const makeRunner = Effect.fn("KeyedLock.makeRunner")(function* <Key>(): Effect.fn.Return<

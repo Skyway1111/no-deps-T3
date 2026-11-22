@@ -62,7 +62,7 @@ vi.mock("react-native", () => ({
 vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-vi.mock("gt-react-native", () => ({
+vi.mock("@t3tools/shared/i18n/react", () => ({
   msg: (text: string) => text,
   T: ({ children }: { children?: ReactNode }) => <>{children}</>,
   useGT: () => (text: string) => text,

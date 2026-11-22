@@ -69,21 +69,14 @@ const RESTRICTED_UI_VARIANT_PATTERNS = [
 ];
 
 const RESTRICTED_PULL_REQUEST_GLYPH_IMPORTS = {
-  name: "lucide-react",
+  name: "~/ui-core/icons",
   importNames: [
-    "GitMerge",
     "GitMergeIcon",
-    "GitPullRequest",
     "GitPullRequestIcon",
-    "GitPullRequestArrow",
     "GitPullRequestArrowIcon",
-    "GitPullRequestClosed",
     "GitPullRequestClosedIcon",
-    "GitPullRequestDraft",
     "GitPullRequestDraftIcon",
-    "GitPullRequestCreate",
     "GitPullRequestCreateIcon",
-    "GitPullRequestCreateArrow",
     "GitPullRequestCreateArrowIcon",
   ],
   message:
@@ -233,7 +226,8 @@ export default defineConfig({
     plugins: ["eslint", "oxc", "react", "unicorn", "typescript"],
     jsPlugins: ["./oxlint-plugin-t3code/index.ts", "@shadcn/lint"],
     settings: {
-      shadcn: { ui: "~/components/ui" },
+      // ui-core primitives are headless, like the library they replaced; only components/ui owns looks.
+      shadcn: { ui: "~/components/ui", ignoreImports: ["^~/ui-core/"] },
     },
     categories: {
       correctness: "warn",

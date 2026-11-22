@@ -1,22 +1,16 @@
-/// <reference types="mdast-util-to-hast" />
-import type { Root } from "mdast";
-import remarkMath from "remark-math";
-import remarkParse from "remark-parse";
-import remarkGfm from "remark-gfm";
-import { unified } from "unified";
+import { parseMarkdown, type MdNode, type MdRoot } from "./markdown/index.ts";
 
-const mathParser = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkMath, { singleDollarTextMath: true })
-  .freeze();
-
-export function parseMarkdownWithMath(source: string) {
-  return mathParser.parse(source);
+export function parseMarkdownWithMath(source: string): MdRoot {
+  return parseMarkdown(source, {
+    gfm: true,
+    math: true,
+    windowsPaths: false,
+    autolinkBoundaries: false,
+  });
 }
 
 /** Closed, parser-owned formulas with authored source for editors. */
-export function markdownMathRanges(source: string, tree?: Root) {
+export function markdownMathRanges(source: string, tree?: MdRoot) {
   const ranges: Array<{
     start: number;
     end: number;
@@ -26,7 +20,7 @@ export function markdownMathRanges(source: string, tree?: Root) {
     inTable: boolean;
   }> = [];
   if (!mayContainMath(source)) return ranges;
-  const visit = (node: Root | Root["children"][number], inTable = false) => {
+  const visit = (node: MdNode, inTable = false) => {
     const table = inTable || node.type === "tableCell";
     if (
       node.type === "math" ||
@@ -38,13 +32,16 @@ export function markdownMathRanges(source: string, tree?: Root) {
       if (start === undefined || end === undefined) return;
       const authored = source.slice(start, end);
       if (node.type === "code") {
+        if (node.closed !== true) return;
         const open = /^[ \t]*(`{3,}|~{3,})/.exec(authored)?.[1];
         const close = /\n[ \t>]*(`{3,}|~{3,})[ \t\r]*$/.exec(authored)?.[1];
         if (!open || !close || open[0] !== close[0] || close.length < open.length) return;
       }
-      const display = node.type !== "inlineMath" || /^(?:\$\$|\\\[)/.test(authored);
+      const display = node.type !== "inlineMath" || node.display === true || /^(?:\$\$|\\\[)/.test(authored);
       ranges.push({ start, end, source: authored, tex: node.value, display, inTable: table });
-    } else if ("children" in node) node.children.forEach((child) => visit(child, table));
+    } else if ("children" in node && Array.isArray(node.children)) {
+      for (const child of node.children) visit(child, table);
+    }
   };
   visit(tree ?? parseMarkdownWithMath(source));
   return ranges;
@@ -60,11 +57,6 @@ function mayContainMath(text: string): boolean {
   );
 }
 
-/**
- * A `$` formula needs a closing `$` (or the second `$` of `$$`) after another `$` on its line and
- * not right after a space (micromark reads a tab as virtual spaces, which still close). So `$skill`
- * chips and prices skip the parser.
- */
 function mayContainDollarMath(text: string): boolean {
   let opened = false;
   for (let index = 0; index < text.length; index += 1) {

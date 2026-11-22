@@ -3,15 +3,13 @@ import {
   Box3,
   CanvasTexture,
   DirectionalLight,
-  LinearFilter,
   Matrix4,
   PerspectiveCamera,
   Quaternion,
   Scene,
-  SRGBColorSpace,
   Vector3,
   WebGLRenderer,
-} from "three";
+} from "./webglEngine.ts";
 import {
   createDeviceModelSlot,
   type DeviceModelSource,
@@ -70,15 +68,7 @@ export function createPhoneViewer(options: {
     antialias: true,
     powerPreference: "low-power",
   });
-  renderer.outputColorSpace = SRGBColorSpace;
-  const makeTexture = () => {
-    const next = new CanvasTexture(options.source);
-    next.colorSpace = SRGBColorSpace;
-    next.minFilter = LinearFilter;
-    next.magFilter = LinearFilter;
-    next.generateMipmaps = false;
-    return next;
-  };
+  const makeTexture = () => new CanvasTexture(options.source);
   let texture = makeTexture();
   let textureWidth = options.source.width;
   let textureHeight = options.source.height;

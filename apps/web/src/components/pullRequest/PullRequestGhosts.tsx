@@ -8,8 +8,8 @@ import {
   TagIcon,
   UserPlusIcon,
   UsersIcon,
-} from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+} from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { ReactNode } from "react";
 import {
   sourceControlClients,

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "~/ui-core/router";
 
 import { IssuesPage } from "../components/issue/IssuesPage";
 import { issuesSearchFromUrl } from "../components/issue/issuesSearch.logic";

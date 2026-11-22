@@ -1,4 +1,4 @@
-import { msg } from "gt-i18n";
+import { msg } from "@t3tools/shared/i18n";
 import { MarkedText, translatableMessage } from "../errors/translatable.ts";
 import {
   ORCHESTRATION_PROTOCOL_VERSION,

@@ -17,8 +17,8 @@ vi.mock("react", async (importOriginal) => ({
   useMemo: <A>(factory: () => A) => factory(),
   useState: <A>(value: A) => [value, vi.fn()],
 }));
-vi.mock("gt-react-native", async (importOriginal) => {
-  const gt = await importOriginal<typeof import("gt-react-native")>();
+vi.mock("@t3tools/shared/i18n/react", async (importOriginal) => {
+  const gt = await importOriginal<typeof import("@t3tools/shared/i18n/react")>();
   return { ...gt, useGT: () => gt.mFallback, useMessages: () => gt.mFallback };
 });
 vi.mock("./session", () => ({

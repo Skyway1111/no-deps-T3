@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { videoMimeType } from "@t3tools/shared/video";
 import * as Effect from "effect/Effect";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "../i18n/messages";
 import * as Equal from "effect/Equal";
 import * as Hash from "effect/Hash";

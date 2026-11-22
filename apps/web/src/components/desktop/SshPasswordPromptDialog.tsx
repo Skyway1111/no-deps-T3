@@ -3,7 +3,7 @@ import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import type { DesktopSshPasswordPromptRequest } from "@t3tools/contracts";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
-import { msg, T, useGT, Var } from "gt-react";
+import { msg, T, useGT, Var } from "@t3tools/shared/i18n/react";
 import { useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { m } from "../../i18n/messages";

@@ -1,5 +1,4 @@
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
+import { mergeProps, renderElement, useRender } from "~/ui-core/primitives";
 
 import { cn } from "~/lib/utils";
 
@@ -12,7 +11,7 @@ function Label({ className, render, ...props }: useRender.ComponentProps<"label"
     "data-slot": "label",
   };
 
-  return useRender({
+  return renderElement({
     defaultTagName: "label",
     props: mergeProps<"label">(defaultProps, props),
     render,

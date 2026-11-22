@@ -1,10 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
-import { useNavigate } from "@tanstack/react-router";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { useNavigate } from "~/ui-core/router";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import type { MessageResolver } from "~/i18n/messages";
-import { CalendarClockIcon, PencilIcon, PlayIcon, Settings2Icon } from "lucide-react";
+import { CalendarClockIcon, PencilIcon, PlayIcon, Settings2Icon } from "~/ui-core/icons";
 import { useState } from "react";
 import {
   AuthOrchestrationOperateScope,

@@ -1,67 +1,31 @@
-import DOMPurify from "dompurify";
-import { MinusIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import { createRawHtmlBuilder, elToHtml, htmlAttrToProp, STRIP_CONTENT_TAGS, type ElContent } from "@t3tools/shared/markdown";
+import { MinusIcon, PlusIcon, RotateCcwIcon } from "~/ui-core/icons";
 import { FileSurfaceAction } from "./fileSurfaceChrome";
-import { useGT } from "gt-react";
+import { useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "~/hooks/useTheme";
 import { observeResize } from "~/lib/observeResize";
 
+const DOCUMENT_TAGS = new Set(
+  "p h1 h2 h3 h4 h5 h6 div span strong b em i u s ul ol li blockquote pre code table thead tbody tr th td caption figure figcaption br hr sub sup dl dt dd img".split(" "),
+);
+const DOCUMENT_PROPS = new Set(["src", "alt", "colspan", "rowspan", "data-odf-whitespace"].map(htmlAttrToProp));
+const RASTER_DATA_URI = /^data:image\/(png|jpeg|gif|webp);base64,[a-z\d+/]*={0,2}$/i;
+
+// Disallowed elements unwrap to their children, except ones whose contents are never text (script, style...).
+function keepDocumentNode(node: ElContent): ElContent[] {
+  if (node.type === "text") return [node];
+  const children = STRIP_CONTENT_TAGS.has(node.tagName) ? [] : node.children.flatMap(keepDocumentNode);
+  if (!DOCUMENT_TAGS.has(node.tagName)) return children;
+  if (node.tagName === "img" && !RASTER_DATA_URI.test(String(node.properties.src ?? ""))) return [];
+  const properties = Object.fromEntries(Object.entries(node.properties).filter(([key]) => DOCUMENT_PROPS.has(key)));
+  return [{ ...node, properties, children }];
+}
+
 export function sanitizeDocumentHtml(source: string): string {
-  const fragment = DOMPurify.sanitize(source, {
-    RETURN_DOM_FRAGMENT: true,
-    ALLOWED_TAGS: [
-      "p",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      "div",
-      "span",
-      "strong",
-      "b",
-      "em",
-      "i",
-      "u",
-      "s",
-      "ul",
-      "ol",
-      "li",
-      "blockquote",
-      "pre",
-      "code",
-      "table",
-      "thead",
-      "tbody",
-      "tr",
-      "th",
-      "td",
-      "caption",
-      "figure",
-      "figcaption",
-      "br",
-      "hr",
-      "sub",
-      "sup",
-      "dl",
-      "dt",
-      "dd",
-      "img",
-    ],
-    ALLOWED_ATTR: ["src", "alt", "colspan", "rowspan", "data-odf-whitespace"],
-  });
-  for (const image of fragment.querySelectorAll("img")) {
-    if (
-      !/^data:image\/(png|jpeg|gif|webp);base64,[a-z\d+/]*={0,2}$/i.test(
-        image.getAttribute("src") ?? "",
-      )
-    )
-      image.remove();
-  }
-  const container = document.createElement("div");
-  container.append(fragment);
-  return container.innerHTML;
+  const builder = createRawHtmlBuilder({ type: "root", children: [] });
+  builder.pushRawHtml(source);
+  return elToHtml({ type: "root", children: builder.finish().children.flatMap(keepDocumentNode) });
 }
 
 function documentColors() {

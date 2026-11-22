@@ -21,7 +21,7 @@ import type { AsyncResult, Atom } from "effect/reactivity";
 import type { CommandOutputView } from "@t3tools/client-runtime/state/command-output";
 import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRuntime";
 import { useEffect, useRef, createContext, type MouseEvent, type ReactNode } from "react";
-import { type LegendListRef } from "@legendapp/list/react";
+import { type VirtualListRef } from "~/ui-core/virtualList";
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
 import type { PendingApproval } from "../../session-logic";
 import { type ChatFileAttachment } from "../../types";
@@ -55,7 +55,7 @@ export interface TimelineRowSharedState {
   citationRequest: AssistantCitationTarget | null;
   /** Absent hides "Reply", as in the guest view. */
   onReplyToResponse: ((response: ResponseContextRecord) => boolean) | undefined;
-  listRef: React.RefObject<LegendListRef | null>;
+  listRef: React.RefObject<VirtualListRef | null>;
   timestampFormat: TimestampFormat;
   routeThreadKey: string;
   threadRef: ScopedThreadRef | null;

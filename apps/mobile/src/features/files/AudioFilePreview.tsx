@@ -1,6 +1,6 @@
 import { Button } from "../../components/ui/Button";
 import { useAudioPlayerStatus } from "expo-audio";
-import { T, useGT } from "gt-react-native";
+import { T, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useState } from "react";
 import { AppState, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";

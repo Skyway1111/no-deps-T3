@@ -6,14 +6,14 @@ import {
   ChevronDownIcon,
   CircleXIcon,
   EllipsisIcon,
-  FileJsonIcon,
+  FileBracesIcon as FileJsonIcon,
   MinusIcon,
   PlusIcon,
   SearchIcon,
   TriangleAlertIcon,
   XIcon,
-} from "lucide-react";
-import { useLocation } from "@tanstack/react-router";
+} from "~/ui-core/icons";
+import { useLocation } from "~/ui-core/router";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -23,7 +23,7 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,

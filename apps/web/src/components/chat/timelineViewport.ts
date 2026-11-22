@@ -11,7 +11,7 @@ import { resolveTimelineIsAtEnd } from "./MessagesTimeline.logic";
 import { createUpwardScrollDetector, isTimelineScrollTarget } from "./timelineScrollTarget";
 
 /**
- * Which thread the mounted timeline list opened on. LegendList's
+ * Which thread the mounted timeline list opened on. VirtualList's
  * initialScrollAtEnd only measures for that thread; once the same list shows
  * another thread the opening no longer applies, even if it later returns.
  */
@@ -145,7 +145,7 @@ export function attachTimelineViewport(
         programmatic: programmaticHolds > 0,
       }) &&
       frameHasInput() &&
-      // LegendList updates its scroll state on the next animation frame.
+      // VirtualList updates its scroll state on the next animation frame.
       resolveTimelineIsAtEnd({
         contentLength: scrollNode.scrollHeight,
         scroll: scrollNode.scrollTop,

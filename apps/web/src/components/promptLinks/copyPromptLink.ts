@@ -19,7 +19,7 @@ import { configuredHostedAppUrl } from "~/hostedPairing";
 import { draftModelSelectionApplies } from "~/lib/chatThreadActions";
 
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m } from "~/i18n/messages";
 
 /** A shareable link to a prompt on the hosted app, or null when the prompt cannot fit in one. */

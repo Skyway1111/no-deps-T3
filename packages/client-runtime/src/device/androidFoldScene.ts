@@ -14,9 +14,9 @@ import {
   ShapeGeometry,
   Vector2,
   Vector3,
-  type Camera,
+  type PerspectiveCamera as Camera,
   type Texture,
-} from "three";
+} from "./webglEngine.ts";
 import type { PhoneDisplayLayout } from "./phoneScene.ts";
 
 const HEIGHT = 2.2;
@@ -131,9 +131,9 @@ export function createAndroidFoldScene(
     clearcoat: 1,
   });
   const flashMaterial = new MeshBasicMaterial({ color: 0xf2ead6 });
-  const displayMaterial = new MeshBasicMaterial({ map: texture, toneMapped: false });
+  const displayMaterial = new MeshBasicMaterial({ map: texture });
   const hitMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
-  const coverMaterial = new MeshBasicMaterial({ map: texture, toneMapped: false });
+  const coverMaterial = new MeshBasicMaterial({ map: texture });
   const materials = [
     frameMetal,
     polishedMetal,

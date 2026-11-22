@@ -4,7 +4,7 @@ import type {
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import { resolveIssueLinkTarget } from "@t3tools/client-runtime/issue-links";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "~/ui-core/router";
 import type { MouseEvent } from "react";
 
 import { readIssueListPreferences } from "../components/issue/issueListPreferences";

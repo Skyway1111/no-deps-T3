@@ -4,9 +4,9 @@ import {
   assistantCitationLabel,
   serializeAssistantCitation,
 } from "@t3tools/shared/assistantCitations";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useGT } from "gt-react";
-import { PencilIcon, QuoteIcon } from "lucide-react";
+import { Link, useNavigate } from "~/ui-core/router";
+import { useGT } from "@t3tools/shared/i18n/react";
+import { PencilIcon, QuoteIcon } from "~/ui-core/icons";
 import {
   useEffect,
   useEffectEvent,

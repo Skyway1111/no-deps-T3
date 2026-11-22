@@ -1,4 +1,4 @@
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -42,7 +42,7 @@ import type { ChatShortcutCommands } from "./useChatShortcuts";
 import { resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type SetStateAction, useRef, useState } from "react";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "~/ui-core/router";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -50,7 +50,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useUiStateStore } from "../../uiStateStore";
 import { type ChatMessage, DEFAULT_INTERACTION_MODE } from "../../types";
-import { AlarmClockIcon, CheckCircle2Icon } from "lucide-react";
+import { AlarmClockIcon, CircleCheckIcon as CheckCircle2Icon } from "~/ui-core/icons";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { titleRegenerationToast } from "../threadTitleRegenerationToast";
 import { newMessageId } from "~/lib/utils";

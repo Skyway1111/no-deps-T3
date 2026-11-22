@@ -7,7 +7,7 @@ import {
   usePreventRemoveContext,
   type StaticScreenProps,
 } from "@react-navigation/native";
-import { msg, T, useGT } from "gt-react-native";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { useAtomValue } from "@effect/atom-react";

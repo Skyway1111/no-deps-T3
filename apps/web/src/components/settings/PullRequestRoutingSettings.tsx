@@ -5,7 +5,7 @@ import {
   pullRequestRoutingPermissionFor,
   type PullRequestRoutingPermission,
 } from "@t3tools/client-runtime/connection";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";

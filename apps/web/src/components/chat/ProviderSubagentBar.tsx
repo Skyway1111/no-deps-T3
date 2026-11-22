@@ -3,8 +3,8 @@ import {
   type ProviderSubagentStatus,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
-import { T, useGT, useMessages } from "gt-react";
-import { ArrowUpLeftIcon } from "lucide-react";
+import { T, useGT, useMessages } from "@t3tools/shared/i18n/react";
+import { ArrowUpLeftIcon } from "~/ui-core/icons";
 import type { ReactNode } from "react";
 
 import { tickTextContent } from "~/lib/tickTextContent";

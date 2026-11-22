@@ -1,7 +1,7 @@
-import { sha256 } from "@noble/hashes/sha2";
-import JSZip from "jszip";
-import { parse, type ParseError } from "jsonc-parser";
-import { msg } from "gt-react";
+import { sha256 } from "@t3tools/shared/parsers/crypto";
+import { openZip, type NativeZipReader } from "@t3tools/client-runtime/zip/native-zip";
+import { parseJsonc } from "@t3tools/shared/parsers/jsonc";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m } from "./i18n/messages";
 import type { ThemeDefinition } from "./themePalette";
@@ -326,9 +326,8 @@ export async function searchOpenVsxThemes(
 }
 
 function parseJsoncObject(source: string, description: string): Record<string, unknown> {
-  const errors: ParseError[] = [];
-  const value: unknown = parse(source, errors, { allowTrailingComma: true });
-  if (errors.length > 0 || !isRecord(value))
+  const value = parseJsonc(source);
+  if (!isRecord(value))
     throw new Error(m(msg("{description} is not valid JSON.", { description })));
   return value;
 }
@@ -384,16 +383,6 @@ function contributionType(uiTheme: unknown): string | null {
   if (uiTheme === "hc-black" || uiTheme === "hc-light") return uiTheme;
   return null;
 }
-
-type ZipEntrySizes = {
-  uncompressedSize?: unknown;
-};
-
-type InspectableZipObject = JSZip.JSZipObject & {
-  _data?: ZipEntrySizes;
-  unsafeOriginalName?: string;
-  internalStream?: (type: "uint8array") => JSZip.JSZipStreamHelper<Uint8Array>;
-};
 
 const extensionPackageErrors = new WeakSet<Error>();
 
@@ -462,96 +451,57 @@ function inspectZipDirectory(bytes: Uint8Array): Uint8Array {
   if (offset !== directoryEnd)
     throw extensionPackageError(m(msg("That extension package has an invalid ZIP directory.")));
 
-  const commentLength = view.getUint16(endOffset + 20, true);
-  if (commentLength === 0) return bytes;
-
-  // Strip ZIP comments; JSZip can mistake EOCD-like comment bytes for the real record.
-  const withoutComment = bytes.slice(0, endOffset + 22);
-  withoutComment[endOffset + 20] = 0;
-  withoutComment[endOffset + 21] = 0;
-  return withoutComment;
+  return bytes;
 }
 
-function inspectZip(zip: JSZip): void {
-  const entries = Object.values(zip.files) as InspectableZipObject[];
-  if (entries.length > MAX_ZIP_ENTRIES)
+function inspectZip(zip: NativeZipReader): void {
+  if (zip.entries.length > MAX_ZIP_ENTRIES)
     throw extensionPackageError(m(msg("That extension package has too many files.")));
 
-  for (const entry of entries) {
-    if (entry.unsafeOriginalName) normalizePackagePath(entry.unsafeOriginalName);
+  for (const entry of zip.entries) {
+    normalizePackagePath(entry.name);
   }
 }
 
 async function readZipText(
-  zip: JSZip,
+  zip: NativeZipReader,
   path: string,
   description: string,
   signal?: AbortSignal,
 ): Promise<string> {
   signal?.throwIfAborted();
-  const file = zip.file(path) as InspectableZipObject | null;
-  if (!file)
+  const entry = zip.getEntry(path);
+  if (!entry || entry.directory)
     throw new Error(
       m(msg("{description} is missing from the extension package.", { description })),
     );
-  if (typeof file._data?.uncompressedSize !== "number" || !file.internalStream) {
-    throw new Error(m(msg("{description} has unreadable size metadata.", { description })));
-  }
-  if (file._data.uncompressedSize > MAX_THEME_BYTES) {
+  if (entry.uncompressedSize > MAX_THEME_BYTES) {
     throw new Error(m(msg("{description} is too large.", { description })));
   }
 
-  return new Promise((resolve, reject) => {
-    const chunks: Uint8Array[] = [];
-    let byteLength = 0;
-    let settled = false;
-    const stream = file.internalStream!("uint8array");
-    const cleanup = () => signal?.removeEventListener("abort", handleAbort);
-    const handleAbort = () => {
-      if (settled) return;
-      settled = true;
-      stream.pause();
-      cleanup();
-      reject(signal?.reason);
-    };
-    signal?.addEventListener("abort", handleAbort, { once: true });
-    stream
-      .on("data", (chunk) => {
-        if (settled) return;
-        byteLength += chunk.byteLength;
-        if (byteLength > MAX_THEME_BYTES) {
-          settled = true;
-          stream.pause();
-          cleanup();
-          reject(new Error(m(msg("{description} is too large.", { description }))));
-          return;
-        }
-        chunks.push(chunk);
-      })
-      .on("error", (cause) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(cause);
-      })
-      .on("end", () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        const bytes = new Uint8Array(byteLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-          bytes.set(chunk, offset);
-          offset += chunk.byteLength;
-        }
-        resolve(new TextDecoder().decode(bytes));
-      })
-      .resume();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  await zip.streamEntry(entry, {
+    signal,
+    onChunk(chunk) {
+      byteLength += chunk.byteLength;
+      if (byteLength > MAX_THEME_BYTES) {
+        throw new Error(m(msg("{description} is too large.", { description })));
+      }
+      chunks.push(chunk);
+    },
   });
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 async function loadThemeObject(
-  zip: JSZip,
+  zip: NativeZipReader,
   path: string,
   cache: Map<string, Record<string, unknown>>,
   budget: { files: number },
@@ -693,10 +643,10 @@ export async function importOpenVsxThemeExtension(
     throw new Error(m(msg("That Open VSX theme failed its integrity check.")));
   }
   signal?.throwIfAborted();
-  let zip: JSZip;
+  let zip: NativeZipReader;
   try {
     const inspectedPackageBytes = inspectZipDirectory(packageBytes);
-    zip = await JSZip.loadAsync(inspectedPackageBytes);
+    zip = openZip(inspectedPackageBytes, { maxEntries: MAX_ZIP_ENTRIES, rejectZip64: true });
     signal?.throwIfAborted();
     inspectZip(zip);
   } catch (cause) {

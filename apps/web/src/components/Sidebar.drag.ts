@@ -1,5 +1,10 @@
-import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
-import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sortable";
+import {
+  closestCenter,
+  type CollisionDetection,
+  type Modifier,
+  verticalListSortingStrategy,
+  type SortingStrategy,
+} from "~/ui-core/dnd";
 import {
   resolveSidebarDropTarget,
   sidebarListItemId,

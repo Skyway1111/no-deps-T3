@@ -1,8 +1,8 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@t3tools/contracts";
-import { SendIcon } from "lucide-react";
-import { msg, T, useGT } from "gt-react";
+import { SendIcon } from "~/ui-core/icons";
+import { msg, T, useGT } from "@t3tools/shared/i18n/react";
 import { useEffect, useState, type RefObject } from "react";
 
 import { m } from "~/i18n/messages";

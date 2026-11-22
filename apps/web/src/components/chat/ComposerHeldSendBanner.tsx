@@ -1,4 +1,4 @@
-import { msg, useGT } from "gt-react";
+import { msg, useGT } from "@t3tools/shared/i18n/react";
 
 import { composerTargetKey, type ComposerThreadTarget } from "../../composerDraftStore";
 import { m, type MessageResolver } from "../../i18n/messages";

@@ -17,7 +17,7 @@ import {
   collectLimitNotices,
   cursorUsageWindowDetails,
 } from "@t3tools/shared/usageLimitsCopy";
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { Fragment, type ReactNode, useId, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useNowMinuteMs } from "../../lib/clock";

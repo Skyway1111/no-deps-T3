@@ -5,13 +5,12 @@ import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "../i18n/messages";
 import {
   isAtomCommandInterrupted,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import {
   threadSearchMatchKey,
   threadSearchSubject,
@@ -191,10 +190,6 @@ export function useRetainedValue<T>(key: string | null, value: T | null): T | nu
   if (value !== null) return value;
   return key !== null && retained?.key === key ? retained.value : null;
 }
-
-// Sortable owns drag transforms; replaying committed order would animate drops twice.
-export const animateSidebarLayoutChanges: AnimateLayoutChanges = (args) =>
-  args.isSorting ? defaultAnimateLayoutChanges(args) : false;
 
 // Snoozed rows cannot accept drops without a wake time. Working rows only drag out as chat context.
 

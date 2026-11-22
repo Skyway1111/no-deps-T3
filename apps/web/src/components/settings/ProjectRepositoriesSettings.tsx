@@ -15,8 +15,8 @@ import {
   type ProjectTrackedFolder,
   type WorkspaceFolderState,
 } from "@t3tools/contracts";
-import { FolderIcon, PlusIcon } from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { FolderIcon, PlusIcon } from "~/ui-core/icons";
+import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useId, useState } from "react";
 
 import { checkProjectAccess, reportProjectFailure } from "../../hooks/useProjectGroupUpdate";

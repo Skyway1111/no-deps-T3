@@ -4,7 +4,7 @@ import {
 } from "@t3tools/client-runtime/source-control-clients";
 import type { MenuAction } from "@react-native-menu/menu";
 import type { PullRequestDetail, PullRequestLinkedThreadsResult } from "@t3tools/contracts";
-import { msg } from "gt-react-native";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";

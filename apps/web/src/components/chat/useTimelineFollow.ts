@@ -1,7 +1,7 @@
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { type MessageId, type RunId } from "@t3tools/contracts";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { Debouncer } from "@tanstack/react-pacer";
+import { Debouncer } from "~/ui-core/pacer";
 import {
   type SetStateAction,
   useLayoutEffect,
@@ -9,7 +9,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { type LegendListRef } from "@legendapp/list/react";
+import { type VirtualListRef } from "~/ui-core/virtualList";
 import {
   CHAT_TIMELINE_ANCHOR_OFFSET,
   timelineContentOverflowsViewport,
@@ -63,7 +63,7 @@ function createVisitScrollState(
   return {
     visit,
     // Debounce *showing* the scroll-to-bottom pill so it doesn't flash during
-    // thread switches. LegendList fires scroll events with isAtEnd=false while
+    // thread switches. VirtualList fires scroll events with isAtEnd=false while
     // initialScrollAtEnd is settling; hiding is always immediate.
     showScrollDebouncer: new Debouncer(() => showScrollToBottom(visit), { wait: 150 }),
     positionedAnchor: null as MessageId | null,
@@ -86,7 +86,7 @@ function stopAnchorPositioning(scroll: VisitScrollState) {
 }
 
 /** Whether the list still shows the anchored message; a thread switch replaces its data. */
-function listShowsMessage(list: LegendListRef | null, messageId: MessageId): boolean {
+function listShowsMessage(list: VirtualListRef | null, messageId: MessageId): boolean {
   const rows = list?.getState().data as ReadonlyArray<MessagesTimelineRow> | undefined;
   return rows?.some((row) => row.kind === "message" && row.message.id === messageId) === true;
 }
@@ -143,7 +143,7 @@ function sameRunObservation(
 }
 
 interface TimelineFollowInput {
-  readonly legendListRef: RefObject<LegendListRef | null>;
+  readonly legendListRef: RefObject<VirtualListRef | null>;
   readonly composerTimelineInset: number;
   readonly routeThreadKey: string;
   readonly activeThreadKey: string | null;
@@ -229,7 +229,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     }
     return visitScrollRef.current;
   };
-  // The anchor whose list position LegendList reported ready; until then a
+  // The anchor whose list position VirtualList reported ready; until then a
   // newly started run must not re-anchor.
   const [laidOutAnchor, setLaidOutAnchor] = useState<MessageId | null>(null);
   const anchorPending =
@@ -405,7 +405,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
           }
           return;
         }
-        // LegendList waits for queued layout and the animation before resolving.
+        // VirtualList waits for queued layout and the animation before resolving.
         void list
           .scrollToIndex({
             index: anchorIndex,

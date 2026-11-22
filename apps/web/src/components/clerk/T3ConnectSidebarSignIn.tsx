@@ -1,6 +1,6 @@
 import { UserButton, useAuth } from "@clerk/react";
-import { T, useMessages } from "gt-react";
-import { LogInIcon, RotateCwIcon } from "lucide-react";
+import { T, useMessages } from "@t3tools/shared/i18n/react";
+import { LogInIcon, RotateCwIcon } from "~/ui-core/icons";
 
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";

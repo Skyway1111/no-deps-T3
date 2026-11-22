@@ -5,7 +5,7 @@ import * as Path from "effect/Path";
 import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { parse as parseYamlDocument } from "yaml";
+import { parseYaml as parseYamlDocument } from "@t3tools/shared/parsers/yaml";
 
 /** Match Python os.path.expanduser: USERPROFILE, then HOMEDRIVE+HOMEPATH on Windows; HOME elsewhere. */
 export function resolveAntigravityUserHome(

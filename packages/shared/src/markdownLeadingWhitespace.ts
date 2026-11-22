@@ -1,6 +1,3 @@
-import type { Root } from "mdast";
-import type { Transformer } from "unified";
-
 import { GITHUB_ALERT_MARKER } from "./markdownGithubAlerts.ts";
 
 interface MarkdownPoint {
@@ -374,7 +371,9 @@ export function keepsLeadingWhitespace(processor: object): boolean {
 }
 
 /** Sits before plugins that split text without positions, and before list recovery. */
-export function remarkKeepLeadingWhitespace(this: object): Transformer<Root> {
+export function remarkKeepLeadingWhitespace(
+  this: object,
+): (tree: MarkdownNode, file: unknown) => void {
   return (tree, file) => {
     if (enabledProcessors.has(this)) keepLeadingWhitespace(tree, String(file));
   };

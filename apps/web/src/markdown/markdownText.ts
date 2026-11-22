@@ -1,4 +1,4 @@
-import { decodeHTMLStrict } from "entities";
+import { decodeHtmlEntities } from "@t3tools/shared/markdown";
 import {
   codexArtifactTemplatePresentationLabel,
   resolveCodexArtifactTemplate,
@@ -63,6 +63,6 @@ export function renderCodexDirectivesForCopy(markdown: string): string {
 
 /** A link destination as written, with its character references and escapes resolved. */
 export function decodeMarkdownLinkEscapes(href: string): string {
-  const decoded = href.includes("&") ? decodeHTMLStrict(href) : href;
+  const decoded = href.includes("&") ? decodeHtmlEntities(href, { strict: true }) : href;
   return isWindowsAbsolutePath(decoded) ? decoded : decoded.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 }

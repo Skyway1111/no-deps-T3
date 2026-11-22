@@ -45,7 +45,7 @@ import {
   htmlRenderFromToolItem,
   mcpToolResultOutput,
 } from "@t3tools/shared/toolOutput";
-import { FILE_HEADERS_ONLY, formatPatch, structuredPatch } from "diff";
+import { formatPatch, structuredPatch } from "@t3tools/shared/diff";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -1416,7 +1416,7 @@ export function acpToolCallDiffPatch(content: unknown): string | undefined {
     );
     return structured === undefined || structured.hunks.length === 0
       ? []
-      : [{ text: formatPatch(structured, FILE_HEADERS_ONLY), path: diff.path }];
+      : [{ text: formatPatch(structured), path: diff.path }];
   });
   // Diff parsers split at Git headers once one exists, so every section then needs its own.
   const hasGitHeader = patches.some(({ text }) => /^diff --git /m.test(text));

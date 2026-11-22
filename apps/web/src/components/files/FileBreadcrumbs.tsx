@@ -1,8 +1,8 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { ArrowLeftIcon, ChevronRightIcon } from "~/ui-core/icons";
+import { T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 
 import { PierreEntryIcon } from "~/components/chat/PierreEntryIcon";

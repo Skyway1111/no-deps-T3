@@ -4,7 +4,7 @@ import {
   UNKNOWN_SOURCE_CONTROL_CLIENT,
 } from "@t3tools/client-runtime/source-control-clients";
 
-import { msg } from "gt-react";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { m, type MessageResolver } from "~/i18n/messages";

@@ -1,5 +1,5 @@
-import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import { ChevronsUpDownIcon, SearchIcon, XIcon } from "lucide-react";
+import { Combobox as ComboboxPrimitive } from "~/ui-core/combobox";
+import { ChevronsUpDownIcon, SearchIcon, XIcon } from "~/ui-core/icons";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";

@@ -14,8 +14,8 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { useRouter } from "@tanstack/react-router";
-import { msg } from "gt-react";
+import { useRouter } from "~/ui-core/router";
+import { msg } from "@t3tools/shared/i18n/react";
 
 import { pickSnoozePreset, resolveSnoozePresets } from "../components/Sidebar.snooze";
 import {

@@ -1,37 +1,27 @@
 // @effect-diagnostics nodeBuiltinImport:off - A separate Node process proves filesystem exclusion.
 import * as NodeChildProcess from "node:child_process";
-import * as NodeModule from "node:module";
+import { once } from "node:events";
 import * as NodePath from "node:path";
-import * as NodeUtil from "node:util";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProviderInstanceId } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import { t3SysPath } from "@t3tools/shared/sys/binary";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import { withChatGptSessionLock } from "./CodexChatGptSessionLock.ts";
 
-const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
-const lockModule = NodeModule.createRequire(import.meta.url).resolve("proper-lockfile");
 const instanceId = ProviderInstanceId.make("cross-process-test");
 const probe = (directory: string) =>
   Effect.promise(async () => {
-    const { stdout } = await execFile(process.execPath, [
-      "-e",
-      `
-    const { lock } = require(process.argv[1]);
-    lock(process.argv[2], { realpath: false }).then(async release => {
-      await release(); process.stdout.write('acquired');
-    }, error => {
-      if (error.code === 'ELOCKED') process.stdout.write('blocked');
-      else { console.error(error); process.exitCode = 1; }
+    const child = NodeChildProcess.spawn(t3SysPath(), ["flock", `${NodePath.join(directory, "session.bin")}.flock`], {
+      stdio: ["ignore", "pipe", "inherit"],
     });
-  `,
-      lockModule,
-      NodePath.join(directory, "session.bin"),
-    ]);
-    return stdout;
+    let stdout = "";
+    child.stdout.on("data", (chunk: Buffer) => (stdout += chunk));
+    const [code] = await once(child, "close");
+    return code === 0 && stdout.startsWith("locked") ? "acquired" : code === 3 ? "blocked" : `failed (${code})`;
   });
 
 it.live("excludes another process and releases after the credential update", () =>

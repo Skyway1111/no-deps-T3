@@ -3,7 +3,7 @@ import type {
   PreviewViewportSetting,
   ScopedThreadRef,
 } from "@t3tools/contracts";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "@t3tools/shared/core/react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { previewBridge } from "~/components/preview/previewBridge";
