@@ -2790,16 +2790,13 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
               .map((entry) => path.resolve(session.cwd, entry.replace(/^"+|"+$/g, "")))
               .join(":"),
           };
-    // Resolve up front so the agent scope wraps an absolute path.
+    // Resolve up front so the agent scope wraps an absolute path and invalid shells fail cleanly.
+    const shellCommand = candidate.shell.includes("/")
+      ? path.resolve(session.cwd, candidate.shell)
+      : candidate.shell;
     const executable =
       platform !== "win32"
-        ? resolveExecutable(
-            candidate.shell.includes("/")
-              ? path.resolve(session.cwd, candidate.shell)
-              : candidate.shell,
-            platform,
-            lookupEnv,
-          )
+        ? yield* Effect.promise(async () => resolveExecutable(shellCommand, platform, lookupEnv))
         : candidate.shell;
     if (executable === undefined) {
       return yield* trySpawn(

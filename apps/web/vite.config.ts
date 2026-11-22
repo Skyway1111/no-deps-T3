@@ -108,6 +108,9 @@ const browserTestProject = {
   optimizeDeps: {
     include: [
       "vite-plus/test/browser",
+      "@effect/vitest",
+      "@pierre/diffs/ssr",
+      "effect/testing",
     ],
   },
   test: {
