@@ -233,47 +233,71 @@ mod unix {
         unsafe { bridge_loop(master, sig, pid, ctrl) }
     }
 
+    /// Bytes held each way before the bridge stops reading that side, so a flood or a stalled
+    /// reader applies backpressure instead of growing memory, and control stays responsive.
+    const BUFFER_CAP: usize = 256 * 1024;
+
+    /// Moves bytes from `from` into `queue`, reading at most the room left under the cap.
+    /// Returns false at EOF or on an error other than EAGAIN/EINTR.
+    unsafe fn fill(from: c_int, queue: &mut std::collections::VecDeque<u8>, buf: &mut [u8]) -> bool {
+        let room = BUFFER_CAP.saturating_sub(queue.len()).min(buf.len());
+        let n = unsafe { read(from, buf.as_mut_ptr().cast(), room) };
+        if n > 0 {
+            queue.extend(&buf[..n as usize]);
+        }
+        n > 0 || (n < 0 && matches!(errno(), EAGAIN | EINTR))
+    }
+
+    /// Writes what `to` takes from the front of `queue`; false on an error other than EAGAIN/EINTR.
+    unsafe fn flush(to: c_int, queue: &mut std::collections::VecDeque<u8>) -> bool {
+        while !queue.is_empty() {
+            let front = queue.as_slices().0;
+            let n = unsafe { write(to, front.as_ptr().cast(), front.len()) };
+            if n <= 0 {
+                return n < 0 && matches!(errno(), EAGAIN | EINTR);
+            }
+            queue.drain(..n as usize);
+        }
+        true
+    }
+
     unsafe fn bridge_loop(master: c_int, sig: c_int, pid: pid_t, ctrl: bool) -> i32 {
         unsafe {
         set_flags(master, true, true);
         set_flags(0, true, false);
+        set_flags(1, true, false);
         let mut buf = vec![0u8; 64 * 1024];
-        let mut pending: Vec<u8> = Vec::new();
+        let (mut input, mut output) = (std::collections::VecDeque::new(), std::collections::VecDeque::new());
         let mut ctrl_buf: Vec<u8> = Vec::new();
-        let (mut stdin_open, ctrl_open, mut master_open) = (true, ctrl, true);
+        let (mut stdin_open, ctrl_open, mut master_open, mut stdout_open) = (true, ctrl, true, true);
         let mut status: Option<c_int> = None;
-        let read_into = |fd: c_int, buf: &mut [u8]| read(fd, buf.as_mut_ptr().cast(), buf.len());
-        let drain_master = |buf: &mut [u8]| -> bool {
-            loop {
-                let n = read_into(master, buf);
-                if n > 0 {
-                    if !write_all(1, &buf[..n as usize]) {
-                        return false;
-                    }
-                } else if n < 0 && errno() == EINTR {
-                    continue;
-                } else {
-                    // EAGAIN keeps the master open; EIO/EOF means every slave closed.
-                    return n < 0 && errno() == EAGAIN;
-                }
-            }
-        };
         loop {
             if let Some(status) = status {
-                drain_master(&mut buf);
+                // Hand over the rest of the output before the exit; EAGAIN means only other
+                // holders of the terminal remain.
+                set_flags(1, false, false);
+                while stdout_open && master_open {
+                    master_open = fill(master, &mut output, &mut buf) && !output.is_empty();
+                    stdout_open = flush(1, &mut output);
+                }
+                if stdout_open {
+                    flush(1, &mut output);
+                }
                 let (code, signal) = decode_status(status);
                 send(ctrl, &exit_message(code, signal));
                 return 0;
             }
+            let room = output.len() < BUFFER_CAP;
             let mut fds = [
                 pollfd { fd: sig, events: POLLIN, revents: 0 },
                 pollfd {
                     fd: if master_open { master } else { -1 },
-                    events: POLLIN | if pending.is_empty() { 0 } else { POLLOUT },
+                    events: if room { POLLIN } else { 0 } | if input.is_empty() { 0 } else { POLLOUT },
                     revents: 0,
                 },
-                pollfd { fd: if stdin_open { 0 } else { -1 }, events: POLLIN, revents: 0 },
+                pollfd { fd: if stdin_open && input.len() < BUFFER_CAP { 0 } else { -1 }, events: POLLIN, revents: 0 },
                 pollfd { fd: if ctrl_open { CTRL } else { -1 }, events: POLLIN, revents: 0 },
+                pollfd { fd: if stdout_open && !output.is_empty() { 1 } else { -1 }, events: POLLOUT, revents: 0 },
             ];
             if poll(fds.as_mut_ptr(), fds.len() as _, -1) < 0 {
                 if errno() == EINTR {
@@ -282,32 +306,48 @@ mod unix {
                 return 1;
             }
             if fds[0].revents != 0 {
-                while read_into(sig, &mut buf) > 0 {}
+                while read(sig, buf.as_mut_ptr().cast(), buf.len()) > 0 {}
                 let mut st = 0;
                 if waitpid(pid, &raw mut st, WNOHANG) == pid {
                     status = Some(st);
                     continue;
                 }
             }
-            if fds[1].revents & POLLOUT != 0 && !pending.is_empty() {
-                let n = write(master, pending.as_ptr().cast(), pending.len());
-                if n > 0 {
-                    pending.drain(..n as usize);
-                }
-            }
-            if fds[1].revents & (POLLIN | POLLHUP | POLLERR) != 0 {
-                master_open = drain_master(&mut buf);
+            if fds[1].revents & POLLOUT != 0 {
+                flush(master, &mut input);
             }
             if fds[2].revents != 0 {
-                let n = read_into(0, &mut buf);
-                if n > 0 {
-                    pending.extend_from_slice(&buf[..n as usize]);
-                } else if n == 0 || errno() != EAGAIN {
-                    stdin_open = false;
+                stdin_open = fill(0, &mut input, &mut buf);
+            }
+            if stdout_open && !output.is_empty() {
+                stdout_open = flush(1, &mut output);
+            }
+            if room && fds[1].revents & (POLLIN | POLLHUP | POLLERR) != 0 {
+                // Pass output straight through while stdout keeps up; a few rounds per poll
+                // keep control commands prompt. EIO/EOF means every slave closed.
+                for _ in 0..16 {
+                    let n = read(master, buf.as_mut_ptr().cast(), buf.len());
+                    if n <= 0 {
+                        master_open = n < 0 && matches!(errno(), EAGAIN | EINTR);
+                        break;
+                    }
+                    let chunk = &buf[..n as usize];
+                    let written = if stdout_open && output.is_empty() { write(1, chunk.as_ptr().cast(), chunk.len()) } else { 0 };
+                    if written < 0 && !matches!(errno(), EAGAIN | EINTR) {
+                        stdout_open = false;
+                    }
+                    output.extend(&chunk[written.max(0) as usize..]);
+                    if !output.is_empty() {
+                        break;
+                    }
                 }
             }
+            if !stdout_open {
+                // Nobody reads the output any more; keep the program from blocking on it.
+                output.clear();
+            }
             if fds[3].revents != 0 {
-                let n = read_into(CTRL, &mut buf);
+                let n = read(CTRL, buf.as_mut_ptr().cast(), buf.len());
                 if n <= 0 && !(n < 0 && (errno() == EAGAIN || errno() == EINTR)) {
                     // The owner is gone: closing the master hangs up the session like a closed terminal.
                     close(master);

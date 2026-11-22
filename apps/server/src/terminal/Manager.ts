@@ -101,6 +101,10 @@ const DEFAULT_HISTORY_BYTE_LIMIT = 8 * 1024 * 1024;
 // eCryptfs permits 143-byte names.
 const MAX_HISTORY_FILENAME_BYTES = 143;
 const MAX_HISTORY_CHUNK_LENGTH = 16 * 1024;
+// An unterminated OSC/DCS/CSI longer than this is kept as text rather than rescanned per chunk.
+const MAX_PENDING_CONTROL_SEQUENCE_LENGTH = 64 * 1024;
+// Output events queued behind a busy drain merge up to this length.
+const MAX_COALESCED_OUTPUT_LENGTH = 64 * 1024;
 const DEFAULT_PERSIST_DEBOUNCE_MS = 250;
 const DEFAULT_SUBPROCESS_POLL_INTERVAL_MS = 1_000;
 const MAX_SUBPROCESS_POLL_INTERVAL_MS = 60_000;
@@ -524,7 +528,16 @@ function enqueueProcessEvent(
     return false;
   }
 
-  session.pendingProcessEvents.push(event);
+  const last = session.pendingProcessEvents.at(-1);
+  if (
+    event.type === "output" &&
+    last?.type === "output" &&
+    last.data.length + event.data.length <= MAX_COALESCED_OUTPUT_LENGTH
+  ) {
+    last.data += event.data;
+  } else {
+    session.pendingProcessEvents.push(event);
+  }
   if (session.processEventDrainRunning) {
     return false;
   }
@@ -1022,9 +1035,9 @@ export class BoundedTerminalHistory {
       this.byteLength += 1;
       this.lastCodeUnit = firstCode;
       offset = 1;
-      this.trim();
     }
 
+    const liveBefore = this.chunks.length - this.start;
     while (offset < text.length) {
       let end = Math.min(offset + MAX_HISTORY_CHUNK_LENGTH, text.length);
       const before = text.charCodeAt(end - 1);
@@ -1032,15 +1045,22 @@ export class BoundedTerminalHistory {
       if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) {
         end -= 1;
       }
-      const data = text.slice(offset, end);
-      // Detach small chunks from large input strings so evicted prefixes can be collected.
-      this.appendChunk(
-        text.length > MAX_HISTORY_CHUNK_LENGTH
-          ? Buffer.from(data, "utf16le").toString("utf16le")
-          : data,
-      );
-      this.trim();
+      this.appendChunk(text.slice(offset, end));
       offset = end;
+    }
+    // The last chunk before this append may have absorbed its first slice.
+    const touched = this.chunks.length - this.start - liveBefore + 1;
+    this.trim();
+    if (text.length > MAX_HISTORY_CHUNK_LENGTH) {
+      // Copy what survived out of the large input so the input itself can be collected.
+      for (
+        let index = Math.max(this.start, this.chunks.length - touched);
+        index < this.chunks.length;
+        index += 1
+      ) {
+        const chunk = this.chunks[index]!;
+        chunk.data = Buffer.from(chunk.data, "utf16le").toString("utf16le");
+      }
     }
   }
 
@@ -1395,6 +1415,19 @@ const HISTORY_SEQUENCE_START = /\u001b/;
 const NEXT_HISTORY_SEQUENCE_START = new RegExp(HISTORY_SEQUENCE_START.source, "g");
 
 function sanitizeTerminalHistoryChunk(
+  pendingControlSequence: string,
+  data: string,
+): { visibleText: string; pendingControlSequence: string } {
+  const result = scanTerminalHistoryChunk(pendingControlSequence, data);
+  return result.pendingControlSequence.length > MAX_PENDING_CONTROL_SEQUENCE_LENGTH
+    ? {
+        visibleText: result.visibleText + result.pendingControlSequence,
+        pendingControlSequence: "",
+      }
+    : result;
+}
+
+function scanTerminalHistoryChunk(
   pendingControlSequence: string,
   data: string,
 ): { visibleText: string; pendingControlSequence: string } {
