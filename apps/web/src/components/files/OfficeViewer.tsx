@@ -1,4 +1,3 @@
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 /* oxlint-disable react/no-array-index-key -- Spreadsheet rows and columns retain their source positions. */
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import type { OfficePreviewKind } from "@t3tools/shared/filePreview";
@@ -19,7 +18,8 @@ import {
 
 import { FileSurfaceAction, FileSurfaceLoading, FileSurfaceNotice } from "./fileSurfaceChrome";
 import { OFFICE_PREVIEW_MAX_BYTES, type OfficeWorkerResult } from "./officePreviewProtocol";
-import { previewFailureText } from "./previewFailureMessages";
+import { previewErrorText, previewFailureText } from "./previewFailureMessages";
+import { readBoundedDocument } from "./readBoundedDocument";
 
 const DocumentPages = lazy(() => import("./DocumentPages"));
 const NotebookPreview = lazy(() => import("./NotebookPreview"));
@@ -27,31 +27,6 @@ const NotebookPreview = lazy(() => import("./NotebookPreview"));
 type Workbook = Extract<OfficeWorkerResult, { type: "ods" }>;
 
 const OpenXmlOfficeViewer = lazy(() => import("./OpenXmlOfficeViewer"));
-
-async function readOfficeFile(src: string, signal: AbortSignal) {
-  const response = await fetch(src, { signal });
-  if (!response.ok)
-    throw new Error(m(msg("The file could not be loaded. Close it and try again.")));
-  if (Number(response.headers.get("content-length")) > OFFICE_PREVIEW_MAX_BYTES)
-    throw new Error(m(msg("Preview limited to files under 50 MB.")));
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error(m(msg("The file is unavailable.")));
-  const chunks: Uint8Array<ArrayBuffer>[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > OFFICE_PREVIEW_MAX_BYTES)
-        throw new Error(m(msg("Preview limited to files under 50 MB.")));
-      chunks.push(value);
-    }
-  } finally {
-    await reader.cancel();
-  }
-  return new Blob(chunks).arrayBuffer();
-}
 
 export default function OfficeViewer(props: {
   readonly src: string;
@@ -65,13 +40,13 @@ export default function OfficeViewer(props: {
         <OpenXmlOfficeViewer {...props} kind={props.kind} />
       </Suspense>
     );
-  return <ExtendedOfficeViewer {...props} />;
+  return <ExtendedOfficeViewer {...props} kind={props.kind} />;
 }
 
 function ExtendedOfficeViewer(props: {
   readonly src: string;
   readonly name: string;
-  readonly kind: OfficePreviewKind;
+  readonly kind: Exclude<OfficePreviewKind, "docx" | "xlsx" | "pptx">;
   readonly sizeBytes?: number;
 }) {
   const gt = useGT();
@@ -144,7 +119,7 @@ function ExtendedOfficeViewer(props: {
         });
       }
     });
-    void readOfficeFile(props.src, controller.signal)
+    void readBoundedDocument(props.src, controller.signal, OFFICE_PREVIEW_MAX_BYTES)
       .then((bytes) => {
         if (!controller.signal.aborted) {
           setFileSize(bytes.byteLength);
@@ -152,7 +127,7 @@ function ExtendedOfficeViewer(props: {
         }
       })
       .catch((cause: unknown) =>
-        fail(thrownErrorMessage(cause, m) ?? m(msg("Could not read this file."))),
+        fail(previewErrorText(cause, m(msg("Could not read this file.")))),
       );
     return () => {
       controller.abort();

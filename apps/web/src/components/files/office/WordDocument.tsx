@@ -1,6 +1,7 @@
 /* oxlint-disable react/no-unstable-nested-components -- The overlay callback is a render function, not a component. */
 import { msg } from "@t3tools/shared/i18n/react";
 import { useRef } from "react";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { m } from "~/i18n/messages";
 import { FileSurfaceLoading } from "../fileSurfaceChrome";
 import { OfficePages, type PaintPage } from "./OfficePages";
@@ -14,24 +15,20 @@ const describe = (model: { pages: readonly unknown[] }) =>
   );
 
 export default function WordDocument(props: {
-  bytes: ArrayBuffer;
-  onDetails: (text: string) => void;
+  src: string;
+  onDetails: (text: string, truncated: boolean) => void;
   onError: (cause: unknown) => void;
 }) {
-  const { bytes, onDetails, onError } = props;
-  const opened = useOfficeDocument(bytes, openDocument, describe, onDetails, onError);
+  const { src, onDetails, onError } = props;
+  const opened = useOfficeDocument(src, openDocument, describe, onDetails, onError);
   const scroll = useRef<((index: number, y?: number) => void) | null>(null);
-  const paint: PaintPage | undefined =
-    opened &&
-    (async (index, canvas, scale) =>
-      paintFrame(
-        canvas,
-        opened.model.pages[index]!,
-        opened.images,
-        scale * (window.devicePixelRatio || 1),
-      ));
+  // One identity for the document's life, so re-rendering the page indicator repaints nothing.
+  const paint: PaintPage = useStableCallback(async (index, canvas, scale) => {
+    const frame = opened?.model.pages[index];
+    if (frame) paintFrame(canvas, frame, opened.images, scale * (window.devicePixelRatio || 1));
+  });
 
-  if (!opened || !paint) return <FileSurfaceLoading />;
+  if (!opened) return <FileSurfaceLoading />;
   const { model } = opened;
   return (
     <OfficePages

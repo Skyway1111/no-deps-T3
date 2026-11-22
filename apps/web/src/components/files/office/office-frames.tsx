@@ -3,29 +3,58 @@ import { useEffect, useState } from "react";
 import type { OfficeFrame, OfficeImage, Paint } from "../decoders/officeEngine";
 import { officeImageBitmap } from "./image-bitmap";
 import { externalUrl } from "./links";
+import { OFFICE_PREVIEW_MAX_BYTES } from "../officePreviewProtocol";
+import { PreviewError } from "../previewFailure";
+import { readBoundedDocument } from "../readBoundedDocument";
 import { createWorkerClient } from "./worker-rpc";
 import type { OfficeMethods } from "./office.worker";
 
 export type OfficeEngine = ReturnType<typeof createWorkerClient<OfficeMethods>>;
 
-/** Starts the document's worker, runs `open` and decodes its images; everything is released on change or unmount. */
-export function useOfficeDocument<T extends { images: OfficeImage[] }>(
-  bytes: ArrayBuffer,
+/**
+ * Fetches the file straight into a fresh Office worker: the bytes are moved, never copied. Opening must `settle`
+ * within 30 s or the worker closes and `onError` gets a timeout.
+ */
+export function openOfficeWorker(
+  src: string,
+  controller: AbortController,
+  onError: (cause: unknown) => void,
+) {
+  const engine = createWorkerClient<OfficeMethods>(
+    new Worker(new URL("./office.worker.ts", import.meta.url), { type: "module" }),
+  );
+  const timer = setTimeout(() => {
+    controller.abort();
+    engine.close();
+    onError(new PreviewError({ code: "office-timeout" }));
+  }, 30_000);
+  controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+  return {
+    engine,
+    bytes: readBoundedDocument(src, controller.signal, OFFICE_PREVIEW_MAX_BYTES),
+    settle: () => clearTimeout(timer),
+  };
+}
+
+/** Opens the file in its own worker and decodes its images; the worker closes once the model is out. */
+export function useOfficeDocument<T extends { images: OfficeImage[]; truncated?: boolean }>(
+  src: string,
   open: (engine: OfficeEngine, bytes: ArrayBuffer, signal: AbortSignal) => Promise<T>,
   describe: (model: T) => string,
-  onDetails: (text: string) => void,
+  onDetails: (text: string, truncated: boolean) => void,
   onError: (cause: unknown) => void,
 ) {
   const [opened, setOpened] = useState<{ model: T; images: (ImageBitmap | null)[] }>();
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the Office worker and decoded image bitmaps for this file, releasing both when it changes or unmounts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the Office fetch, worker and decoded image bitmaps for this file, releasing them when it changes or unmounts.
   useEffect(() => {
     const controller = new AbortController();
-    const worker = new Worker(new URL("./office.worker.ts", import.meta.url), { type: "module" });
-    const engine = createWorkerClient<OfficeMethods>(worker);
+    const { engine, bytes, settle } = openOfficeWorker(src, controller, onError);
     let images: (ImageBitmap | null)[] = [];
-    const copy = bytes.slice(0);
-    void open(engine, copy, controller.signal)
+    void bytes
+      .then((buffer) => open(engine, buffer, controller.signal))
       .then(async (model) => {
+        settle();
+        engine.close();
         images = await Promise.all(
           model.images.map((image) =>
             officeImageBitmap(
@@ -34,8 +63,9 @@ export function useOfficeDocument<T extends { images: OfficeImage[] }>(
           ),
         );
         if (controller.signal.aborted) return images.forEach((bitmap) => bitmap?.close());
-        setOpened({ model, images });
-        onDetails(describe(model));
+        // Painting needs only the bitmaps; the encoded bytes go.
+        setOpened({ model: { ...model, images: [] }, images });
+        onDetails(describe(model), model.truncated === true);
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) onError(cause);
@@ -45,7 +75,7 @@ export function useOfficeDocument<T extends { images: OfficeImage[] }>(
       engine.close();
       images.forEach((bitmap) => bitmap?.close());
     };
-  }, [bytes, open, describe, onDetails, onError]);
+  }, [src, open, describe, onDetails, onError]);
   return opened;
 }
 

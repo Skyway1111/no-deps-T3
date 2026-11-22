@@ -1,5 +1,12 @@
 // Zero-dependency semantic OOXML engine: Word pages, Excel workbooks and PowerPoint slides as plain, cloneable data.
+import { checkZipDirectory } from "@t3tools/client-runtime/zip/directory";
 import { openZip, type NativeZipReader } from "@t3tools/client-runtime/zip/native-zip";
+import {
+  OFFICE_PREVIEW_MAX_BYTES,
+  OFFICE_PREVIEW_MAX_COLUMNS,
+  OFFICE_PREVIEW_MAX_ROWS,
+} from "../officePreviewProtocol";
+import { PreviewError } from "../previewFailure";
 
 export type XmlNode = {
   name: string;
@@ -39,7 +46,7 @@ export function parseXml(xml: string): XmlNode {
       top.text += xml.slice(lt + 9, end < 0 ? xml.length : end);
       i = end < 0 ? xml.length : end + 3;
     } else if (xml.startsWith("<?", lt)) i = (xml.indexOf("?>", lt) + 1 || xml.length) + 1;
-    else if (xml.startsWith("<!", lt)) throw new Error("XML declarations are not supported");
+    else if (xml.startsWith("<!", lt)) throw new PreviewError({ code: "office-xml-declarations" });
     else {
       const gt = xml.indexOf(">", lt);
       if (gt < 0) break;
@@ -100,36 +107,137 @@ const onOff = (node: XmlNode | undefined) =>
     : undefined;
 const textOf = (node: XmlNode): string => node.text + node.children.map(textOf).join("");
 
+const MIB = 1024 * 1024;
+export type OfficeKind = "docx" | "xlsx" | "pptx";
+
+/** Parts are decoded in their declared encoding; Word writes UTF-16 and legacy code pages too. */
+function decodeXml(bytes: Uint8Array) {
+  if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0x3c && bytes[1] === 0))
+    return new TextDecoder("utf-16le").decode(bytes);
+  if ((bytes[0] === 0xfe && bytes[1] === 0xff) || (bytes[0] === 0 && bytes[1] === 0x3c))
+    return new TextDecoder("utf-16be").decode(bytes);
+  const declared = /^<\?xml\s[^?]*\bencoding\s*=\s*["']([^"']+)["']/i.exec(
+    new TextDecoder().decode(bytes.subarray(0, 256)),
+  )?.[1];
+  try {
+    return new TextDecoder(declared).decode(bytes);
+  } catch {
+    return new TextDecoder().decode(bytes);
+  }
+}
+
+/**
+ * The file's ZIP, with every read charged to one expansion budget: a small archive must not inflate into an unbounded
+ * allocation. Each part is read once; parsed parts are cached until `forget`.
+ */
 export class OfficePackage {
   readonly zip: NativeZipReader;
   private readonly cache = new Map<string, Promise<XmlNode | undefined>>();
-  constructor(zip: NativeZipReader) {
+  private readonly charged = new Set<string>();
+  private readonly partLimit: number;
+  private remaining: number;
+  /** Set when a part was cut short to stay within its limit. */
+  truncated = false;
+  constructor(zip: NativeZipReader, partLimit: number, budget: number) {
     this.zip = zip;
+    this.partLimit = partLimit;
+    this.remaining = budget;
   }
-  static open(bytes: ArrayBuffer | Uint8Array) {
-    return new OfficePackage(openZip(bytes, { maxEntries: 20000 }));
+  static open(bytes: ArrayBuffer | Uint8Array, kind: OfficeKind) {
+    const buffer = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (buffer.byteLength > OFFICE_PREVIEW_MAX_BYTES)
+      throw new PreviewError({ code: "document-too-large" });
+    let zip: NativeZipReader;
+    try {
+      checkZipDirectory(buffer.buffer as ArrayBuffer);
+      zip = openZip(buffer, { maxEntries: 2048 });
+    } catch (cause) {
+      throw /entry limit/.test(String(cause))
+        ? new PreviewError({ code: "office-too-many-entries" })
+        : new PreviewError({ code: "office-invalid" });
+    }
+    return kind === "xlsx"
+      ? new OfficePackage(
+          zip,
+          64 * MIB,
+          Math.min(128 * MIB, Math.max(buffer.byteLength * 200, 8 * MIB)),
+        )
+      : new OfficePackage(zip, 8 * MIB, 50 * MIB);
   }
   has(path: string) {
     return !!this.zip.getEntry(path);
   }
-  xml(path: string) {
+  /** Reads a part's bytes against the budget; with `prefix`, a part over its limit keeps its start and marks the package truncated. */
+  async read(path: string, prefix = false): Promise<Uint8Array | undefined> {
+    const entry = this.zip.getEntry(path);
+    if (!entry) return undefined;
+    const limit = Math.min(this.partLimit, this.remaining);
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    const full = Symbol("limit");
+    try {
+      await this.zip.streamEntry(entry, {
+        onChunk: (chunk) => {
+          if (length + chunk.length > limit) {
+            if (!prefix || limit < this.partLimit)
+              throw new PreviewError({ code: "office-too-large-expanded" });
+            chunks.push(chunk.subarray(0, limit - length));
+            length = limit;
+            throw full;
+          }
+          chunks.push(chunk);
+          length += chunk.length;
+        },
+      });
+    } catch (cause) {
+      if (cause !== full) throw cause;
+      this.truncated = true;
+    }
+    if (!this.charged.has(path)) {
+      this.charged.add(path);
+      this.remaining -= length;
+    }
+    if (chunks.length === 1) return chunks[0]!;
+    const out = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return out;
+  }
+  async text(path: string) {
+    const bytes = await this.read(path);
+    return bytes ? decodeXml(bytes) : "";
+  }
+  xml(path: string, prefix = false) {
     let part = this.cache.get(path);
     if (!part) {
-      const entry = this.zip.getEntry(path);
-      part = entry
-        ? this.zip.readText(entry, { maxBytes: 256 * 1024 * 1024 }).then(parseXml)
-        : Promise.resolve(undefined);
+      part = this.read(path, prefix).then((bytes) =>
+        bytes ? parseXml(decodeXml(bytes)) : undefined,
+      );
       this.cache.set(path, part);
     }
     return part;
   }
-  bytes(path: string) {
-    return this.zip.getEntry(path)
-      ? this.zip.readBytes(path, { maxBytes: 64 * 1024 * 1024 })
-      : Promise.resolve(undefined);
+  /** Drops a parsed part that its reader has extracted everything from. */
+  forget(path: string | undefined) {
+    if (path) this.cache.delete(path);
   }
+  bytes(path: string) {
+    return this.read(path);
+  }
+  private readonly relsCache = new Map<
+    string,
+    Promise<Map<string, { target: string; type: string; external: boolean }>>
+  >();
   /** A part's relationships by id, with targets resolved to package paths (or kept as external URLs). */
-  async rels(path: string) {
+  rels(path: string) {
+    let rels = this.relsCache.get(path);
+    if (!rels) this.relsCache.set(path, (rels = this.readRels(path)));
+    return rels;
+  }
+  private async readRels(path: string) {
     const slash = path.lastIndexOf("/");
     const xml = await this.xml(`${path.slice(0, slash + 1)}_rels/${path.slice(slash + 1)}.rels`);
     const out = new Map<string, { target: string; type: string; external: boolean }>();
@@ -724,19 +832,26 @@ export type WordDocumentModel = {
   pages: OfficeFrame[];
   images: OfficeImage[];
   bookmarks: Record<string, { page: number; y: number }>;
+  /** The body was cut short: past 8 MiB of XML or 1,000 pages. */
+  truncated: boolean;
 };
+
+const MAX_WORD_PAGES = 1000;
+/** Stops layout once the page limit is reached; the pages so far are kept. */
+const PAGE_LIMIT = Symbol("page limit");
 
 export async function layoutDocx(
   bytes: ArrayBuffer | Uint8Array,
   measure: Measure = approximateMeasure,
 ): Promise<WordDocumentModel> {
-  const pkg = OfficePackage.open(bytes);
+  const pkg = OfficePackage.open(bytes, "docx");
   const rootRels = await pkg.rels("");
   const mainPath =
     [...rootRels.values()].find((r) => r.type === "officeDocument")?.target ?? "word/document.xml";
-  const document = await pkg.xml(mainPath);
+  if (!pkg.has(mainPath)) throw new PreviewError({ code: "office-not-open-xml" });
+  const document = await pkg.xml(mainPath, true);
   const body = find(document, "body");
-  if (!body) throw new Error("This document has no body.");
+  if (!body) throw new PreviewError({ code: "word-no-body" });
   const rels = await pkg.rels(mainPath);
   const partOf = (type: string) => [...rels.values()].find((r) => r.type === type)?.target;
   const ctx: DocContext = {
@@ -890,7 +1005,7 @@ export async function layoutDocx(
   const bookmarks: WordDocumentModel["bookmarks"] = {};
   let frame: OfficeFrame = { width: page.width, height: page.height, items: [] };
   const newPage = () => {
-    if (pages.length >= 1000) throw new Error("Preview limited to 1,000 pages.");
+    if (pages.length >= MAX_WORD_PAGES) throw PAGE_LIMIT;
     frame = { width: page.width, height: page.height, items: [] };
     pages.push(frame);
     pageSection.push(section);
@@ -1154,7 +1269,10 @@ export async function layoutDocx(
     const right = merged.right ?? 0;
     const first = merged.first ?? 0;
     // Without a styles part Word falls back to its Normal template (1.08 lines, 8pt after); with one, to zero.
-    const spacing = merged.lineRule === "auto" || !merged.lineRule ? (merged.line ?? (styles ? 240 : 259)) / 240 : 1;
+    const spacing =
+      merged.lineRule === "auto" || !merged.lineRule
+        ? (merged.line ?? (styles ? 240 : 259)) / 240
+        : 1;
     let before = merged.before ?? 0;
     const after = merged.after ?? (styles ? 0 : merged.heading !== undefined ? 4 : 10.67);
     if (target.prev?.style === styleId) {
@@ -1780,14 +1898,21 @@ export async function layoutDocx(
     for (const child of container.children) await block(child, target, width, offsetX);
   };
   const target: Target = { items: frame.items, y: page.top, paginate: true };
-  for (const child of body.children) {
-    await block(child, target, page.width - page.left - page.right, page.left);
-    if (child.name !== "p" || !kid(kid(child, "pPr"), "sectPr") || section + 1 >= sections.length)
-      continue;
-    const next = sections[++section]!;
-    page = next.geometry;
-    if (next.type !== "continuous") breakPage(target);
+  let truncated = pkg.truncated;
+  try {
+    for (const child of body.children) {
+      await block(child, target, page.width - page.left - page.right, page.left);
+      if (child.name !== "p" || !kid(kid(child, "pPr"), "sectPr") || section + 1 >= sections.length)
+        continue;
+      const next = sections[++section]!;
+      page = next.geometry;
+      if (next.type !== "continuous") breakPage(target);
+    }
+  } catch (cause) {
+    if (cause !== PAGE_LIMIT) throw cause;
+    truncated = true;
   }
+  pkg.forget(mainPath);
 
   // Headers and footers, laid out per page so PAGE and NUMPAGES fields read true.
   ctx.recordBookmarks = false;
@@ -1810,7 +1935,7 @@ export async function layoutDocx(
       for (const item of area.items) frameOf.items.push(shift(item, 0, dy));
     }
   }
-  return { pages, images: ctx.images, bookmarks };
+  return { pages, images: ctx.images, bookmarks, truncated };
 }
 
 const cropOf = (rect: XmlNode): [number, number, number, number] => [
@@ -1869,7 +1994,12 @@ export type SheetData = {
   links: Map<string, string>;
   defaultWidth: number;
   defaultHeight: number;
+  /** Cells past the preview's row or column limit were left out. */
+  truncated: boolean;
 };
+
+/** Cells one sheet keeps, bounding the worker's maps and the copy sent to the window. */
+const MAX_SHEET_CELLS = 2_000_000;
 export type Workbook = {
   sheets: { name: string; path: string; hidden: boolean; rels: string }[];
   styles: CellStyle[];
@@ -2043,10 +2173,11 @@ function themeColors(theme: XmlNode | undefined) {
 export async function openXlsx(
   bytes: ArrayBuffer | Uint8Array,
 ): Promise<{ pkg: OfficePackage; workbook: Workbook }> {
-  const pkg = OfficePackage.open(bytes);
+  const pkg = OfficePackage.open(bytes, "xlsx");
   const rootRels = await pkg.rels("");
   const path =
     [...rootRels.values()].find((r) => r.type === "officeDocument")?.target ?? "xl/workbook.xml";
+  if (!pkg.has(path)) throw new PreviewError({ code: "office-not-open-xml" });
   const xml = await pkg.xml(path);
   const rels = await pkg.rels(path);
   const partOf = (type: string) => [...rels.values()].find((r) => r.type === type)?.target;
@@ -2142,6 +2273,10 @@ export async function openXlsx(
       format: formats.get(id) ?? BUILTIN_FORMATS[id] ?? "General",
     };
   });
+  // Strings and styles are extracted; their trees would otherwise stay cached for the workbook's life.
+  pkg.forget(partOf("sharedStrings"));
+  pkg.forget(partOf("styles"));
+  pkg.forget(path);
   const workbook = kid(xml, "workbook");
   const sheets = kids(kid(workbook, "sheets"), "sheet").map((s) => ({
     name: at(s, "name") ?? "Sheet",
@@ -2183,8 +2318,7 @@ export async function readSheet(
   index: number,
 ): Promise<SheetData> {
   const sheet = workbook.sheets[index]!;
-  const entry = pkg.zip.getEntry(sheet.path);
-  const xml = entry ? await pkg.zip.readText(entry, { maxBytes: 512 * 1024 * 1024 }) : "";
+  const xml = await pkg.text(sheet.path);
   const data: SheetData = {
     name: sheet.name,
     rows: new Map(),
@@ -2200,6 +2334,7 @@ export async function readSheet(
     links: new Map(),
     defaultWidth: 64,
     defaultHeight: 20,
+    truncated: false,
   };
   const head = xml.slice(0, Math.max(0, xml.indexOf("<sheetData"))) || xml.slice(0, 20000);
   const view = /<sheetView\b([^>]*)>/.exec(head)?.[1] ?? "";
@@ -2236,11 +2371,15 @@ export async function readSheet(
   const shared = new Map<string, { formula: string; row: number; column: number }>();
   const start = xml.indexOf("<sheetData");
   rowPattern.lastIndex = start < 0 ? xml.length : start;
+  let cells = 0;
   for (let rm = rowPattern.exec(xml); rm; rm = rowPattern.exec(xml)) {
     const attrs = rm[1]!;
     const r = Number(/\br="(\d+)"/.exec(attrs)?.[1] ?? nextRow + 1) - 1;
     nextRow = r + 1;
-    if (r >= 1_048_576) break;
+    if (r >= OFFICE_PREVIEW_MAX_ROWS) {
+      data.truncated = true;
+      break;
+    }
     const ht = /\bht="([\d.]+)"/.exec(attrs)?.[1];
     if (ht) data.rowHeights.set(r, Number(ht) * (96 / 72));
     if (/hidden="(1|true)"/.test(attrs)) data.hiddenRows.add(r);
@@ -2253,6 +2392,10 @@ export async function readSheet(
       const ref = /\br="([A-Z]+\d+)"/.exec(ca)?.[1];
       const column = ref ? parseCellRef(ref)!.column : nextColumn;
       nextColumn = column + 1;
+      if (column >= OFFICE_PREVIEW_MAX_COLUMNS) {
+        data.truncated = true;
+        continue;
+      }
       const type = /\bt="(\w+)"/.exec(ca)?.[1] ?? "n";
       const style = Number(/\bs="(\d+)"/.exec(ca)?.[1] ?? 0);
       const inner = cm[2] ?? "";
@@ -2293,6 +2436,10 @@ export async function readSheet(
     if (row.size) {
       data.rows.set(r, row);
       data.maxRow = Math.max(data.maxRow, r + 1);
+    }
+    if ((cells += row.size) > MAX_SHEET_CELLS) {
+      data.truncated = true;
+      break;
     }
   }
   const tail = xml.slice(xml.lastIndexOf("</sheetData>") + 1 || xml.length);
@@ -2616,6 +2763,131 @@ function evaluateSheet(sheet: SheetData, workbook: Workbook) {
 }
 
 /** Excel number formats: sections, decimals, grouping, percent, scientific, dates and times, and literals. */
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const literal = (s: string) =>
+  s
+    .replace(/"([^"]*)"/g, "$1")
+    .replace(/\\(.)/g, "$1")
+    .replace(/_./g, " ")
+    .replace(/\*./g, "");
+
+type FormatSection = (number: number, date1904: boolean) => string;
+
+/** One `;` section of a number format, parsed once; the result formats any number. */
+function compileSection(raw: string): FormatSection {
+  const section = raw
+    .replace(/\[\$([^\]-]*)(?:-[^\]]*)?\]/g, '"$1"')
+    .replace(
+      /\[(?:Red|Black|Blue|Green|White|Yellow|Cyan|Magenta|Color\s*\d+|[<>=]+[\d.]+)\]/gi,
+      "",
+    );
+  if (
+    /[dmyhs]/i.test(section.replace(/"[^"]*"/g, "")) &&
+    !/0/.test(section.replace(/"[^"]*"|\[[^\]]*\]/g, "").replace(/\.0+/, ""))
+  ) {
+    const ampm = /AM\/PM|A\/P/i.test(section);
+    const lower = section.toLowerCase();
+    return (number, date1904) => {
+      const ms = Math.round((number - (date1904 ? -1462 : 25569)) * 86400000);
+      const d = new Date(ms);
+      const pm = d.getUTCHours() >= 12;
+      const hours = ampm ? d.getUTCHours() % 12 || 12 : d.getUTCHours();
+      let minuteContext = false;
+      return literal(
+        section.replace(
+          /"[^"]*"|\[h+\]|yyyy|yy|mmmmm|mmmm|mmm|mm|m|dddd|ddd|dd|d|hh|h|ss|s|AM\/PM|A\/P|\.0+/gi,
+          (token) => {
+            const t = token.toLowerCase();
+            if (token.startsWith('"')) return token;
+            if (t.startsWith("[h")) return String(Math.floor(number * 24));
+            if (t === "yyyy") return String(d.getUTCFullYear());
+            if (t === "yy") return String(d.getUTCFullYear()).slice(-2);
+            if (t.startsWith("h")) {
+              minuteContext = true;
+              return t === "hh" ? String(hours).padStart(2, "0") : String(hours);
+            }
+            if (t === "mmmmm") return MONTHS[d.getUTCMonth()]![0]!;
+            if (t === "mmmm") return MONTHS[d.getUTCMonth()]!;
+            if (t === "mmm") return MONTHS[d.getUTCMonth()]!.slice(0, 3);
+            if (t === "mm" || t === "m") {
+              const minutes =
+                minuteContext || /^\s*:?s/.test(section.slice(lower.indexOf(t) + t.length));
+              minuteContext = false;
+              const v = minutes ? d.getUTCMinutes() : d.getUTCMonth() + 1;
+              return t === "mm" ? String(v).padStart(2, "0") : String(v);
+            }
+            if (t === "dddd") return DAYS[d.getUTCDay()]!;
+            if (t === "ddd") return DAYS[d.getUTCDay()]!.slice(0, 3);
+            if (t === "dd") return String(d.getUTCDate()).padStart(2, "0");
+            if (t === "d") return String(d.getUTCDate());
+            if (t === "ss") return String(d.getUTCSeconds()).padStart(2, "0");
+            if (t === "s") return String(d.getUTCSeconds());
+            if (t === "am/pm") return pm ? "PM" : "AM";
+            if (t === "a/p") return pm ? "P" : "A";
+            if (t.startsWith(".0"))
+              return `.${String(d.getUTCMilliseconds())
+                .padStart(3, "0")
+                .slice(0, t.length - 1)}`;
+            return token;
+          },
+        ),
+      );
+    };
+  }
+  const code = section.replace(/"[^"]*"/g, (q) => q.replace(/[0#?.,%E]/g, (c) => `\\${c}`));
+  // Keep the literal prefix and suffix around the number pattern.
+  const pattern = /(?<!\\)[0#?][0#?,.]*(?:E[+-][0#]+)?/i.exec(code);
+  if (!pattern) {
+    const text = literal(section);
+    return () => text;
+  }
+  const scale = 100 ** (code.match(/(?<!\\)%/g) ?? []).length;
+  const scientific = /(?<!\\)E[+-]/i.test(code);
+  const decimals = (/(?<!\\)\.([0#?]+)/.exec(code)?.[1] ?? "").length;
+  const grouping = /[0#?],[0#?]/.test(code);
+  const minimumDigits = (/(?<!\\)(0+)(?:[.,]|$|[^0#?,.])/.exec(code.split(".")[0] ?? "")?.[1] ?? "")
+    .length;
+  const optional = (/(?<!\\)\.(0*)(#*)/.exec(code)?.[1] ?? "").length;
+  const trailingZeros =
+    optional < decimals ? new RegExp(`(\\.\\d{${optional}}\\d*?)0+$`) : undefined;
+  const before = literal(code.slice(0, pattern.index).replace(/\\(.)/g, "$1"));
+  const after = literal(code.slice(pattern.index + pattern[0].length).replace(/\\(.)/g, "$1"));
+  return (value) => {
+    const number = value * scale;
+    let formatted: string;
+    if (scientific) {
+      const [mantissa, exponent] = number.toExponential(decimals).split("e");
+      formatted = `${mantissa}E${Number(exponent) < 0 ? "-" : "+"}${String(Math.abs(Number(exponent))).padStart(2, "0")}`;
+    } else {
+      let digits = Math.abs(number).toFixed(decimals);
+      if (trailingZeros) digits = digits.replace(trailingZeros, "$1").replace(/\.$/, "");
+      let [whole, fraction] = digits.split(".");
+      whole = whole!.padStart(minimumDigits, "0");
+      if (whole === "0" && !minimumDigits) whole = "";
+      if (grouping) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      formatted = (number < 0 ? "-" : "") + whole + (fraction ? `.${fraction}` : "");
+    }
+    return before + formatted + after;
+  };
+}
+
+/** Number formats by code, each section compiled on first use; a workbook uses a few dozen. */
+const compiledFormats = new Map<string, { sections: string[]; compiled: FormatSection[] }>();
+
 export function formatValue(value: SheetCell["value"], format: string, date1904 = false): string {
   if (value === null) return "";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
@@ -2631,123 +2903,20 @@ export function formatValue(value: SheetCell["value"], format: string, date1904 
           .replace(/\.?0+e/, "E")
           .replace("E+", "E+")
       : String(Math.round(value * 1e10) / 1e10);
-  const sections = format.split(/;(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-  let section = sections[0]!;
+  let entry = compiledFormats.get(format);
+  if (!entry) {
+    if (compiledFormats.size > 4096) compiledFormats.clear();
+    entry = { sections: format.split(/;(?=(?:[^"]*"[^"]*")*[^"]*$)/), compiled: [] };
+    compiledFormats.set(format, entry);
+  }
+  let index = 0;
   let number = value;
-  if (value < 0 && sections[1] !== undefined) {
-    section = sections[1];
+  if (value < 0 && entry.sections[1] !== undefined) {
+    index = 1;
     number = -value;
-  } else if (value === 0 && sections[2] !== undefined) section = sections[2];
-  section = section
-    .replace(/\[\$([^\]-]*)(?:-[^\]]*)?\]/g, '"$1"')
-    .replace(
-      /\[(?:Red|Black|Blue|Green|White|Yellow|Cyan|Magenta|Color\s*\d+|[<>=]+[\d.]+)\]/gi,
-      "",
-    );
-  const literal = (s: string) =>
-    s
-      .replace(/"([^"]*)"/g, "$1")
-      .replace(/\\(.)/g, "$1")
-      .replace(/_./g, " ")
-      .replace(/\*./g, "");
-  if (
-    /[dmyhs]/i.test(section.replace(/"[^"]*"/g, "")) &&
-    !/0/.test(section.replace(/"[^"]*"|\[[^\]]*\]/g, "").replace(/\.0+/, ""))
-  ) {
-    const ms = Math.round((number - (date1904 ? -1462 : 25569)) * 86400000);
-    const d = new Date(ms);
-    const pm = d.getUTCHours() >= 12;
-    const ampm = /AM\/PM|A\/P/i.test(section);
-    const hours = ampm ? d.getUTCHours() % 12 || 12 : d.getUTCHours();
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    let minuteContext = false;
-    return literal(
-      section.replace(
-        /"[^"]*"|\[h+\]|yyyy|yy|mmmmm|mmmm|mmm|mm|m|dddd|ddd|dd|d|hh|h|ss|s|AM\/PM|A\/P|\.0+/gi,
-        (token) => {
-          const t = token.toLowerCase();
-          if (token.startsWith('"')) return token;
-          if (t.startsWith("[h")) return String(Math.floor(number * 24));
-          if (t === "yyyy") return String(d.getUTCFullYear());
-          if (t === "yy") return String(d.getUTCFullYear()).slice(-2);
-          if (t.startsWith("h")) {
-            minuteContext = true;
-            return t === "hh" ? String(hours).padStart(2, "0") : String(hours);
-          }
-          if (t === "mmmmm") return months[d.getUTCMonth()]![0]!;
-          if (t === "mmmm") return months[d.getUTCMonth()]!;
-          if (t === "mmm") return months[d.getUTCMonth()]!.slice(0, 3);
-          if (t === "mm" || t === "m") {
-            const minutes =
-              minuteContext ||
-              /^\s*:?s/.test(section.slice(section.toLowerCase().indexOf(t) + t.length));
-            minuteContext = false;
-            const v = minutes ? d.getUTCMinutes() : d.getUTCMonth() + 1;
-            return t === "mm" ? String(v).padStart(2, "0") : String(v);
-          }
-          if (t === "dddd") return days[d.getUTCDay()]!;
-          if (t === "ddd") return days[d.getUTCDay()]!.slice(0, 3);
-          if (t === "dd") return String(d.getUTCDate()).padStart(2, "0");
-          if (t === "d") return String(d.getUTCDate());
-          if (t === "ss") return String(d.getUTCSeconds()).padStart(2, "0");
-          if (t === "s") return String(d.getUTCSeconds());
-          if (t === "am/pm") return pm ? "PM" : "AM";
-          if (t === "a/p") return pm ? "P" : "A";
-          if (t.startsWith(".0"))
-            return `.${String(d.getUTCMilliseconds())
-              .padStart(3, "0")
-              .slice(0, t.length - 1)}`;
-          return token;
-        },
-      ),
-    );
-  }
-  const code = section.replace(/"[^"]*"/g, (q) => q.replace(/[0#?.,%E]/g, (c) => `\\${c}`));
-  const percent = (code.match(/(?<!\\)%/g) ?? []).length;
-  number *= 100 ** percent;
-  const scientific = /(?<!\\)E[+-]/i.exec(code);
-  const decimals = (/(?<!\\)\.([0#?]+)/.exec(code)?.[1] ?? "").length;
-  const grouping = /[0#?],[0#?]/.test(code);
-  let formatted: string;
-  if (scientific) {
-    const [mantissa, exponent] = number.toExponential(decimals).split("e");
-    formatted = `${mantissa}E${Number(exponent) < 0 ? "-" : "+"}${String(Math.abs(Number(exponent))).padStart(2, "0")}`;
-  } else {
-    const minimumDigits = (
-      /(?<!\\)(0+)(?:[.,]|$|[^0#?,.])/.exec(code.split(".")[0] ?? "")?.[1] ?? ""
-    ).length;
-    const optional = (/(?<!\\)\.(0*)(#*)/.exec(code)?.[1] ?? "").length;
-    let digits = Math.abs(number).toFixed(decimals);
-    if (optional < decimals)
-      digits = digits.replace(new RegExp(`(\\.\\d{${optional}}\\d*?)0+$`), "$1").replace(/\.$/, "");
-    let [whole, fraction] = digits.split(".");
-    whole = whole!.padStart(minimumDigits, "0");
-    if (whole === "0" && !minimumDigits) whole = "";
-    if (grouping) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    formatted = (number < 0 ? "-" : "") + whole + (fraction ? `.${fraction}` : "");
-  }
-  // Keep the literal prefix and suffix around the number pattern.
-  const pattern = /(?<!\\)[0#?][0#?,.]*(?:E[+-][0#]+)?/i.exec(code);
-  if (!pattern) return literal(section);
-  const before = code.slice(0, pattern.index);
-  const after = code.slice(pattern.index + pattern[0].length);
-  return (
-    literal(before.replace(/\\(.)/g, "$1")) + formatted + literal(after.replace(/\\(.)/g, "$1"))
-  );
+  } else if (value === 0 && entry.sections[2] !== undefined) index = 2;
+  const section = (entry.compiled[index] ??= compileSection(entry.sections[index]!));
+  return section(number, date1904);
 }
 
 /** The cells of a range as the tab-separated text a spreadsheet pastes. */
@@ -2850,9 +3019,10 @@ function autoNumber(n: number, type: string) {
 
 export async function layoutPptx(
   bytes: ArrayBuffer | Uint8Array,
-  measure: Measure = approximateMeasure,
+  rawMeasure: Measure = approximateMeasure,
 ): Promise<PresentationModel> {
-  const pkg = OfficePackage.open(bytes);
+  const measure = memoMeasure(rawMeasure);
+  const pkg = OfficePackage.open(bytes, "pptx");
   const rootRels = await pkg.rels("");
   const path =
     [...rootRels.values()].find((r) => r.type === "officeDocument")?.target ??
@@ -2873,6 +3043,40 @@ export async function layoutPptx(
     kids(tableStyleList, "tblStyle").map((style) => [at(style, "styleId") ?? "", style]),
   );
   const defaultTableStyle = at(tableStyleList, "def") ?? "";
+  // Slides share a few layouts, masters and themes; their derived tables are built once per part.
+  const themes = new Map<
+    string,
+    Promise<{ palette: string[]; fonts: { major: string; minor: string } }>
+  >();
+  const themeOf = (themePath: string | undefined) => {
+    let entry = themes.get(themePath ?? "");
+    if (!entry) {
+      entry = (themePath ? pkg.xml(themePath) : Promise.resolve(undefined)).then((theme) => ({
+        palette: themeColors(theme),
+        fonts: {
+          major: at(find(find(theme, "majorFont"), "latin"), "typeface") ?? "Calibri Light",
+          minor: at(find(find(theme, "minorFont"), "latin"), "typeface") ?? "Calibri",
+        },
+      }));
+      themes.set(themePath ?? "", entry);
+    }
+    return entry;
+  };
+  const placeholderMaps = new Map<string, Map<string, XmlNode>>();
+  const placeholdersOf = (partPath: string | undefined, tree: XmlNode | undefined) => {
+    let map = partPath ? placeholderMaps.get(partPath) : undefined;
+    if (map) return map;
+    map = new Map<string, XmlNode>();
+    for (const sp of findAll(find(tree, "spTree"), "sp")) {
+      const ph = find(kid(sp, "nvSpPr"), "ph");
+      if (!ph) continue;
+      const type = at(ph, "type") ?? "body";
+      map.set(`type:${type}`, sp);
+      if (at(ph, "idx")) map.set(`idx:${at(ph, "idx")}`, sp);
+    }
+    if (partPath) placeholderMaps.set(partPath, map);
+    return map;
+  };
   const slides: OfficeFrame[] = [];
   const slideIds = kids(kid(presentation, "sldIdLst"), "sldId").slice(0, 500);
   for (const id of slideIds) {
@@ -2887,12 +3091,7 @@ export async function layoutPptx(
     const master = masterPath ? kid(await pkg.xml(masterPath), "sldMaster") : undefined;
     const masterRels = masterPath ? await pkg.rels(masterPath) : new Map();
     const themePath = [...masterRels.values()].find((r) => r.type === "theme")?.target;
-    const theme = themePath ? await pkg.xml(themePath) : undefined;
-    const palette = themeColors(theme);
-    const fonts = {
-      major: at(find(find(theme, "majorFont"), "latin"), "typeface") ?? "Calibri Light",
-      minor: at(find(find(theme, "minorFont"), "latin"), "typeface") ?? "Calibri",
-    };
+    const { palette, fonts } = await themeOf(themePath);
     const clrMap = kid(master, "clrMap")?.attrs ?? {};
     const schemeIndex: Record<string, number> = {
       dk1: 0,
@@ -2967,19 +3166,8 @@ export async function layoutPptx(
       imageCache.set(rel.target, index);
       return index;
     };
-    const placeholders = (tree: XmlNode | undefined) => {
-      const map = new Map<string, XmlNode>();
-      for (const sp of findAll(find(tree, "spTree"), "sp")) {
-        const ph = find(kid(sp, "nvSpPr"), "ph");
-        if (!ph) continue;
-        const type = at(ph, "type") ?? "body";
-        map.set(`type:${type}`, sp);
-        if (at(ph, "idx")) map.set(`idx:${at(ph, "idx")}`, sp);
-      }
-      return map;
-    };
-    const layoutPh = placeholders(layout);
-    const masterPh = placeholders(master);
+    const layoutPh = placeholdersOf(layoutPath, layout);
+    const masterPh = placeholdersOf(masterPath, master);
     const txStyles = kid(master, "txStyles");
     const inherit = (sp: XmlNode): Inherited[] => {
       const ph = find(kid(sp, "nvSpPr"), "ph");

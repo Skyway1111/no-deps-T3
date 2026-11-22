@@ -9,6 +9,7 @@ import {
 } from "../fileSurfaceChrome";
 import { OfficePages, type PaintPage } from "./OfficePages";
 import { FrameText, paintFrame, useOfficeDocument, type OfficeEngine } from "./office-frames";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { m } from "~/i18n/messages";
 
 const openPresentation = async (engine: OfficeEngine, bytes: ArrayBuffer, signal: AbortSignal) => {
@@ -25,26 +26,22 @@ const describe = (model: { slides: readonly unknown[] }) =>
   );
 
 export default function Presentation(props: {
-  bytes: ArrayBuffer;
-  onDetails: (text: string) => void;
+  src: string;
+  onDetails: (text: string, truncated: boolean) => void;
   onError: (cause: unknown) => void;
 }) {
-  const { onError, bytes, onDetails } = props;
+  const { onError, src, onDetails } = props;
   const gt = useGT();
   const [page, setPage] = useState(0);
   const scroll = useRef<((index: number, y?: number) => void) | null>(null);
-  const opened = useOfficeDocument(bytes, openPresentation, describe, onDetails, onError);
-  const paint: PaintPage | undefined =
-    opened &&
-    (async (index, canvas, scale) =>
-      paintFrame(
-        canvas,
-        opened.model.slides[index]!,
-        opened.images,
-        scale * (window.devicePixelRatio || 1),
-      ));
+  const opened = useOfficeDocument(src, openPresentation, describe, onDetails, onError);
+  // One identity for the document's life, so re-rendering the page indicator repaints nothing.
+  const paint: PaintPage = useStableCallback(async (index, canvas, scale) => {
+    const frame = opened?.model.slides[index];
+    if (frame) paintFrame(canvas, frame, opened.images, scale * (window.devicePixelRatio || 1));
+  });
 
-  if (!opened || !paint) return <FileSurfaceLoading />;
+  if (!opened) return <FileSurfaceLoading />;
   const slides = opened.model.slides;
   const select = (index: number) => {
     setPage(index);

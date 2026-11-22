@@ -1,5 +1,6 @@
 /* oxlint-disable react/no-array-index-key -- A page keeps its ordinal throughout incremental layout. */
 import { useGT } from "@t3tools/shared/i18n/react";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { observeResize } from "~/lib/observeResize";
 import {
   useEffect,
@@ -33,10 +34,51 @@ export function OfficePages(props: {
   onError: (error: unknown) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const rows = useRef(new Map<number, HTMLDivElement>());
+  // Page rows in document order, so scrolling finds the current page by binary search.
+  const rows = useRef<(HTMLDivElement | undefined)[]>([]);
   const [width, setWidth] = useState(0);
   const [settledWidth, setSettledWidth] = useState(0);
   const [mounted, setMounted] = useState(6);
+  const [near, setNear] = useState<ReadonlySet<number>>(() => new Set());
+  const [ratio, setRatio] = useState(() => window.devicePixelRatio || 1);
+  const observer = useRef<IntersectionObserver | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- One observer tracks which pages are near the viewport, limiting painting and text layers to them.
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) =>
+        setNear((previous) => {
+          const next = new Set(previous);
+          for (const entry of entries) {
+            const index = Number((entry.target as HTMLElement).dataset.officePage);
+            if (entry.isIntersecting) next.add(index);
+            else next.delete(index);
+          }
+          return next.size === previous.size && [...next].every((i) => previous.has(i))
+            ? previous
+            : next;
+        }),
+      { root: scroller.current, rootMargin: "100% 0px" },
+    );
+    observer.current = io;
+    for (const row of rows.current) if (row) io.observe(row);
+    return () => {
+      io.disconnect();
+      observer.current = null;
+    };
+  }, []);
+  const track = useStableCallback((index: number, row: HTMLDivElement | undefined) => {
+    const previous = rows.current[index];
+    if (previous && previous !== row) observer.current?.unobserve(previous);
+    rows.current[index] = row;
+    if (row) observer.current?.observe(row);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Subscribe to display density changes so canvas rasters match the current screen.
+  useEffect(() => {
+    const query = matchMedia(`(resolution: ${ratio}dppx)`);
+    const change = () => setRatio(window.devicePixelRatio || 1);
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, [ratio]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Observe the scroll container width and debounce raster resizing, releasing the observer and timer on unmount.
   useEffect(() => {
     const root = scroller.current;
@@ -64,7 +106,7 @@ export function OfficePages(props: {
     props.scrollRef,
     () =>
       (index: number, y = 0) => {
-        const row = rows.current.get(index);
+        const row = rows.current[index];
         const page = props.pages[index];
         if (row && page)
           scroller.current?.scrollTo({
@@ -88,12 +130,17 @@ export function OfficePages(props: {
           props.onPageChange(Math.min(mounted, props.pages.length) - 1);
           return;
         }
-        for (const [index, row] of [...rows.current].sort(([a], [b]) => a - b)) {
-          if (row.offsetTop + row.offsetHeight > root.scrollTop + 24) {
-            props.onPageChange(index);
-            break;
-          }
+        const list = rows.current;
+        let lo = 0;
+        let hi = Math.min(mounted, list.length) - 1;
+        if (hi < 0) return;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          const row = list[mid];
+          if (row && row.offsetTop + row.offsetHeight > root.scrollTop + 24) hi = mid;
+          else lo = mid + 1;
         }
+        props.onPageChange(lo);
       }}
     >
       <div className="flex flex-col items-center gap-4 py-6">
@@ -102,11 +149,9 @@ export function OfficePages(props: {
             key={index}
             page={page}
             index={index}
-            root={scroller}
-            register={(el) => {
-              if (el) rows.current.set(index, el);
-              else rows.current.delete(index);
-            }}
+            near={near.has(index)}
+            ratio={ratio}
+            track={track}
             scale={Math.min(1, Math.max(0, width - 48) / page.width)}
             rasterScale={Math.min(1, Math.max(0, (settledWidth || width) - 48) / page.width)}
             {...props}
@@ -120,8 +165,9 @@ export function OfficePages(props: {
 function OfficePage(props: {
   page: PageSize;
   index: number;
-  root: RefObject<HTMLDivElement | null>;
-  register: (element: HTMLDivElement | null) => void;
+  near: boolean;
+  ratio: number;
+  track: (index: number, row: HTMLDivElement | undefined) => void;
   scale: number;
   rasterScale: number;
   paint: PaintPage;
@@ -130,30 +176,29 @@ function OfficePage(props: {
   footer?: (index: number) => ReactNode;
   onError: (error: unknown) => void;
 }) {
-  const { root, rasterScale, index, onError, page, paint, scale, register, kind, overlay, footer } =
-    props;
+  const {
+    near,
+    ratio,
+    rasterScale,
+    index,
+    onError,
+    page,
+    paint,
+    scale,
+    track,
+    kind,
+    overlay,
+    footer,
+  } = props;
   const gt = useGT();
   const row = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [near, setNear] = useState(false);
-  const [ratio, setRatio] = useState(window.devicePixelRatio || 1);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Observe the page's viewport proximity to limit painting and text layers to nearby pages.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Register this page's row with the shared viewport observer while mounted.
   useEffect(() => {
-    if (!row.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setNear(entry?.isIntersecting ?? false),
-      { root: root.current, rootMargin: "100% 0px" },
-    );
-    observer.observe(row.current);
-    return () => observer.disconnect();
-  }, [root]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Subscribe to display density changes so canvas rasters match the current screen.
-  useEffect(() => {
-    const query = matchMedia(`(resolution: ${ratio}dppx)`);
-    const change = () => setRatio(window.devicePixelRatio || 1);
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
-  }, [ratio]);
+    const element = row.current ?? undefined;
+    track(index, element);
+    return () => track(index, undefined);
+  }, [index, track]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Paint the visible page canvas at the current raster scale and cancel obsolete paint requests.
   useEffect(() => {
     const target = canvas.current;
@@ -175,10 +220,8 @@ function OfficePage(props: {
   return (
     <div className="flex shrink-0 flex-col gap-3" style={{ width: page.width * scale }}>
       <div
-        ref={(el) => {
-          row.current = el;
-          register(el);
-        }}
+        ref={row}
+        data-office-page={index}
         role="group"
         aria-label={
           kind === "slide"

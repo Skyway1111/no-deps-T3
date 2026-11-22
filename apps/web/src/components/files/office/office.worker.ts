@@ -1,4 +1,3 @@
-import type { WorkbookView } from "../officePreviewProtocol";
 import {
   layoutDocx,
   layoutPptx,
@@ -6,20 +5,21 @@ import {
   readSheet,
   type CellStyle,
   type Measure,
+  type OfficeImage,
   type OfficePackage,
   type PresentationModel,
   type SheetData,
   type WordDocumentModel,
   type Workbook,
 } from "../decoders/officeEngine";
-import { serveWorker, type Method } from "./worker-rpc";
+import { serveWorker, Transfer, type Method } from "./worker-rpc";
 
 // One worker per open file parses and lays out off the main thread; the window paints the returned frames.
 export type OfficeMethods = {
   readonly docx: Method<{ readonly bytes: ArrayBuffer }, WordDocumentModel>;
   readonly pptx: Method<{ readonly bytes: ArrayBuffer }, PresentationModel>;
   readonly workbook: Method<
-    { readonly bytes: ArrayBuffer; readonly view: WorkbookView },
+    { readonly bytes: ArrayBuffer },
     {
       readonly tabs: readonly { index: number; name: string }[];
       readonly active: number;
@@ -37,9 +37,13 @@ const measure: Measure = (text, font) => {
 };
 const state: { workbook?: { pkg: OfficePackage; workbook: Workbook } } = {};
 
+/** Moves the embedded images to the window instead of copying them. */
+const withImages = <T extends { images: OfficeImage[] }>(model: T) =>
+  new Transfer(model, [...new Set(model.images.map((image) => image.bytes.buffer as ArrayBuffer))]);
+
 serveWorker<OfficeMethods>({
-  docx: ({ bytes }) => layoutDocx(bytes, measure),
-  pptx: ({ bytes }) => layoutPptx(bytes, measure),
+  docx: async ({ bytes }) => withImages(await layoutDocx(bytes, measure)),
+  pptx: async ({ bytes }) => withImages(await layoutPptx(bytes, measure)),
   async workbook({ bytes }) {
     state.workbook = await openXlsx(bytes);
     const { workbook } = state.workbook;

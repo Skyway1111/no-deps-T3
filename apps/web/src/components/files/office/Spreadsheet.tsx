@@ -4,14 +4,11 @@ import { m } from "~/i18n/messages";
 import { observeResize } from "~/lib/observeResize";
 import { columnName, sheetTsv, type CellStyle, type SheetData } from "../decoders/officeEngine";
 import { FileSurfaceLoading, FileSurfaceNotice } from "../fileSurfaceChrome";
-import type { WorkbookView } from "../officePreviewProtocol";
 import { externalUrl } from "./links";
-import type { OfficeMethods } from "./office.worker";
-import { createWorkerClient } from "./worker-rpc";
+import { openOfficeWorker, type OfficeEngine } from "./office-frames";
 
-type Engine = ReturnType<typeof createWorkerClient<OfficeMethods>>;
 type Opened = {
-  engine: Engine;
+  engine: OfficeEngine;
   tabs: readonly { index: number; name: string }[];
   styles: readonly CellStyle[];
 };
@@ -59,6 +56,81 @@ function axis(
 
 const HEADER = 22;
 
+// Row and column offsets and merged-cell coverage depend only on the sheet; scrolling and selecting reuse them.
+const sheetLayouts = new WeakMap<
+  SheetData,
+  {
+    rows: ReturnType<typeof axis>;
+    columns: ReturnType<typeof axis>;
+    covered: Map<string, SheetData["merges"][number]>;
+  }
+>();
+function sheetLayout(sheet: SheetData) {
+  let layout = sheetLayouts.get(sheet);
+  if (layout) return layout;
+  const covered = new Map<string, SheetData["merges"][number]>();
+  for (const merge of sheet.merges)
+    if ((merge.r2 - merge.r1 + 1) * (merge.c2 - merge.c1 + 1) <= 10000)
+      for (let r = merge.r1; r <= merge.r2; r++)
+        for (let c = merge.c1; c <= merge.c2; c++) covered.set(`${r}:${c}`, merge);
+  layout = {
+    rows: axis(
+      Math.max(sheet.maxRow + 50, 100),
+      sheet.defaultHeight,
+      sheet.rowHeights,
+      sheet.hiddenRows,
+    ),
+    columns: axis(
+      Math.max(sheet.maxColumn + 10, 26),
+      sheet.defaultWidth,
+      sheet.columnWidths,
+      sheet.hiddenColumns,
+    ),
+    covered,
+  };
+  sheetLayouts.set(sheet, layout);
+  return layout;
+}
+
+type Viewport = { left: number; top: number; width: number; height: number };
+
+/** Where rows, columns and frozen panes sit on screen for one scroll position. */
+function gridGeometry(sheet: SheetData, viewport: Viewport) {
+  const { rows, columns, covered } = sheetLayout(sheet);
+  const gutter = Math.max(36, String(rows.count).length * 8 + 14);
+  const frozenRows = Math.min(sheet.frozen.rows, rows.count);
+  const frozenColumns = Math.min(sheet.frozen.columns, columns.count);
+  const frozenHeight = rows.start(frozenRows);
+  const frozenWidth = columns.start(frozenColumns);
+  // Screen positions: frozen panes stay put, the rest scrolls beneath them.
+  const xOf = (c: number) => gutter + columns.start(c) - (c < frozenColumns ? 0 : viewport.left);
+  const yOf = (r: number) => HEADER + rows.start(r) - (r < frozenRows ? 0 : viewport.top);
+  const cellAt = (x: number, y: number) => {
+    const ix = x - gutter;
+    const iy = y - HEADER;
+    const column =
+      ix < frozenWidth ? columns.index(Math.max(0, ix)) : columns.index(ix + viewport.left);
+    const row = iy < frozenHeight ? rows.index(Math.max(0, iy)) : rows.index(iy + viewport.top);
+    return { row, column };
+  };
+  return {
+    rows,
+    columns,
+    covered,
+    gutter,
+    frozenRows,
+    frozenColumns,
+    frozenHeight,
+    frozenWidth,
+    xOf,
+    yOf,
+    cellAt,
+  };
+}
+
+const sheetCount = (count: number) =>
+  m(msg("{count, plural, one {{count} sheet} other {{count} sheets}}", { count }));
+
 function wrapText(context: CanvasRenderingContext2D, text: string, width: number) {
   const lines: string[] = [];
   for (const paragraph of text.split("\n")) {
@@ -76,37 +148,35 @@ function wrapText(context: CanvasRenderingContext2D, text: string, width: number
 }
 
 export default function Spreadsheet(props: {
-  bytes: ArrayBuffer;
-  view: WorkbookView;
-  onDetails: (text: string) => void;
+  src: string;
+  onDetails: (text: string, truncated: boolean) => void;
   onError: (cause: unknown) => void;
 }) {
-  const { onError, bytes: source, onDetails, view } = props;
+  const { onError, src, onDetails } = props;
   const gt = useGT();
   const [opened, setOpened] = useState<Opened>();
   const [sheet, setSheet] = useState<{ index: number; data: SheetData }>();
   const [error, setError] = useState("");
   const picking = useRef<AbortController | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the workbook worker and its sheet requests for this file, closing it when the file changes or unmounts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Own the workbook fetch, worker and its sheet requests for this file, closing it when the file changes or unmounts.
   useEffect(() => {
     const controller = new AbortController();
-    const worker = new Worker(new URL("./office.worker.ts", import.meta.url), { type: "module" });
-    const engine = createWorkerClient<OfficeMethods>(worker);
-    const bytes = source.slice(0);
-    void engine
-      .call("workbook", { bytes, view }, { transfer: [bytes], signal: controller.signal })
+    const { engine, bytes, settle } = openOfficeWorker(src, controller, onError);
+    void bytes
+      .then((buffer) =>
+        engine.call(
+          "workbook",
+          { bytes: buffer },
+          { transfer: [buffer], signal: controller.signal },
+        ),
+      )
       .then(async ({ tabs, active, styles }) => {
         if (!tabs.length) throw new Error(m(msg("This workbook has no visible sheets.")));
         const data = await engine.call("sheet", { sheet: active }, { signal: controller.signal });
+        settle();
         setOpened({ engine, tabs, styles });
         setSheet({ index: active, data });
-        onDetails(
-          m(
-            msg("{count, plural, one {{count} sheet} other {{count} sheets}}", {
-              count: tabs.length,
-            }),
-          ),
-        );
+        onDetails(sheetCount(tabs.length), data.truncated);
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) onError(cause);
@@ -116,7 +186,7 @@ export default function Spreadsheet(props: {
       picking.current?.abort();
       engine.close();
     };
-  }, [source, view, onDetails, onError]);
+  }, [src, onDetails, onError]);
   if (!opened || !sheet) return <FileSurfaceLoading />;
   const show = (index: number) => {
     picking.current?.abort();
@@ -128,6 +198,7 @@ export default function Spreadsheet(props: {
       .then((data) => {
         setError("");
         setSheet({ index, data });
+        onDetails(sheetCount(opened.tabs.length), data.truncated);
       })
       .catch(() => {
         if (!controller.signal.aborted) setError(m(msg("This sheet could not be opened.")));
@@ -140,7 +211,7 @@ export default function Spreadsheet(props: {
         key={sheet.index}
         sheet={sheet.data}
         styles={opened.styles}
-        gridlines={sheet.data.gridlines && !view.hiddenGridlines.includes(sheet.index)}
+        gridlines={sheet.data.gridlines}
         onNavigate={(name) => {
           const tab = opened.tabs.find(
             (candidate) => candidate.name.toLowerCase() === name.toLowerCase(),
@@ -196,7 +267,7 @@ function SheetGrid(props: {
   const gt = useGT();
   const scroller = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [viewport, setViewport] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [viewport, setViewport] = useState<Viewport>({ left: 0, top: 0, width: 0, height: 0 });
   const [selection, setSelection] = useState<Selection>({
     row: 0,
     column: 0,
@@ -204,39 +275,8 @@ function SheetGrid(props: {
     anchorColumn: 0,
   });
   const dragging = useRef(false);
-  const rows = axis(
-    Math.max(sheet.maxRow + 50, 100),
-    sheet.defaultHeight,
-    sheet.rowHeights,
-    sheet.hiddenRows,
-  );
-  const columns = axis(
-    Math.max(sheet.maxColumn + 10, 26),
-    sheet.defaultWidth,
-    sheet.columnWidths,
-    sheet.hiddenColumns,
-  );
-  const covered = new Map<string, SheetData["merges"][number]>();
-  for (const merge of sheet.merges)
-    if ((merge.r2 - merge.r1 + 1) * (merge.c2 - merge.c1 + 1) <= 10000)
-      for (let r = merge.r1; r <= merge.r2; r++)
-        for (let c = merge.c1; c <= merge.c2; c++) covered.set(`${r}:${c}`, merge);
-  const gutter = Math.max(36, String(rows.count).length * 8 + 14);
-  const frozenRows = Math.min(sheet.frozen.rows, rows.count);
-  const frozenColumns = Math.min(sheet.frozen.columns, columns.count);
-  const frozenHeight = rows.start(frozenRows);
-  const frozenWidth = columns.start(frozenColumns);
-  // Screen positions: frozen panes stay put, the rest scrolls beneath them.
-  const xOf = (c: number) => gutter + columns.start(c) - (c < frozenColumns ? 0 : viewport.left);
-  const yOf = (r: number) => HEADER + rows.start(r) - (r < frozenRows ? 0 : viewport.top);
-  const cellAt = (x: number, y: number) => {
-    const ix = x - gutter;
-    const iy = y - HEADER;
-    const column =
-      ix < frozenWidth ? columns.index(Math.max(0, ix)) : columns.index(ix + viewport.left);
-    const row = iy < frozenHeight ? rows.index(Math.max(0, iy)) : rows.index(iy + viewport.top);
-    return { row, column };
-  };
+  const { rows, columns, frozenRows, frozenColumns, frozenHeight, frozenWidth, gutter, cellAt } =
+    gridGeometry(sheet, viewport);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Observe the scroll container's size for the painted viewport.
   useEffect(() => {
@@ -257,12 +297,27 @@ function SheetGrid(props: {
   useEffect(() => {
     const target = canvas.current;
     if (!target || !viewport.width || !viewport.height) return;
+    const {
+      rows,
+      columns,
+      covered,
+      gutter,
+      frozenRows,
+      frozenColumns,
+      frozenHeight,
+      frozenWidth,
+      xOf,
+      yOf,
+    } = gridGeometry(sheet, viewport);
     const ratio = window.devicePixelRatio || 1;
-    target.width = Math.round(viewport.width * ratio);
-    target.height = Math.round(viewport.height * ratio);
+    const width = Math.round(viewport.width * ratio);
+    const height = Math.round(viewport.height * ratio);
+    // Resizing reallocates the backing store; scrolling repaints the same one.
+    if (target.width !== width) target.width = width;
+    if (target.height !== height) target.height = height;
     const context = target.getContext("2d");
     if (!context) return;
-    context.scale(ratio, ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, viewport.width, viewport.height);
     context.textBaseline = "middle";
@@ -517,7 +572,7 @@ function SheetGrid(props: {
     context.fillRect(gutter - 1, 0, 1, viewport.height);
     if (frozenRows) context.fillRect(0, HEADER + frozenHeight, viewport.width, 1);
     if (frozenColumns) context.fillRect(gutter + frozenWidth, 0, 1, viewport.height);
-  });
+  }, [sheet, styles, gridlines, viewport, selection]);
 
   const r1 = Math.min(selection.row, selection.anchorRow);
   const r2 = Math.max(selection.row, selection.anchorRow);
