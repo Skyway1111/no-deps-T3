@@ -4,10 +4,19 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
-import { buildAriaSnapshot, type AriaRefTarget, type AriaSnapshotOptions } from "./accessibility.ts";
+import {
+  buildAriaSnapshot,
+  type AriaRefTarget,
+  type AriaSnapshotOptions,
+} from "./accessibility.ts";
 import { describeKey, MODIFIER_BITS, parseKeyChord } from "./keys.ts";
 import { CdpElementHandle, CdpLocator } from "./locator.ts";
-import { CdpTimeoutError, type CdpExceptionDetails, type CdpFrameTree, type CdpRemoteObject } from "./protocol.ts";
+import {
+  CdpTimeoutError,
+  type CdpExceptionDetails,
+  type CdpFrameTree,
+  type CdpRemoteObject,
+} from "./protocol.ts";
 import { CdpSession, SimpleEmitter } from "./transport.ts";
 import type { CdpBrowserContext } from "./context.ts";
 
@@ -110,7 +119,9 @@ export class CdpFileChooser {
   ): Promise<void> {
     const list = Array.isArray(files) ? files : [files];
     const resolvedPaths = await Promise.all(
-      list.map((entry) => (typeof entry === "string" ? Promise.resolve(entry) : this.stageUploadFile(entry))),
+      list.map((entry) =>
+        typeof entry === "string" ? Promise.resolve(entry) : this.stageUploadFile(entry),
+      ),
     );
     if (this.backendNodeId === undefined) {
       throw new Error("File chooser has no backing <input> node.");
@@ -399,7 +410,14 @@ export class CdpMouse {
         type: "mouseMoved",
         x: nextX,
         y: nextY,
-        button: this.buttons & 1 ? "left" : this.buttons & 2 ? "right" : this.buttons & 4 ? "middle" : "none",
+        button:
+          this.buttons & 1
+            ? "left"
+            : this.buttons & 2
+              ? "right"
+              : this.buttons & 4
+                ? "middle"
+                : "none",
         buttons: this.buttons,
       });
     }
@@ -931,7 +949,9 @@ export class CdpPage extends SimpleEmitter<CdpPageEventMap> {
     return new Promise<CdpPageEventMap[K]>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        reject(new CdpTimeoutError(`page.waitForEvent(${event}): Timeout ${timeoutMs}ms exceeded.`));
+        reject(
+          new CdpTimeoutError(`page.waitForEvent(${event}): Timeout ${timeoutMs}ms exceeded.`),
+        );
       }, timeoutMs);
       const onEvent = (payload: CdpPageEventMap[K]) => {
         cleanup();
@@ -981,9 +1001,7 @@ export class CdpPage extends SimpleEmitter<CdpPageEventMap> {
     const enabled = count > 0;
     if (enabled === this.fileChooserInterceptEnabled) return;
     this.fileChooserInterceptEnabled = enabled;
-    void this.pageSession
-      .send("Page.setInterceptFileChooserDialog", { enabled })
-      .catch(() => {});
+    void this.pageSession.send("Page.setInterceptFileChooserDialog", { enabled }).catch(() => {});
   }
 
   private syncFrameTree(tree: CdpFrameTree, session: CdpSession): void {
@@ -1130,8 +1148,16 @@ export class CdpPage extends SimpleEmitter<CdpPageEventMap> {
     session.on("Network.loadingFailed", (event) => {
       const request = this.requestsById.get(event.requestId);
       if (!request) return;
-      request.setFailure(event.errorText || (event.canceled ? "net::ERR_ABORTED" : "net::ERR_FAILED"));
+      request.setFailure(
+        event.errorText || (event.canceled ? "net::ERR_ABORTED" : "net::ERR_FAILED"),
+      );
+      this.requestsById.delete(event.requestId);
       this.emit("requestfailed", request);
+    });
+
+    // A finished request gets no further events, so it no longer needs to be found by id.
+    session.on("Network.loadingFinished", (event: { readonly requestId: string }) => {
+      this.requestsById.delete(event.requestId);
     });
 
     session.on("Runtime.consoleAPICalled", (event) => {
@@ -1140,10 +1166,7 @@ export class CdpPage extends SimpleEmitter<CdpPageEventMap> {
     });
 
     session.on("Log.entryAdded", (event) => {
-      this.emit(
-        "console",
-        new CdpConsoleMessage(event.entry.level ?? "log", event.entry.text, []),
-      );
+      this.emit("console", new CdpConsoleMessage(event.entry.level ?? "log", event.entry.text, []));
     });
 
     session.on("Runtime.executionContextCreated", ({ context }) => {
@@ -1239,7 +1262,10 @@ export class CdpPage extends SimpleEmitter<CdpPageEventMap> {
 
     if (event.waitingForDebugger) {
       const workerScript = this.browserContext.workerInitScript();
-      if (workerScript && (type === "service_worker" || type === "worker" || type === "shared_worker")) {
+      if (
+        workerScript &&
+        (type === "service_worker" || type === "worker" || type === "shared_worker")
+      ) {
         await childSession.send("Runtime.evaluate", { expression: workerScript }).catch(() => {});
       }
       await childSession.send("Runtime.runIfWaitingForDebugger").catch(() => {});

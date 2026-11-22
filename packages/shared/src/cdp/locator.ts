@@ -68,18 +68,23 @@ const QUERY_SELECTOR_FN = `function(selector) {
   const queryText = (roots, raw) => {
     const exact = (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"));
     const needle = exact ? raw.slice(1, -1) : raw.toLowerCase();
+    // innerText lays the page out; textContent holds all rendered text, so an element whose
+    // textContent lacks the needle's longest word cannot match and skips innerText.
+    const probe = needle.toLowerCase().split(/\\s+/).reduce((a, b) => (b.length > a.length ? b : a), "");
+    const mayMatch = (el) => !probe || (el.textContent ?? "").toLowerCase().includes(probe);
     const found = [];
     const seen = new Set();
     for (const root of roots) {
       walkRoots(root, (scope) => {
         const all = scope.querySelectorAll ? scope.querySelectorAll("*") : [];
         for (const el of all) {
-          if (seen.has(el)) continue;
+          if (seen.has(el) || !mayMatch(el)) continue;
           const text = (el.innerText ?? el.textContent ?? "").trim();
           const matched = exact ? text === needle : text.toLowerCase().includes(needle);
           if (!matched) continue;
           // Prefer leaf-most matching elements.
           const childMatches = Array.from(el.children).some((child) => {
+            if (!mayMatch(child)) return false;
             const ct = (child.innerText ?? child.textContent ?? "").trim();
             return exact ? ct === needle : ct.toLowerCase().includes(needle);
           });
@@ -237,7 +242,9 @@ export class CdpElementHandle {
     const session = this.frame.session();
     const described =
       this.backendNodeId !== undefined
-        ? await session.send("DOM.describeNode", { backendNodeId: this.backendNodeId }).catch(() => null)
+        ? await session
+            .send("DOM.describeNode", { backendNodeId: this.backendNodeId })
+            .catch(() => null)
         : await session
             .send("DOM.describeNode", { objectId: await this.resolveObjectId() })
             .catch(() => null);
@@ -250,7 +257,10 @@ export class CdpElementHandle {
     if (this.objectId === undefined) return;
     const id = this.objectId;
     this.objectId = undefined;
-    await this.frame.session().send("Runtime.releaseObject", { objectId: id }).catch(() => {});
+    await this.frame
+      .session()
+      .send("Runtime.releaseObject", { objectId: id })
+      .catch(() => {});
   }
 }
 
@@ -308,37 +318,18 @@ export class CdpLocator {
     const frame = this.page.mainFrame();
     const session = frame.session();
     const contextId = frame.defaultContextId();
+    // One round trip: the element itself when it is the only match, otherwise the count.
     const evalResult = await session.send("Runtime.evaluate", {
-      expression: `(${QUERY_SELECTOR_FN})(${JSON.stringify(this.selector)})`,
+      expression: `(() => { const found = (${QUERY_SELECTOR_FN})(${JSON.stringify(this.selector)}); return found.length === 1 ? found[0] : found.length; })()`,
       ...(contextId === undefined ? {} : { contextId }),
       returnByValue: false,
     });
     if (evalResult.exceptionDetails) {
       throw new Error(exceptionMessage(evalResult.exceptionDetails));
     }
-    const listObjectId = evalResult.result.objectId;
-    if (!listObjectId) return { count: 0, handle: null };
-    try {
-      const lengthRes = await session.send("Runtime.callFunctionOn", {
-        objectId: listObjectId,
-        functionDeclaration: "function() { return this.length; }",
-        returnByValue: true,
-      });
-      const count = typeof lengthRes.result.value === "number" ? lengthRes.result.value : 0;
-      if (count !== 1) return { count, handle: null };
-      const firstRes = await session.send("Runtime.callFunctionOn", {
-        objectId: listObjectId,
-        functionDeclaration: "function() { return this[0]; }",
-        returnByValue: false,
-      });
-      if (!firstRes.result.objectId) return { count: 0, handle: null };
-      return {
-        count: 1,
-        handle: new CdpElementHandle(frame, { objectId: firstRes.result.objectId }),
-      };
-    } finally {
-      await session.send("Runtime.releaseObject", { objectId: listObjectId }).catch(() => {});
-    }
+    const { objectId, value } = evalResult.result ?? {};
+    if (objectId) return { count: 1, handle: new CdpElementHandle(frame, { objectId }) };
+    return { count: typeof value === "number" ? value : 0, handle: null };
   }
 
   private async waitForHandle(
@@ -437,7 +428,11 @@ export class CdpLocator {
       const frameId = current.id;
       const rect = await parent
         .evaluate((targetId: string) => {
-          const doc = (globalThis as unknown as { document: { querySelectorAll: (s: string) => ArrayLike<any> } }).document;
+          const doc = (
+            globalThis as unknown as {
+              document: { querySelectorAll: (s: string) => ArrayLike<any> };
+            }
+          ).document;
           for (const el of Array.from(doc.querySelectorAll("iframe, frame"))) {
             const box = el.getBoundingClientRect();
             if (el.id === targetId || el.name === targetId) {
@@ -462,7 +457,9 @@ export class CdpLocator {
       this.defaultTimeout(options?.timeout),
     );
     try {
-      const connected = await handle.evaluate((el: { isConnected?: boolean }) => el.isConnected === true);
+      const connected = await handle.evaluate(
+        (el: { isConnected?: boolean }) => el.isConnected === true,
+      );
       if (!connected) {
         throw new Error("locator.scrollIntoViewIfNeeded: Element is not attached to the DOM");
       }
@@ -526,7 +523,10 @@ export class CdpLocator {
         .send("DOM.scrollIntoViewIfNeeded", { objectId })
         .catch(() => {});
       const box = await this.readBox(handle);
-      if (!box) throw new CdpTimeoutError("locator.click: Timeout exceeded.\nCall log:\n  - element is not visible");
+      if (!box)
+        throw new CdpTimeoutError(
+          "locator.click: Timeout exceeded.\nCall log:\n  - element is not visible",
+        );
       await this.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
         ...(options?.button === undefined ? {} : { button: options.button }),
         ...(options?.clickCount === undefined ? {} : { clickCount: options.clickCount }),
@@ -549,7 +549,10 @@ export class CdpLocator {
         .send("DOM.scrollIntoViewIfNeeded", { objectId })
         .catch(() => {});
       const box = await this.readBox(handle);
-      if (!box) throw new CdpTimeoutError("locator.hover: Timeout exceeded.\nCall log:\n  - element is not visible");
+      if (!box)
+        throw new CdpTimeoutError(
+          "locator.hover: Timeout exceeded.\nCall log:\n  - element is not visible",
+        );
       await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     } finally {
       await handle.dispose();
@@ -662,7 +665,9 @@ export class CdpLocator {
       const sourceBox = await this.readBox(sourceHandle);
       const targetBox = await target.readBox(targetHandle);
       if (!sourceBox || !targetBox) {
-        throw new CdpTimeoutError("locator.dragTo: Timeout exceeded.\nCall log:\n  - element is not visible");
+        throw new CdpTimeoutError(
+          "locator.dragTo: Timeout exceeded.\nCall log:\n  - element is not visible",
+        );
       }
       const startX = sourceBox.x + sourceBox.width / 2;
       const startY = sourceBox.y + sourceBox.height / 2;

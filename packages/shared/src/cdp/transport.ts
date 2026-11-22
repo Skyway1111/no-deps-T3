@@ -11,6 +11,8 @@ import {
 
 type Listener = (payload: any) => void;
 
+const UTF8 = new TextDecoder();
+
 export class SimpleEmitter<Events extends Record<string, any>> {
   private readonly listeners = new Map<string, Set<Listener>>();
 
@@ -96,7 +98,9 @@ export class CdpSession extends SimpleEmitter<CdpEventMap> {
   send(method: string, params?: Record<string, unknown>): Promise<Record<string, unknown>>;
   send(method: string, params?: Record<string, unknown>): Promise<any> {
     if (this.closed) {
-      return Promise.reject(new Error(`CDP session ${this.sessionId ?? "root"} is closed (${method}).`));
+      return Promise.reject(
+        new Error(`CDP session ${this.sessionId ?? "root"} is closed (${method}).`),
+      );
     }
     return this.transport.send(method, params, this.sessionId);
   }
@@ -284,11 +288,11 @@ export class CdpTransport extends SimpleEmitter<{ disconnected: void }> {
     if (typeof raw === "string") {
       text = raw;
     } else if (raw instanceof ArrayBuffer) {
-      text = new TextDecoder().decode(raw);
+      text = UTF8.decode(raw);
     } else if (raw instanceof Blob) {
       text = await raw.text();
     } else if (ArrayBuffer.isView(raw)) {
-      text = new TextDecoder().decode(raw);
+      text = UTF8.decode(raw);
     } else {
       return;
     }

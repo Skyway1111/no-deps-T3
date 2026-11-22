@@ -121,10 +121,8 @@ const normalizeRole = (raw: string | undefined): string => {
   return ROLE_MAP[raw] ?? raw.charAt(0).toLowerCase() + raw.slice(1);
 };
 
-const propOf = (
-  properties: ReadonlyArray<CdpAxProperty> | undefined,
-  name: string,
-): unknown => properties?.find((prop) => prop.name === name)?.value?.value;
+const propOf = (properties: ReadonlyArray<CdpAxProperty> | undefined, name: string): unknown =>
+  properties?.find((prop) => prop.name === name)?.value?.value;
 
 const cleanText = (value: unknown): string =>
   typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -158,12 +156,81 @@ const quadToBox = (quad: ReadonlyArray<number>): BoxInfo | null => {
   return { x: Math.round(minX), y: Math.round(minY), width, height };
 };
 
+interface LayoutSnapshot {
+  readonly documents?: ReadonlyArray<{
+    readonly frameId?: number;
+    readonly scrollOffsetX?: number;
+    readonly scrollOffsetY?: number;
+    readonly nodes?: {
+      readonly backendNodeId?: ReadonlyArray<number>;
+      readonly contentDocumentIndex?: {
+        readonly index?: ReadonlyArray<number>;
+        readonly value?: ReadonlyArray<number>;
+      };
+    };
+    readonly layout?: {
+      readonly nodeIndex?: ReadonlyArray<number>;
+      readonly bounds?: ReadonlyArray<ReadonlyArray<number>>;
+    };
+  }>;
+  readonly strings?: ReadonlyArray<string>;
+}
+
+interface Layout {
+  readonly boxes: Map<number, BoxInfo>;
+  /** Frame id of each same-process iframe element's document. */
+  readonly frames: Map<number, string>;
+}
+
+/**
+ * The root document's border boxes (shifted from document to viewport coordinates, as
+ * getContentQuads reports them) and its iframes' frames, in one round trip. Requested before
+ * the AX tree: right after one, Chromium takes seconds to answer any DOM command.
+ */
+async function captureLayout(session: CdpSession, frameId: string): Promise<Layout> {
+  const layout: Layout = { boxes: new Map(), frames: new Map() };
+  const snapshot = (await session
+    .send("DOMSnapshot.captureSnapshot", { computedStyles: [] })
+    .catch(() => null)) as LayoutSnapshot | null;
+  const strings = snapshot?.strings ?? [];
+  const documents = snapshot?.documents ?? [];
+  const doc = documents.find((candidate) => strings[candidate.frameId ?? -1] === frameId);
+  const ids = doc?.nodes?.backendNodeId;
+  if (!doc || !ids) return layout;
+  const content = doc.nodes?.contentDocumentIndex;
+  for (let k = 0; k < (content?.index?.length ?? 0); k++) {
+    const id = ids[content!.index![k]!];
+    const child = strings[documents[content!.value![k]!]?.frameId ?? -1];
+    if (id !== undefined && child) layout.frames.set(id, child);
+  }
+  const nodeIndex = doc.layout?.nodeIndex ?? [];
+  const bounds = doc.layout?.bounds ?? [];
+  const scrollX = doc.scrollOffsetX ?? 0;
+  const scrollY = doc.scrollOffsetY ?? 0;
+  for (let k = 0; k < nodeIndex.length; k++) {
+    const id = ids[nodeIndex[k]!];
+    const rect = bounds[k];
+    if (id === undefined || !rect || rect.length < 4 || layout.boxes.has(id)) continue;
+    const width = Math.round(rect[2]!);
+    const height = Math.round(rect[3]!);
+    if (width > 0 && height > 0) {
+      layout.boxes.set(id, {
+        x: Math.round(rect[0]! - scrollX),
+        y: Math.round(rect[1]! - scrollY),
+        width,
+        height,
+      });
+    }
+  }
+  return layout;
+}
+
 async function fetchBoxes(
   session: CdpSession,
   backendNodeIds: ReadonlyArray<number>,
   deadline: number,
+  boxes = new Map<number, BoxInfo>(),
 ): Promise<Map<number, BoxInfo>> {
-  const boxes = new Map<number, BoxInfo>();
   if (backendNodeIds.length === 0) return boxes;
   // Cap concurrent CDP quad queries so large DOMs stay fast and responsive.
   const CONCURRENCY = 24;
@@ -195,13 +262,13 @@ export async function buildAriaSnapshot(
   const frameById = new Map<string, CdpFrame>(allFrames.map((frame) => [frame.id, frame]));
   let frameCounter = 0;
 
-  const renderFrame = async (
-    frame: CdpFrame,
-    refPrefix: string,
-    baseIndent: number,
-  ): Promise<Array<string>> => {
+  const renderFrame = async (frame: CdpFrame, refPrefix: string): Promise<Array<string>> => {
     const session = frame.session();
     const isSessionRoot = frame.parentFrame() === null || frame.targetId !== undefined;
+    const layout: Promise<Layout> =
+      includeBoxes && isSessionRoot
+        ? captureLayout(session, frame.id)
+        : Promise.resolve({ boxes: new Map(), frames: new Map() });
     const treeResult = await session.send(
       "Accessibility.getFullAXTree",
       isSessionRoot ? {} : { frameId: frame.id },
@@ -219,8 +286,11 @@ export async function buildAriaSnapshot(
     const backendIds: Array<number> = [];
     const iframeTargets = new Map<string, CdpFrame>();
 
-    const assignRefs = async (node: CdpAxNode): Promise<void> => {
-      const role = normalizeRole(typeof node.role?.value === "string" ? node.role.value : undefined);
+    const iframeNodes: Array<{ readonly nodeId: string; readonly backendNodeId: number }> = [];
+    const assignRefs = (node: CdpAxNode): void => {
+      const role = normalizeRole(
+        typeof node.role?.value === "string" ? node.role.value : undefined,
+      );
       const name = cleanText(node.name?.value);
       const skipped = node.ignored === true || SKIP_ROLES.has(role);
       const collapsed = COLLAPSE_ROLES.has(role) && name.length === 0;
@@ -231,33 +301,56 @@ export async function buildAriaSnapshot(
         refs.set(ref, { frame, backendNodeId: node.backendDOMNodeId });
         if (includeBoxes) backendIds.push(node.backendDOMNodeId);
 
-        if (role === "iframe") {
-          const described = await session
-            .send("DOM.describeNode", { backendNodeId: node.backendDOMNodeId })
-            .catch(() => null);
-          const childFrameId = described?.node.frameId;
-          const childFrame = childFrameId ? frameById.get(childFrameId) : undefined;
-          if (childFrame && childFrame !== frame) {
-            iframeTargets.set(node.nodeId, childFrame);
-          }
-        }
+        if (role === "iframe")
+          iframeNodes.push({ nodeId: node.nodeId, backendNodeId: node.backendDOMNodeId });
       }
 
       if (role !== "iframe") {
         for (const childId of node.childIds ?? []) {
           const child = byId.get(childId);
-          if (child) await assignRefs(child);
+          if (child) assignRefs(child);
         }
       }
     };
 
-    await assignRefs(root);
-    const boxes = includeBoxes ? await fetchBoxes(session, backendIds, deadline) : new Map<number, BoxInfo>();
+    assignRefs(root);
+    const known = await layout;
+    const [, boxes] = await Promise.all([
+      Promise.all(
+        iframeNodes.map(async ({ nodeId, backendNodeId }) => {
+          const childFrameId =
+            known.frames.get(backendNodeId) ??
+            (await session.send("DOM.describeNode", { backendNodeId }).catch(() => null))?.node
+              .frameId;
+          const childFrame = childFrameId ? frameById.get(childFrameId) : undefined;
+          if (childFrame && childFrame !== frame) iframeTargets.set(nodeId, childFrame);
+        }),
+      ),
+      fetchBoxes(
+        session,
+        backendIds.filter((id) => !known.boxes.has(id)),
+        deadline,
+        known.boxes,
+      ),
+    ]);
+
+    // Child frames render in document order so their ref prefixes number the same way.
+    const childFrameLines = new Map<string, Array<string>>();
+    for (const { nodeId } of iframeNodes) {
+      const childFrame = iframeTargets.get(nodeId);
+      if (!childFrame) continue;
+      childFrameLines.set(
+        nodeId,
+        await renderFrame(childFrame, `f${++frameCounter}`).catch(() => []),
+      );
+    }
 
     const lines: Array<string> = [];
 
-    const emit = async (node: CdpAxNode, depth: number): Promise<void> => {
-      const role = normalizeRole(typeof node.role?.value === "string" ? node.role.value : undefined);
+    const emit = (node: CdpAxNode, depth: number): void => {
+      const role = normalizeRole(
+        typeof node.role?.value === "string" ? node.role.value : undefined,
+      );
       const name = cleanText(node.name?.value);
       const value = cleanText(node.value?.value);
       const skipped = node.ignored === true || SKIP_ROLES.has(role);
@@ -266,7 +359,7 @@ export async function buildAriaSnapshot(
       if (skipped || collapsed) {
         for (const childId of node.childIds ?? []) {
           const child = byId.get(childId);
-          if (child) await emit(child, depth);
+          if (child) emit(child, depth);
         }
         return;
       }
@@ -315,16 +408,12 @@ export async function buildAriaSnapshot(
       const url = cleanText(propOf(node.properties, "url"));
 
       if (role === "iframe") {
-        const childFrame = iframeTargets.get(node.nodeId);
-        if (childFrame) {
-          const childLines = await renderFrame(childFrame, `f${++frameCounter}`, depth + 1).catch(
-            () => [],
-          );
-          if (childLines.length > 0) {
-            lines.push(`${pad}- ${header}:`);
-            lines.push(...childLines);
-            return;
-          }
+        const childLines = childFrameLines.get(node.nodeId);
+        if (childLines && childLines.length > 0) {
+          lines.push(`${pad}- ${header}:`);
+          const indent = `${pad}  `;
+          for (const line of childLines) lines.push(indent + line);
+          return;
         }
         lines.push(`${pad}- ${header}`);
         return;
@@ -343,13 +432,14 @@ export async function buildAriaSnapshot(
       // Avoid repeating a StaticText child when its text equals the element's accessible name.
       const singleTextChild =
         childNodes.length === 1 &&
-        normalizeRole(typeof childNodes[0]!.role?.value === "string" ? childNodes[0]!.role.value : undefined) ===
-          "text" &&
+        normalizeRole(
+          typeof childNodes[0]!.role?.value === "string" ? childNodes[0]!.role.value : undefined,
+        ) === "text" &&
         cleanText(childNodes[0]!.name?.value) === name;
 
       if (!singleTextChild) {
         const beforeCount = lines.length;
-        for (const child of childNodes) await emit(child, depth + 1);
+        for (const child of childNodes) emit(child, depth + 1);
         childLines.push(...lines.splice(beforeCount));
       }
 
@@ -363,10 +453,10 @@ export async function buildAriaSnapshot(
       }
     };
 
-    await emit(root, baseIndent);
+    emit(root, 0);
     return lines;
   };
 
-  const lines = await renderFrame(mainFrame, "", 0);
+  const lines = await renderFrame(mainFrame, "");
   return { yaml: lines.join("\n"), refs };
 }

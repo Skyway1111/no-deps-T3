@@ -312,6 +312,14 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
     const keyEvents: Array<Record<string, unknown>> = [];
     const screencastAcks: Array<number> = [];
     const interceptToggles: Array<boolean> = [];
+    const quadRequests: Array<number> = [];
+    // Past the snapshot threshold, so main-document boxes come from one DOMSnapshot call.
+    const listItems = Array.from({ length: 30 }, (_, i) => ({
+      nodeId: `li${i}`,
+      parentId: "n1",
+      role: { type: "role", value: "ListItem" },
+      backendDOMNodeId: 300 + i,
+    }));
 
     const server = new MockCdpServer((cmd, client) => {
       clientRef = client;
@@ -369,7 +377,9 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
             frameTree: {
               frame: { id: "MAIN-TARGET", url: "https://example.test/" },
               childFrames: [
-                { frame: { id: "CHILD-FRAME", parentId: "MAIN-TARGET", url: "https://child.test/" } },
+                {
+                  frame: { id: "CHILD-FRAME", parentId: "MAIN-TARGET", url: "https://child.test/" },
+                },
               ],
             },
           },
@@ -402,7 +412,11 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
           id: cmd.id,
           result: {
             nodes: [
-              { nodeId: "n1", role: { type: "role", value: "RootWebArea" }, childIds: ["n2", "n3", "n4"] },
+              {
+                nodeId: "n1",
+                role: { type: "role", value: "RootWebArea" },
+                childIds: ["n2", "n3", "n4", ...listItems.map((item) => item.nodeId)],
+              },
               {
                 nodeId: "n2",
                 parentId: "n1",
@@ -428,6 +442,7 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
                 role: { type: "role", value: "Iframe" },
                 backendDOMNodeId: 103,
               },
+              ...listItems,
             ],
           },
           ...route,
@@ -450,8 +465,35 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
         });
         return;
       }
+      if (cmd.method === "DOMSnapshot.captureSnapshot") {
+        // Document coordinates; the scroll offset maps them to the viewport like getContentQuads.
+        client.send({
+          id: cmd.id,
+          result: {
+            strings: ["MAIN-TARGET"],
+            documents: [
+              {
+                frameId: 0,
+                scrollOffsetX: 0,
+                scrollOffsetY: 5,
+                nodes: { backendNodeId: [100, 101, 102] },
+                layout: {
+                  nodeIndex: [1, 2],
+                  bounds: [
+                    [10, 15, 100, 30],
+                    [10, 65, 100, 30],
+                  ],
+                },
+              },
+            ],
+          },
+          ...route,
+        });
+        return;
+      }
       if (cmd.method === "DOM.getContentQuads") {
         const id = Number(cmd.params?.["backendNodeId"] ?? 0);
+        quadRequests.push(id);
         const y = id === 101 ? 10 : id === 102 ? 60 : 120;
         client.send({
           id: cmd.id,
@@ -537,10 +579,14 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
       // 1. Accessibility snapshot + aria-ref= resolution across main frame & child iframe
       const tree = await page.ariaSnapshot({ mode: "ai", boxes: true });
       assert.match(tree, /- heading "Welcome" \[level=1\] \[ref=e1\] \[box=10,10,100,30\]/);
-      assert.match(tree, /- link "Docs" \[active\] \[ref=e2\] \[cursor=pointer\] \[box=10,60,100,30\]:/);
+      assert.match(
+        tree,
+        /- link "Docs" \[active\] \[ref=e2\] \[cursor=pointer\] \[box=10,60,100,30\]:/,
+      );
       assert.match(tree, /- \/url: https:\/\/example\.test\/docs/);
       assert.match(tree, /- iframe \[ref=e3\] \[box=10,120,100,30\]:/);
       assert.match(tree, /- button "Inner Action" \[ref=f1e1\] \[box=10,120,100,30\]/);
+      assert.ok(!quadRequests.includes(101) && !quadRequests.includes(102));
 
       await page.locator("aria-ref=e2").click({ timeout: 2_000 });
       await page.locator("aria-ref=f1e1").click({ timeout: 2_000 });
@@ -622,7 +668,12 @@ describe("CDP page flows: accessibility + aria-ref, input, dialog, file chooser,
       await NodeFSP.writeFile(NodePath.join(downloadPath, guid), "csv,data\n");
       clientRef!.send({
         method: "Browser.downloadWillBegin",
-        params: { frameId: "MAIN-TARGET", guid, url: "https://example.test/r.csv", suggestedFilename: "r.csv" },
+        params: {
+          frameId: "MAIN-TARGET",
+          guid,
+          url: "https://example.test/r.csv",
+          suggestedFilename: "r.csv",
+        },
       });
       clientRef!.send({
         method: "Browser.downloadProgress",
