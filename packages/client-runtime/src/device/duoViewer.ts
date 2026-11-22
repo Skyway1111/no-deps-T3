@@ -67,6 +67,16 @@ export function createDuoViewer(options: {
       return { id, canvas, context };
     })
     .map(({ id, canvas, context }) => ({ id, canvas, context, texture: new CanvasTexture(canvas) }));
+  // One 8×8 canvas samples incoming frames for native shutdown blanks.
+  let probe: { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D | null } | undefined;
+  const blankProbe = () => {
+    if (!probe) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 8;
+      probe = { canvas, context: canvas.getContext("2d", { willReadFrequently: true }) };
+    }
+    return probe.context;
+  };
   const renderer = new WebGLRenderer({
     canvas: options.canvas,
     alpha: true,
@@ -447,9 +457,7 @@ export function createDuoViewer(options: {
       const { context, canvas } = surface;
       // Ignore native shutdown blanks only while waiting for an activation. Steady black application content remains valid.
       if (!primary && !readyKey && performance.now() - activationAt < 1500) {
-        const probe = document.createElement("canvas");
-        probe.width = probe.height = 8;
-        const probeContext = probe.getContext("2d", { willReadFrequently: true });
+        const probeContext = blankProbe();
         if (probeContext) {
           probeContext.drawImage(source, 0, 0, 8, 8);
           if (
@@ -548,7 +556,11 @@ export function createDuoViewer(options: {
       scheduler.dispose();
       slot.dispose();
       options.canvas.removeEventListener("webglcontextlost", lost);
-      for (const surface of surfaces) surface.texture.dispose();
+      for (const surface of surfaces) {
+        surface.texture.dispose();
+        surface.canvas.width = surface.canvas.height = 0;
+      }
+      if (probe) probe.canvas.width = probe.canvas.height = 0;
       renderer.dispose();
       renderer.forceContextLoss();
     },

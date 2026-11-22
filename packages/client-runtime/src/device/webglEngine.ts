@@ -1542,8 +1542,10 @@ void main() {
 }`;
 
 type GpuBuffer = { attribute: BufferAttribute; buffer: WebGLBuffer; version: number };
-type GpuGeometry = { vao: WebGLVertexArrayObject; buffers: Map<string, GpuBuffer>; index: GpuBuffer | null; count: number };
-type GpuTexture = { texture: WebGLTexture; version: number };
+/** `layout` lists the attribute objects and versions the VAO was built from; while it matches, drawing skips setup. */
+type GpuGeometry = { vao: WebGLVertexArrayObject; buffers: Map<string, GpuBuffer>; index: GpuBuffer | null; count: number; layout: unknown[] };
+/** `shape` is the allocated storage; an update with the same shape replaces pixels in place. */
+type GpuTexture = { texture: WebGLTexture; version: number; shape: string };
 type GL = WebGL2RenderingContext | WebGLRenderingContext;
 
 export class WebGLRenderer {
@@ -1558,6 +1560,14 @@ export class WebGLRenderer {
   private readonly textures = new Map<Texture, GpuTexture>();
   private readonly shadow = new Mesh(new PlaneGeometry(), Object.assign(new MeshBasicMaterial({ depthWrite: false }), { side: DoubleSide }));
   private disposed = false;
+  // Scratch storage for per-draw uniforms, so a frame allocates no matrices.
+  private readonly matrix16 = new Float32Array(16);
+  private readonly matrix9 = new Float32Array(9);
+  private readonly inverse = new Matrix4();
+  /** The inputs and result of the last shadow fit; an unchanged camera and pose reuse it. */
+  private shadowFit: { key: number[]; apply: () => void } | null = null;
+  /** Pixel-store state last set, so uploads skip redundant calls. */
+  private unpack = { flipY: -1 };
   constructor(options: { canvas: HTMLCanvasElement; alpha?: boolean; antialias?: boolean; powerPreference?: WebGLPowerPreference }) {
     const attributes: WebGLContextAttributes = {
       alpha: options.alpha ?? false,
@@ -1592,13 +1602,20 @@ export class WebGLRenderer {
       return shader;
     };
     this.program = gl.createProgram()!;
-    gl.attachShader(this.program, compile(gl.VERTEX_SHADER, header[0] + VERTEX));
-    gl.attachShader(this.program, compile(gl.FRAGMENT_SHADER, header[1] + FRAGMENT));
+    const shaders = [compile(gl.VERTEX_SHADER, header[0] + VERTEX), compile(gl.FRAGMENT_SHADER, header[1] + FRAGMENT)];
+    for (const shader of shaders) gl.attachShader(this.program, shader);
     ATTRIBUTE_LOCATIONS.forEach((name, location) => gl.bindAttribLocation(this.program, location, name));
     gl.linkProgram(this.program);
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS) && !gl.isContextLost())
       throw new Error(gl.getProgramInfoLog(this.program) ?? "Shader link failed");
+    // The linked program keeps the compiled code; the shader objects are no longer needed.
+    for (const shader of shaders) {
+      gl.detachShader(this.program, shader);
+      gl.deleteShader(shader);
+    }
     gl.useProgram(this.program);
+    // A mesh without a color attribute reads this constant; no draw changes it.
+    gl.vertexAttrib4f(ATTRIBUTE_LOCATIONS.indexOf("color"), 1, 1, 1, 1);
     MAPS.forEach((name, unit) => gl.uniform1i(this.uniform(name), unit));
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
@@ -1667,6 +1684,22 @@ export class WebGLRenderer {
   }
   /** A soft contact shadow on a card just behind the device, fitted to its projected outline; tilt spreads and fades it. */
   private drawShadow(meshes: Mesh[], camera: PerspectiveCamera, opacity: number) {
+    // The fit depends only on the camera, the casting meshes' poses and bounds, and the opacity.
+    const key: number[] = [opacity, ...camera.matrixWorld.elements];
+    for (const mesh of meshes) {
+      if (!mesh.material.colorWrite) continue;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      const { min, max } = mesh.geometry.boundingBox!;
+      key.push(...mesh.matrixWorld.elements, min.x, min.y, min.z, max.x, max.y, max.z);
+    }
+    const previous = this.shadowFit;
+    if (!previous || previous.key.length !== key.length || previous.key.some((value, i) => value !== key[i]))
+      this.shadowFit = { key, apply: this.fitShadow(meshes, camera, opacity) };
+    this.shadowFit!.apply();
+  }
+  /** Fits the shadow card and returns how to draw it, or nothing when no mesh casts one. */
+  private fitShadow(meshes: Mesh[], camera: PerspectiveCamera, opacity: number): () => void {
+    const none = () => {};
     const bounds = new Box3();
     const corners: Vector3[] = [];
     const toView = new Matrix4();
@@ -1682,7 +1715,7 @@ export class WebGLRenderer {
         corners.push(corner);
       }
     }
-    if (bounds.isEmpty() || bounds.max.z >= 0) return;
+    if (bounds.isEmpty() || bounds.max.z >= 0) return none;
     const z = bounds.min.z - (bounds.max.z - bounds.min.z) * 0.1 - 0.05 * bounds.getSize(new Vector3()).length();
     // Minimum-area rectangle around the outline as projected onto the card: rotating calipers over its hull.
     const hull = convexHull(corners.map((p) => new Vector2(p.x, p.y).multiplyScalar(z / p.z)));
@@ -1692,16 +1725,22 @@ export class WebGLRenderer {
       const length = Math.hypot(b.x - a.x, b.y - a.y);
       if (!length) return;
       const [c, s] = [(b.x - a.x) / length, (b.y - a.y) / length];
-      const us = hull.map((p) => p.x * c + p.y * s);
-      const vs = hull.map((p) => p.y * c - p.x * s);
-      const extent = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+      const extent = [Infinity, -Infinity, Infinity, -Infinity];
+      for (const p of hull) {
+        const u = p.x * c + p.y * s;
+        const v = p.y * c - p.x * s;
+        extent[0] = Math.min(extent[0]!, u);
+        extent[1] = Math.max(extent[1]!, u);
+        extent[2] = Math.min(extent[2]!, v);
+        extent[3] = Math.max(extent[3]!, v);
+      }
       const area = (extent[1]! - extent[0]!) * (extent[3]! - extent[2]!);
       if (area < fit.area) fit = { area, c, s, extent };
     });
     const { c, s, extent } = fit;
     const [width, height] = [extent[1]! - extent[0]!, extent[3]! - extent[2]!];
     const span = Math.max(width, height);
-    if (!span) return;
+    if (!span) return none;
     const lift = Math.min(1, ((bounds.max.z - bounds.min.z) * z) / (bounds.getCenter(new Vector3()).z * span));
     const shrink = 0.47 - 0.12 * lift;
     const [halfX, halfY, blur] = [width * shrink, height * shrink, span * (0.045 + 0.1 * lift)];
@@ -1709,22 +1748,32 @@ export class WebGLRenderer {
     const v = (extent[2]! + extent[3]!) / 2;
     const drop = span * (0.02 + 0.05 * lift);
     const [quadX, quadY] = [2 * (halfX + 2 * blur), 2 * (halfY + 2 * blur)];
-    this.shadow.matrixWorld = new Matrix4()
+    const matrix = new Matrix4()
       .set(c * quadX, -s * quadY, 0, u * c - v * s, s * quadX, c * quadY, 0, u * s + v * c - drop, 0, 0, 1, z, 0, 0, 0, 1)
       .premultiply(camera.matrixWorld);
-    this.gl.uniform1f(this.uniform("shadowRadius"), Math.min(halfX, halfY) * Math.min(1, 0.12 + 2 * lift));
-    this.gl.uniform4f(this.uniform("shadow"), halfX, halfY, blur, opacity / (1 + lift));
-    this.draw(this.shadow);
-    this.gl.uniform4f(this.uniform("shadow"), 0, 0, 0, 0);
+    const radius = Math.min(halfX, halfY) * Math.min(1, 0.12 + 2 * lift);
+    return () => {
+      this.shadow.matrixWorld = matrix;
+      this.gl.uniform1f(this.uniform("shadowRadius"), radius);
+      this.gl.uniform4f(this.uniform("shadow"), halfX, halfY, blur, opacity / (1 + lift));
+      this.draw(this.shadow);
+      this.gl.uniform4f(this.uniform("shadow"), 0, 0, 0, 0);
+    };
   }
   private draw(mesh: Mesh) {
     const gl = this.gl;
     const { material } = mesh;
     const gpu = this.geometry(mesh.geometry);
     if (!gpu.count) return;
-    gl.uniformMatrix4fv(this.uniform("model"), false, mesh.matrixWorld.elements);
-    const n = mesh.matrixWorld.clone().invert().elements;
-    gl.uniformMatrix3fv(this.uniform("normalMatrix"), false, [n[0]!, n[4]!, n[8]!, n[1]!, n[5]!, n[9]!, n[2]!, n[6]!, n[10]!]);
+    this.matrix16.set(mesh.matrixWorld.elements);
+    gl.uniformMatrix4fv(this.uniform("model"), false, this.matrix16);
+    // Unlit materials, such as the live display, never read the normal.
+    if (!material.unlit) {
+      const n = this.inverse.copy(mesh.matrixWorld).invert().elements;
+      const m = this.matrix9;
+      [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]] = [n[0]!, n[4]!, n[8]!, n[1]!, n[5]!, n[9]!, n[2]!, n[6]!, n[10]!];
+      gl.uniformMatrix3fv(this.uniform("normalMatrix"), false, m);
+    }
     gl.uniform1i(this.uniform("unlit"), material.unlit ? 1 : 0);
     gl.uniform1i(this.uniform("vertexColors"), material.vertexColors ? 1 : 0);
     gl.uniform1i(this.uniform("flipBack"), material.side === DoubleSide ? 1 : 0);
@@ -1768,8 +1817,9 @@ export class WebGLRenderer {
   private geometry(geometry: BufferGeometry) {
     const gl = this.gl;
     let gpu = this.geometries.get(geometry);
+    if (gpu && sameLayout(gpu.layout, geometry)) return gpu;
     if (!gpu) {
-      const created: GpuGeometry = { vao: this.vertexArrays.create(), buffers: new Map(), index: null, count: 0 };
+      const created: GpuGeometry = { vao: this.vertexArrays.create(), buffers: new Map(), index: null, count: 0, layout: [] };
       gpu = created;
       this.geometries.set(geometry, created);
       geometry.disposeListeners.add(() => {
@@ -1783,7 +1833,8 @@ export class WebGLRenderer {
     const upload = (target: number, entry: GpuBuffer) => {
       gl.bindBuffer(target, entry.buffer);
       if (entry.version === entry.attribute.version) return;
-      gl.bufferData(target, entry.attribute.array, gl.DYNAMIC_DRAW);
+      // Most geometry uploads once; a buffer that changes again is marked dynamic on its re-upload.
+      gl.bufferData(target, entry.attribute.array, entry.version === -1 ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW);
       entry.version = entry.attribute.version;
     };
     ATTRIBUTE_LOCATIONS.forEach((name, location) => {
@@ -1800,7 +1851,6 @@ export class WebGLRenderer {
       gl.enableVertexAttribArray(location);
       gl.vertexAttribPointer(location, attribute.itemSize, glType(gl, attribute.array), attribute.normalized, 0, 0);
     });
-    gl.vertexAttrib4f(ATTRIBUTE_LOCATIONS.indexOf("color"), 1, 1, 1, 1);
     if (geometry.index) {
       if (gpu.index?.attribute !== geometry.index) {
         if (gpu.index) gl.deleteBuffer(gpu.index.buffer);
@@ -1809,6 +1859,7 @@ export class WebGLRenderer {
       upload(gl.ELEMENT_ARRAY_BUFFER, gpu.index);
     }
     gpu.count = geometry.index?.count ?? geometry.attributes.position?.count ?? 0;
+    gpu.layout = layoutOf(geometry);
     this.vertexArrays.bind(null);
     return gpu;
   }
@@ -1816,7 +1867,7 @@ export class WebGLRenderer {
     const gl = this.gl;
     let gpu = this.textures.get(texture);
     if (!gpu) {
-      const created: GpuTexture = { texture: gl.createTexture()!, version: -1 };
+      const created: GpuTexture = { texture: gl.createTexture()!, version: -1, shape: "" };
       gpu = created;
       this.textures.set(texture, created);
       texture.disposeListeners.add(() => {
@@ -1826,22 +1877,33 @@ export class WebGLRenderer {
     }
     gl.bindTexture(gl.TEXTURE_2D, gpu.texture);
     if (gpu.version !== texture.version && texture.image) {
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, texture.flipY);
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      if (this.unpack.flipY === -1) {
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      }
+      if (this.unpack.flipY !== Number(texture.flipY)) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, texture.flipY);
+        this.unpack.flipY = Number(texture.flipY);
+      }
       const { webgl2 } = this;
       // WebGL1 decodes sRGB in the shader, and cannot repeat or mipmap non-power-of-two images.
       const { width, height } = texture.image as { width: number; height: number };
       const full = webgl2 || ((width & (width - 1)) === 0 && (height & (height - 1)) === 0);
       const format = webgl2 && texture.colorSpace === "srgb" ? (gl as WebGL2RenderingContext).SRGB8_ALPHA8 : gl.RGBA;
-      gl.texImage2D(gl.TEXTURE_2D, 0, format, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
       const wrap = texture.repeat && full ? gl.REPEAT : gl.CLAMP_TO_EDGE;
       const mipmaps = texture.mipmaps && full;
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      const shape = `${width}x${height}:${format}:${wrap}:${mipmaps}`;
+      // A live display re-uploads every frame at one size: replace its pixels, keeping storage and sampling state.
+      if (shape === gpu.shape) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+      else {
+        gl.texImage2D(gl.TEXTURE_2D, 0, format, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+        gpu.shape = shape;
+      }
       if (mipmaps) gl.generateMipmap(gl.TEXTURE_2D);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
       gpu.version = texture.version;
     }
     return gpu.texture;
@@ -1855,6 +1917,23 @@ export class WebGLRenderer {
   forceContextLoss() {
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
+}
+
+function layoutOf(geometry: BufferGeometry): unknown[] {
+  const layout: unknown[] = [geometry.index, geometry.index?.version];
+  for (const name of ATTRIBUTE_LOCATIONS) {
+    const attribute = geometry.attributes[name];
+    layout.push(attribute, attribute?.version);
+  }
+  return layout;
+}
+function sameLayout(layout: unknown[], geometry: BufferGeometry) {
+  if (layout[0] !== geometry.index || layout[1] !== geometry.index?.version) return false;
+  for (let i = 0; i < ATTRIBUTE_LOCATIONS.length; i++) {
+    const attribute = geometry.attributes[ATTRIBUTE_LOCATIONS[i]!];
+    if (layout[2 + 2 * i] !== attribute || layout[3 + 2 * i] !== attribute?.version) return false;
+  }
+  return true;
 }
 
 /** Andrew's monotone chain, counter-clockwise. */
@@ -1981,6 +2060,7 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     ),
   );
   const textureCache = new Map<string, Texture>();
+  const usedImages = new Set<ImageBitmap>();
   const texture = (info: TextureInfo | undefined, srgb: boolean) => {
     if (!info) return null;
     const { index, texCoord = 0 } = info;
@@ -1991,6 +2071,7 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     const source = definition.extensions?.EXT_texture_webp?.source ?? definition.source;
     const image = source === undefined ? null : images[source];
     if (!image) return null;
+    usedImages.add(image);
     const sampler = definition.sampler === undefined ? undefined : gltf.samplers?.[definition.sampler];
     const result = new Texture(image);
     result.flipY = false;
@@ -2074,5 +2155,7 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
   };
   const scene = new Group();
   for (const index of gltf.scenes?.[gltf.scene ?? 0]?.nodes ?? []) scene.add(node(index));
+  // Images no material samples would otherwise hold their decoded pixels until garbage collection.
+  for (const image of images) if (image && !usedImages.has(image)) image.close();
   return scene;
 }

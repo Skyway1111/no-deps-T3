@@ -153,8 +153,14 @@ export function createPhoneViewer(options: {
     );
     applyCamera();
   };
+  // A stream frame repaints the display only; the camera is recomputed when its framing moves.
+  let applied = "";
   const applyCamera = () => {
-    camera.position.set(framing.center.x, framing.center.y, framing.distance());
+    const distance = framing.distance();
+    const key = `${framing.center.x},${framing.center.y},${distance},${camera.aspect},${camera.fov}`;
+    if (key === applied) return;
+    applied = key;
+    camera.position.set(framing.center.x, framing.center.y, distance);
     camera.lookAt(framing.center.x, framing.center.y, 0);
     camera.updateProjectionMatrix();
   };
