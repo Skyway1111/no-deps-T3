@@ -46,7 +46,7 @@ import { caretLineDirection } from "~/composer-text-direction";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { isRichTextFormattingShortcut, isThreadNavigationShortcut } from "~/keybindings";
 import { collectInlineContextIds } from "~/lib/composerContextReferences";
-import { resolveDiffThemeName } from "~/lib/diffRendering";
+import { resolveDiffThemeName } from "~/lib/diffTheme";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { hasCommandForKeyDown } from "~/shortcuts/dispatcher";
