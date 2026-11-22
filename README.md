@@ -7,7 +7,7 @@
 <h1 align="center">no-deps-T3</h1>
 
 <p align="center">
-  <strong>A for-fun experimental fork of <a href="https://github.com/pingdotgg/t3code">T3 Code</a></strong> — tearing out ~100 runtime dependencies and replacing them with hand-rolled zero-dependency TypeScript and zero-crate Rust engines.
+  <strong>A for-fun experimental fork of <a href="https://github.com/pingdotgg/t3code">T3 Code</a></strong> — tearing out 100+ runtime dependencies and replacing them with hand-rolled zero-dependency TypeScript and zero-crate Rust engines.
 </p>
 
 > [!NOTE]
@@ -20,14 +20,15 @@ We wanted to see how far we could push a real, multi-surface production app (web
 
 What changed compared to upstream [pingdotgg/t3code](https://github.com/pingdotgg/t3code):
 
-- **~100 runtime dependencies removed** (`210 → 116` unique production packages workspace-wide; the remaining ones are mostly Expo/React Native mobile packages, React, Effect, agent provider SDKs, and Electron packaging).
+- **102 runtime dependencies removed** (`210 → 108` unique production packages workspace-wide; the remaining ones are mostly Expo/React Native mobile packages, React, Effect, agent provider SDKs, and Electron packaging). Zero third-party UI, diff, file-tree, icon, or syntax-highlighting libraries remain in the web bundle.
 - **Zero-dependency TypeScript engines built in-tree:**
-  - **UI & state:** custom UI primitives, popups, combobox, virtual list (Fenwick-tree sizing), drag-and-drop, router, and Zustand-compatible signal/persist store.
-  - **Rich content & previews:** custom Markdown parser/HAST emitter/sanitizer, Mermaid layout & SVG renderer, TipTap-free rich-text composer, PDF renderer, Office (DOCX/XLSX/PPTX) worker engine, TIFF/HEIC image decoders, and WebGL 3D device preview renderer.
+  - **UI & state:** custom UI primitives, popups, combobox, virtual list (Fenwick-tree sizing), light-DOM fixed-height file tree + 58 vendored file-icon symbols (replacing `@pierre/trees` + Preact), drag-and-drop, router, and Zustand-compatible signal/persist store.
+  - **Diffs, code viewing, editing & syntax highlighting:** light-DOM virtualized `CodeView`, `FileDiff`, `File`, and inline `Editor` (~5.2k LOC replacing the 40.5k-line `@pierre/diffs` + Shiki/Oniguruma stack), Hermes-safe pure-TS `charCodeAt` syntax highlighter (~70 languages, `pierre-dark` / WCAG-checked `t3-light`, Zed + TextMate themes, replacing `@pierre/highlights` + the mobile `wasm2c`/Nitro C++ module), and unified patch parser/hydrator.
+  - **Rich content & previews:** custom Markdown parser/HAST emitter/sanitizer, Mermaid layout & SVG renderer, TipTap-free rich-text composer, PDF renderer, Office (DOCX/XLSX/PPTX) worker engine, TIFF/HEIC image decoders, WebGL 3D device preview renderer, React 18/19 fiber inspector (replacing `react-grab`), and vendored Inter Variable font.
   - **Core & protocols:** `node:sqlite` worker pool, histogram/Myers diff, linear JSONC/YAML/XML/D-Bus parsers, and direct CDP browser automation.
 - **Zero-crate Rust native binaries:**
   - `native/t3-desktop` — standalone WebKitGTK desktop shell (`0.67 MB` stripped release binary).
-  - `native/t3-sys` — unified native PTY bridge, fuzzy workspace search/grep daemon, and OS helpers.
+  - `native/t3-sys` — unified native PTY bridge, fuzzy workspace search/grep daemon, macOS `clonefile`, Windows registry/foreground/hotkey syscalls (replacing `ffi-rs`), and OS helpers (`689 KB`).
   - `native/resource-monitor` — zero-clone system resource history monitor.
 - **Isolated local run:** custom purple branding, isolated `~/.no-deps-t3` state directory (does not touch your real `~/.t3` install), and a native launcher at [`scripts/launch-no-deps-t3.mjs`](./scripts/launch-no-deps-t3.mjs).
 
@@ -40,7 +41,26 @@ When swapping out the original 97 runtime packages for our in-tree TS and Rust e
 - **32 / 32** head-to-head engine benchmarks green with a **3.41× geometric mean speedup** over the replaced npm libraries.
 - Custom PDF engine matched `pdf.js 6.5` within **0.00–0.53 px** across full Type1/CFF/OpenType font reconstruction, CMaps, shadings, and transparency groups.
 
-### 2. Optimization & cleanup pass (zero-dep base → current `main`)
+### 2. Removing `@pierre/*` (diffs, trees, highlights, Shiki/Oniguruma), `ffi-rs` & quick wins
+
+Replacing `@pierre/diffs`, `@pierre/trees` (Preact + Shadow DOM), `@pierre/highlights` (plus mobile's `wasm2c`/`simde`/Nitro C++ module), `ffi-rs`, `@clerk/electron-passkeys`, `react-grab`, and `@fontsource-variable/inter` cut **−178,311 net LOC** across 242 files with **377/377 tests** and `vp run knip:check` passing:
+
+| Benchmark                                       |           Before |                  After |                 Change |
+| ----------------------------------------------- | ---------------: | ---------------------: | ---------------------: |
+| `apps/web/dist` total JS (non-map)              |         34.07 MB |           **18.68 MB** |  **−45.2% (−15.4 MB)** |
+| `apps/web/dist` JS chunks / transformed mods    | 850 / 3,353 mods |   **353 / 2,523 mods** |      **−58.5% chunks** |
+| FileTree chunk (raw / gzipped)                  | 197.3 / 54.0 KiB |     **24.3 / 8.8 KiB** |       **8.1× smaller** |
+| Inter Variable font assets                      |     1,196 KB pkg |             **221 KB** |       **5.4× smaller** |
+| 100-file diff first render (Chromium)           |           260 ms |              **52 ms** |        **5.0× faster** |
+| `DiffFileTree` mount (2,000 files, Chromium)    |       22–23.5 ms |         **10–10.5 ms** |        **2.2× faster** |
+| `DiffFileTree` expand all (1,200 dirs, browser) |         73–75 ms |         **2.8–3.7 ms** |        **~22× faster** |
+| `DiffFileTree` collapse all (browser)           |            64 ms |         **2.4–2.9 ms** |        **~24× faster** |
+| Streaming highlight (1 char/step, 300 lines)    |          23.8 ms |             **7.5 ms** |        **3.2× faster** |
+| `parsePatchFiles` (11 MB, 150 commits)          | 116 ms (95 MB/s) | **50.5 ms (218 MB/s)** |        **2.3× faster** |
+| `hydratePartialDiff`                            |          0.38 ms |            **0.06 ms** |        **6.2× faster** |
+| `t3-sys` Linux release binary (+3 OS commands)  |         686.9 KB |           **689.5 KB** | **+2.7 KB (0 crates)** |
+
+### 3. Optimization & cleanup pass (zero-dep base → optimized engines)
 
 After reaching feature parity, we ran a 6-workstream optimization pass across server, client state, web UI, composer/decoders/WebGL, native Rust/parsers/CDP, and boot/bundle splitting, followed by a dead-code cleanup pass (**−29,540 net LOC** across 343 files; `vp run knip:check` 100% clean).
 
