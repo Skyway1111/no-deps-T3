@@ -1,6 +1,6 @@
 import { useMessages } from "@t3tools/shared/i18n/react";
 import { memo, useMemo, useState } from "react";
-import { getFiletypeFromFileName } from "@pierre/diffs/utils/getFiletypeFromFileName";
+import { getFiletypeFromFileName } from "@t3tools/shared/highlight/languages";
 import { ScrollView, StyleSheet, Text as NativeText, View, type ColorValue } from "react-native";
 import { SelectableMarkdownText } from "../../native/SelectableMarkdownText";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";

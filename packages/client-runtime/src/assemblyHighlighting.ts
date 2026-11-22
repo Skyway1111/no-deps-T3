@@ -1,6 +1,6 @@
-import { setCustomExtension } from "@pierre/diffs/utils/getFiletypeFromFileName";
+import { setCustomExtension } from "@t3tools/shared/highlight/languages";
 
-// The default .s mapping is riscv, which the Highlights backend does not support.
+// Assembly sources use the asm lexer rather than RISC-V.
 for (const extension of ["asm", "ASM", "s", "S", "nasm", "NASM"]) {
   setCustomExtension(extension, "asm");
 }

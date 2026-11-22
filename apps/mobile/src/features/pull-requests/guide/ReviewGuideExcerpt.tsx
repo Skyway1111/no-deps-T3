@@ -1,7 +1,7 @@
 import { useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import type { PullRequestReviewGuideExcerpt } from "@t3tools/contracts";
 import { excerptRows, fileDiffRows, rowsToPatch } from "@t3tools/client-runtime/review-guide-tour";
 import { AppText as Text } from "../../../components/ui/AppText";

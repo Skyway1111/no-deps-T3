@@ -14,12 +14,6 @@ import {
   createPullRequestDiffHighlightFiles,
 } from "./pullRequestDiffHighlightFiles";
 
-vi.mock("react-native-nitro-modules", async () => {
-  const { createWasmHighlightsModule } = await import("../../lib/highlights.testing");
-  const highlights = createWasmHighlightsModule();
-  return { NitroModules: { hasHybridObject: () => true, createHybridObject: () => highlights } };
-});
-
 const target = {
   environmentId: EnvironmentId.make("remote-environment"),
   input: {

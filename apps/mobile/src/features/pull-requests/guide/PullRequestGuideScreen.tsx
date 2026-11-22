@@ -1,6 +1,5 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
-import type { FileDiffMetadata } from "@pierre/diffs";
+import { parsePatchFiles, type FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { msg, T, useGT, useMessages } from "@t3tools/shared/i18n/react";
 import { useEffect } from "react";
