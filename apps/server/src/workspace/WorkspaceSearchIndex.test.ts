@@ -269,7 +269,7 @@ it.effect("continues whole-word searches after a filtered grep page", () =>
       } as unknown as FileFinder;
       vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
 
-      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", "content");
+      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project");
       const result = yield* searchIndex.searchContents({
         query: "needle",
         limit: 1,
@@ -333,22 +333,27 @@ it.live("answers content searches with git grep while a slow content index build
       waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: false })),
       getScanProgressAsync: async () => ({
         ok: true as const,
-        value: { isScanning: false, isWarmupComplete },
+        value: { isScanning: !isWarmupComplete, isWarmupComplete },
       }),
       watchAsync: async () => ({ ok: true as const, value: () => undefined }),
       grepAsync: grep,
     } as unknown as FileFinder;
-    const noPcreFinder = {
-      ...finder,
-      waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
-    } as unknown as FileFinder;
+    // Each index outlasts its initial wait, then finishes during the first fallback wait.
+    const noPcreFinder = () =>
+      ({
+        ...finder,
+        waitForIndexReady: vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, value: false })
+          .mockResolvedValue({ ok: true, value: true }),
+      }) as unknown as FileFinder;
     vi.spyOn(FileFinder, "create")
       .mockReturnValueOnce({ ok: true, value: finder })
-      .mockReturnValueOnce({ ok: true, value: noPcreFinder })
-      .mockReturnValueOnce({ ok: true, value: noPcreFinder })
-      .mockReturnValueOnce({ ok: true, value: noPcreFinder });
+      .mockReturnValueOnce({ ok: true, value: noPcreFinder() })
+      .mockReturnValueOnce({ ok: true, value: noPcreFinder() })
+      .mockReturnValueOnce({ ok: true, value: noPcreFinder() });
 
-    const searchIndex = yield* WorkspaceSearchIndex.make(cwd, "content");
+    const searchIndex = yield* WorkspaceSearchIndex.make(cwd);
     const search = (input: Partial<Parameters<typeof searchIndex.searchContents>[0]>) =>
       searchIndex.searchContents({
         query: "needle",
@@ -416,7 +421,7 @@ it.live("answers content searches with git grep while a slow content index build
         stdout: "",
       },
     ) =>
-      WorkspaceSearchIndex.make(cwd, "content").pipe(
+      WorkspaceSearchIndex.make(cwd).pipe(
         Effect.provideService(
           VcsProcess.VcsProcess,
           VcsProcess.VcsProcess.of({
@@ -485,20 +490,7 @@ function fakeSymlinkFinder(
 ) {
   const watchers: Array<(events: ReadonlyArray<WatchEvent>) => void> = [];
   let watchFailures = options.watchFailures ?? 0;
-  // fff's pageIndex is an offset into the results, not a page number.
-  const directorySearch = vi.fn(
-    async (_query: string, searchOptions?: { pageIndex?: number; pageSize?: number }) => {
-      const offset = searchOptions?.pageIndex ?? 0;
-      const items = directories.slice(offset, offset + (searchOptions?.pageSize ?? 100));
-      return {
-        ok: true as const,
-        value: {
-          items: items.map((relativePath) => ({ relativePath })),
-          totalMatched: directories.length,
-        },
-      };
-    },
-  );
+  const listDirs = vi.fn(async () => ({ ok: true as const, value: directories }));
   const indexedItems = (options.indexed ?? []).map((entry) => ({
     type: entry.kind,
     item: { relativePath: entry.path, fileName: entry.path.split("/").at(-1) },
@@ -526,7 +518,7 @@ function fakeSymlinkFinder(
       watchers.push(callback);
       return { ok: true as const, value: () => undefined };
     },
-    directorySearchAsync: directorySearch,
+    listDirsAsync: listDirs,
     fileSearchAsync: async () => {
       const items = indexedItems.flatMap((entry) => (entry.type === "file" ? [entry.item] : []));
       return { ok: true as const, value: { items, scores: [], totalMatched: items.length } };
@@ -538,7 +530,7 @@ function fakeSymlinkFinder(
   } as unknown as FileFinder;
   vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
   return {
-    directorySearch,
+    listDirs,
     notifyWatchers: (events: ReadonlyArray<WatchEvent>) =>
       watchers.forEach((watcher) => watcher(events)),
   };
@@ -557,7 +549,7 @@ it.effect("reads symlinks again after the watcher reports a change", () =>
       const outside = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3code-outside-" });
       yield* fileSystem.writeFileString(path.join(cwd, "a.ts"), "");
       yield* fileSystem.symlink("a.ts", path.join(cwd, "old-link.ts"));
-      const { directorySearch, notifyWatchers } = fakeSymlinkFinder([]);
+      const { listDirs, notifyWatchers } = fakeSymlinkFinder([]);
 
       const searchIndex = yield* WorkspaceSearchIndex.make(cwd);
       const concurrent = yield* Effect.all(
@@ -583,7 +575,7 @@ it.effect("reads symlinks again after the watcher reports a change", () =>
       expect(afterEdit).toEqual(["old-link.ts"]);
       expect(afterNotice).toEqual(["new-link.ts"]);
       expect(afterReplace).toEqual([]);
-      expect(directorySearch).toHaveBeenCalledTimes(3);
+      expect(listDirs).toHaveBeenCalledTimes(3);
     }),
   ).pipe(Effect.provide(testLayer)),
 );
@@ -635,14 +627,14 @@ it.effect("keeps symlinks once the watcher subscribes after starting late", () =
       const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3code-symlink-watch-" });
       yield* fileSystem.writeFileString(path.join(cwd, "a.ts"), "");
       yield* fileSystem.symlink("a.ts", path.join(cwd, "link.ts"));
-      const { directorySearch } = fakeSymlinkFinder([], { watchFailures: 2 });
+      const { listDirs } = fakeSymlinkFinder([], { watchFailures: 2 });
 
       const searchIndex = yield* WorkspaceSearchIndex.make(cwd);
       const scansAfterRound: number[] = [];
       for (let round = 0; round < 5; round += 1) {
         expect(yield* listedPaths(searchIndex)).toEqual(["link.ts"]);
         expect(yield* listedPaths(searchIndex)).toEqual(["link.ts"]);
-        scansAfterRound.push(directorySearch.mock.calls.length);
+        scansAfterRound.push(listDirs.mock.calls.length);
         yield* TestClock.adjust("1 minute");
       }
 
@@ -696,7 +688,7 @@ it.effect(
     ).pipe(Effect.provide(testLayer)),
 );
 
-it.effect("finds symlinks in folders past the first page of the index", () =>
+it.effect("finds symlinks in every folder the index lists", () =>
   Effect.scoped(
     Effect.gen(function* () {
       if ((yield* HostProcess.Platform) === "win32") return;
@@ -708,14 +700,11 @@ it.effect("finds symlinks in folders past the first page of the index", () =>
       yield* fileSystem.symlink("a.ts", path.join(cwd, "late/link.ts"));
       // Folders fff lists but that are gone by the time they are read are skipped.
       const firstPage = Array.from({ length: 1_000 }, (_, index) => `missing-${index}`);
-      const { directorySearch } = fakeSymlinkFinder([...firstPage, "late"]);
+      fakeSymlinkFinder([...firstPage, "late"]);
 
       const searchIndex = yield* WorkspaceSearchIndex.make(cwd);
 
       expect(yield* listedPaths(searchIndex)).toEqual(["late", "late/link.ts"]);
-      expect(directorySearch.mock.calls.map(([, options]) => options?.pageIndex)).toEqual([
-        0, 1_000,
-      ]);
     }),
   ).pipe(Effect.provide(testLayer)),
 );
@@ -796,7 +785,7 @@ it.live.each([
     yield* fileSystem.writeFileString(path.join(cwd, "notes.md"), "needle *.ts\n");
     yield* fileSystem.writeFileString(path.join(cwd, "fold.txt"), "\u017f\ns\n\u212a\nk\n");
 
-    const searchIndex = yield* WorkspaceSearchIndex.make(cwd, "content");
+    const searchIndex = yield* WorkspaceSearchIndex.make(cwd);
     const result = yield* searchIndex.searchContents({
       query,
       limit: 500,

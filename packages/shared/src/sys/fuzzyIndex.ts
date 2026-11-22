@@ -3,7 +3,9 @@ import * as NodeReadline from "node:readline";
 
 import { t3SysPath } from "./binary.ts";
 
-export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string };
+export type Result<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: string };
 
 export interface FileItem {
   readonly relativePath: string;
@@ -108,7 +110,9 @@ export class FileFinder {
       this.pending.clear();
     };
     this.child.on("error", (error) => fail(error.message));
-    this.child.on("exit", (code, signal) => fail(`The search index process exited (${signal ?? code}).`));
+    this.child.on("exit", (code, signal) =>
+      fail(`The search index process exited (${signal ?? code}).`),
+    );
     NodeReadline.createInterface({ input: this.child.stdout }).on("line", (line) => {
       const message = JSON.parse(line) as {
         id?: number;
@@ -125,7 +129,11 @@ export class FileFinder {
       } else if (message.id !== undefined) {
         const resolve = this.pending.get(message.id);
         this.pending.delete(message.id);
-        resolve?.(message.ok ? { ok: true, value: message.value } : { ok: false, error: message.error ?? "Search failed." });
+        resolve?.(
+          message.ok
+            ? { ok: true, value: message.value }
+            : { ok: false, error: message.error ?? "Search failed." },
+        );
       }
     });
   }
@@ -161,18 +169,27 @@ export class FileFinder {
   fileSearchAsync(query: string, options: SearchOptions = {}): Promise<Result<FileSearchResult>> {
     return this.request("fileSearch", { query, ...options });
   }
-  directorySearchAsync(query: string, options: SearchOptions = {}): Promise<Result<DirectorySearchResult>> {
+  directorySearchAsync(
+    query: string,
+    options: SearchOptions = {},
+  ): Promise<Result<DirectorySearchResult>> {
     return this.request("directorySearch", { query, ...options });
   }
   mixedSearchAsync(query: string, options: SearchOptions = {}): Promise<Result<MixedSearchResult>> {
     return this.request("mixedSearch", { query, ...options });
+  }
+  /** Every indexed folder, in path order. */
+  listDirsAsync(): Promise<Result<ReadonlyArray<string>>> {
+    return this.request("listDirs");
   }
   grepAsync(query: string, options: GrepOptions = {}): Promise<Result<GrepResult>> {
     return this.request("grep", { query, ...options });
   }
 
   /** Subscribes to changes found by rescans; fails where the platform watcher is unavailable. */
-  async watchAsync(onEvents: (events: ReadonlyArray<WatchEvent>) => void): Promise<Result<WatchUnsubscribe>> {
+  async watchAsync(
+    onEvents: (events: ReadonlyArray<WatchEvent>) => void,
+  ): Promise<Result<WatchUnsubscribe>> {
     const started = await this.request<boolean>("watch");
     if (!started.ok) return started;
     if (!started.value) return { ok: false, error: "File watching is unavailable here." };

@@ -40,6 +40,25 @@ pub enum Kind {
     Mixed,
 }
 
+/// A `folder/` word: matches when some segment run of the entry's folder starts with it.
+#[derive(Debug)]
+struct Folder {
+    /// `name` + `/`
+    prefix: String,
+    name: String,
+    /// `/name/`
+    inner: String,
+    /// `/name`
+    tail: String,
+}
+
+impl Folder {
+    /// Whether `base + "/"` starts with `prefix` or contains `/prefix`.
+    fn matches(&self, base: &str) -> bool {
+        base.starts_with(&self.prefix) || base == self.name || base.contains(&self.inner) || base.ends_with(&self.tail)
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct Query {
     fuzzy: Vec<Vec<u8>>,
@@ -48,7 +67,9 @@ pub struct Query {
     excludes: Vec<Glob>,
     excluded_words: Vec<String>,
     prefixes: Vec<String>,
-    folders: Vec<String>,
+    folders: Vec<Folder>,
+    /// Some word was a glob only for braces without alternatives, like `foo{bar}.ts`.
+    brace_words: bool,
 }
 
 fn strip_location(token: &str) -> &str {
@@ -65,26 +86,39 @@ fn strip_location(token: &str) -> &str {
     t
 }
 
+
 impl Query {
     /// Words are fuzzy terms except: globs (bare `*.ext` ones OR together), `!x` exclusions,
     /// `/x` root prefixes, `x/` folder names, and a trailing `:line[:col]`.
     pub fn parse(input: &str) -> Query {
+        Query::parse_with(input, false)
+    }
+
+    /// `*`, `?` and `{` make a word a glob; `[` alone does not, so `[id].tsx` stays literal while
+    /// `*.[jt]s` works. With `literal_braces`, words whose braces have no alternatives are literal.
+    pub fn parse_with(input: &str, literal_braces: bool) -> Query {
         let mut q = Query::default();
         for raw in input.split_whitespace() {
             let token = strip_location(raw);
-            if let Some(neg) = token.strip_prefix('!').filter(|n| !n.is_empty()) {
-                if glob::has_glob_chars(neg) {
+            let neg = token.strip_prefix('!').filter(|n| !n.is_empty());
+            let word = neg.unwrap_or(token);
+            let literal = word.contains('{') && glob::expand_braces(word).len() == 1;
+            q.brace_words |= literal;
+            let glob = word.contains(['*', '?']) || (word.contains('{') && !(literal_braces && literal));
+            if let Some(neg) = neg {
+                if glob {
                     q.excludes.push(Glob::new(neg));
                 } else {
                     q.excluded_words.push(neg.to_lowercase());
                 }
-            } else if glob::has_glob_chars(token) {
+            } else if glob {
                 let ext = token.strip_prefix("*.").is_some_and(|e| !e.is_empty() && !glob::has_glob_chars(e) && !e.contains('/'));
                 if ext { q.extensions.push(Glob::new(token)) } else { q.globs.push(Glob::new(token)) }
             } else if let Some(prefix) = token.strip_prefix('/').filter(|p| !p.is_empty()) {
                 q.prefixes.push(prefix.trim_end_matches('/').to_lowercase());
             } else if token.len() > 1 && token.ends_with('/') {
-                q.folders.push(token.to_lowercase());
+                let name = token[..token.len() - 1].to_lowercase();
+                q.folders.push(Folder { prefix: format!("{name}/"), inner: format!("/{name}/"), tail: format!("/{name}"), name });
             } else if !token.is_empty() {
                 q.fuzzy.push(token.to_lowercase().into_bytes());
             }
@@ -93,30 +127,34 @@ impl Query {
     }
 
     fn accepts(&self, e: &Entry) -> bool {
-        let lower = e.path.to_lowercase();
         let ext_ok = self.extensions.is_empty() || (!e.is_dir && self.extensions.iter().any(|g| g.is_match(&e.path, true)));
-        ext_ok
-            && self.globs.iter().all(|g| g.is_match(&e.path, false))
-            && !self.excludes.iter().any(|g| g.is_match(&e.path, false))
-            && !self.excluded_words.iter().any(|w| lower.contains(w.as_str()))
+        if !(ext_ok && self.globs.iter().all(|g| g.is_match(&e.path, false)) && !self.excludes.iter().any(|g| g.is_match(&e.path, false))) {
+            return false;
+        }
+        if self.excluded_words.is_empty() && self.prefixes.is_empty() && self.folders.is_empty() {
+            return true;
+        }
+        let lower = e.path.to_lowercase();
+        let folder = if e.is_dir { Some(lower.as_str()) } else { lower.rsplit_once('/').map(|(d, _)| d) };
+        !self.excluded_words.iter().any(|w| lower.contains(w.as_str()))
             && self.prefixes.iter().all(|p| lower.starts_with(p.as_str()))
-            && self.folders.iter().all(|f| {
-                let dir = if e.is_dir { format!("{lower}/") } else { lower.rsplit_once('/').map_or(String::new(), |(d, _)| format!("{d}/")) };
-                dir.starts_with(f.as_str()) || dir.contains(&format!("/{f}"))
-            })
+            && self.folders.iter().all(|f| folder.is_some_and(|d| f.matches(d)))
     }
 
-    fn score(&self, e: &Entry) -> Option<f64> {
+    fn score(&self, e: &Entry, scratch: &mut score::Scratch) -> Option<f64> {
         let path = e.path.as_bytes();
-        let name = e.path.rsplit('/').next().unwrap_or(&e.path).as_bytes();
+        let name_len = e.path.rsplit('/').next().unwrap_or(&e.path).len();
         let mut total = 0.0;
-        for term in &self.fuzzy {
+        for (i, term) in self.fuzzy.iter().enumerate() {
             if !score::is_subsequence(term, path) {
                 return None;
             }
-            let mut s = score::score(term, path);
-            if score::is_subsequence(term, name) {
-                s = s.max(score::score(term, name) + 1.0);
+            if i == 0 {
+                scratch.load(path);
+            }
+            let mut s = scratch.score(term, path.len());
+            if score::is_subsequence(term, &path[path.len() - name_len..]) {
+                s = s.max(scratch.score(term, name_len) + 1.0);
             }
             total += s;
         }
@@ -126,32 +164,47 @@ impl Query {
 
 /// Matches `kind` entries against `query`; returns the page and the match total.
 pub fn search<'a>(index: &'a Index, query: &Query, kind: Kind, offset: usize, size: usize) -> (Vec<&'a Entry>, usize) {
-    let candidates: Vec<&Entry> = index
-        .entries
-        .iter()
-        .filter(|e| match kind {
-            Kind::File => !e.is_dir,
-            Kind::Dir => e.is_dir,
-            Kind::Mixed => true,
-        })
-        .collect();
+    let wanted = |e: &Entry| match kind {
+        Kind::File => !e.is_dir,
+        Kind::Dir => e.is_dir,
+        Kind::Mixed => true,
+    };
+    let matches = |part: &'a [Entry]| {
+        let mut scratch = score::Scratch::default();
+        part.iter().filter(|e| wanted(e) && query.accepts(e)).filter_map(|e| Some((query.score(e, &mut scratch)?, e))).collect::<Vec<_>>()
+    };
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(16);
-    let chunk = candidates.len().div_ceil(threads).max(1024);
-    let mut scored: Vec<(f64, &Entry)> = std::thread::scope(|s| {
-        let parts: Vec<_> = candidates
-            .chunks(chunk)
-            .map(|part| s.spawn(move || part.iter().filter(|e| query.accepts(e)).filter_map(|e| Some((query.score(e)?, *e))).collect::<Vec<_>>()))
-            .collect();
-        parts.into_iter().flat_map(|p| p.join().unwrap_or_default()).collect()
-    });
-    if query.fuzzy.is_empty() {
-        // No terms: recently modified files first, folders in path order.
-        scored.sort_by(|(_, a), (_, b)| a.is_dir.cmp(&b.is_dir).then(if a.is_dir { a.path.cmp(&b.path) } else { b.mtime.cmp(&a.mtime).then(a.path.cmp(&b.path)) }));
+    let chunk = index.entries.len().div_ceil(threads).max(1024);
+    let mut scored: Vec<(f64, &Entry)> = if index.entries.len() <= chunk {
+        matches(&index.entries)
     } else {
-        scored.sort_by(|(sa, a), (sb, b)| sb.total_cmp(sa).then(a.path.len().cmp(&b.path.len())).then(a.path.cmp(&b.path)));
-    }
+        std::thread::scope(|s| {
+            let parts: Vec<_> = index.entries.chunks(chunk).map(|part| s.spawn(move || matches(part))).collect();
+            parts.into_iter().flat_map(|p| p.join().unwrap_or_default()).collect()
+        })
+    };
+    let cmp: fn(&(f64, &Entry), &(f64, &Entry)) -> std::cmp::Ordering = if query.fuzzy.is_empty() {
+        // No terms: recently modified files first, folders in path order.
+        |(_, a), (_, b)| a.is_dir.cmp(&b.is_dir).then(if a.is_dir { a.path.cmp(&b.path) } else { b.mtime.cmp(&a.mtime).then(a.path.cmp(&b.path)) })
+    } else {
+        |(sa, a), (sb, b)| sb.total_cmp(sa).then(a.path.len().cmp(&b.path.len())).then(a.path.cmp(&b.path))
+    };
     let total = scored.len();
-    (scored.into_iter().skip(offset).take(size).map(|(_, e)| e).collect(), total)
+    let end = offset.saturating_add(size).min(total);
+    if end < total {
+        scored.select_nth_unstable_by(end, cmp);
+        scored.truncate(end);
+    }
+    scored.sort_unstable_by(cmp);
+    (scored.into_iter().skip(offset).map(|(_, e)| e).collect(), total)
+}
+
+/// Searches `input`; when braces without alternatives made it match nothing, as in
+/// `foo{bar}.ts`, searches again reading those words literally.
+pub fn find<'a>(index: &'a Index, input: &str, kind: Kind, offset: usize, size: usize) -> (Vec<&'a Entry>, usize) {
+    let query = Query::parse(input);
+    let found = search(index, &query, kind, offset, size);
+    if found.1 == 0 && query.brace_words { search(index, &Query::parse_with(input, true), kind, offset, size) } else { found }
 }
 
 fn name_of(path: &str) -> &str {
@@ -322,13 +375,12 @@ impl Daemon {
             }
             "fileSearch" | "directorySearch" | "mixedSearch" => {
                 let index = self.current();
-                let query = Query::parse(p.get_str("query").unwrap_or(""));
                 let kind = match method {
                     "fileSearch" => Kind::File,
                     "directorySearch" => Kind::Dir,
                     _ => Kind::Mixed,
                 };
-                let (items, total) = search(&index, &query, kind, num("pageIndex", 0.0), num("pageSize", 100.0));
+                let (items, total) = find(&index, p.get_str("query").unwrap_or(""), kind, num("pageIndex", 0.0), num("pageSize", 100.0));
                 let items = items
                     .into_iter()
                     .map(|e| match kind {
@@ -347,6 +399,7 @@ impl Daemon {
                     ("totalDirs", dirs.into()),
                 ]))
             }
+            "listDirs" => Ok(Value::Arr(self.current().entries.iter().filter(|e| e.is_dir).map(|e| e.path.as_str().into()).collect())),
             "grep" => Ok(self.grep(p)),
             other => Err(format!("unknown method {other}")),
         }
@@ -355,12 +408,19 @@ impl Daemon {
     fn grep(&self, p: &Value) -> Value {
         let index = self.current();
         let regex = p.get_str("mode") == Some("regex");
-        let (matcher, fallback) = grep::matcher(p.get_str("query").unwrap_or(""), regex, p.get_bool("smartCase").unwrap_or(true));
+        let raw = p.get_str("query").unwrap_or("");
+        // Plain searches read glob words as file constraints: `*.ts needle` greps `.ts` files.
+        let words: Vec<&str> = raw.split_whitespace().collect();
+        let (globs, rest): (Vec<&str>, Vec<&str>) = words.iter().partition(|w| w.contains(['*', '?']));
+        let (needle, filter) =
+            if regex || globs.is_empty() || rest.is_empty() { (raw.to_owned(), None) } else { (rest.join(" "), Some(Query::parse(&globs.join(" ")))) };
+        let (matcher, fallback) = grep::matcher(&needle, regex, p.get_bool("smartCase").unwrap_or(true));
         let per_file = p.get_num("maxMatchesPerFile").unwrap_or(100.0).max(1.0) as usize;
         let page = p.get_num("pageSize").unwrap_or(50.0).max(1.0) as usize;
         let budget = Duration::from_millis(p.get_num("timeBudgetMs").unwrap_or(1000.0).max(1.0) as u64);
         let mut file = p.get("cursor").and_then(|c| c.get_num("file")).unwrap_or(0.0) as usize;
-        let files: Vec<&Entry> = index.entries.iter().filter(|e| !e.is_dir && e.size <= grep::FILE_MAX).collect();
+        let files: Vec<&Entry> =
+            index.entries.iter().filter(|e| !e.is_dir && e.size <= grep::FILE_MAX && filter.as_ref().is_none_or(|f| f.accepts(e))).collect();
         let started = Instant::now();
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(16);
         let (mut items, mut searched) = (Vec::new(), 0);
@@ -369,7 +429,7 @@ impl Daemon {
         // Workers search ahead in parallel; results are taken in file order so a page ends on a
         // file boundary and the cursor is exact. Work past the cut is dropped.
         std::thread::scope(|s| {
-            let (tx, rx) = mpsc::channel::<(usize, Vec<grep::LineMatch>)>();
+            let (tx, rx) = mpsc::sync_channel::<(usize, Vec<grep::LineMatch>)>(threads * 64);
             for _ in 0..threads {
                 let (tx, files, next, stop, matcher, root) = (tx.clone(), &files, &next, &stop, &matcher, &self.root);
                 s.spawn(move || {
@@ -452,8 +512,16 @@ pub fn run(args: &[String]) -> i32 {
         return 2;
     };
     let root = PathBuf::from(root);
-    if !root.is_dir() {
-        println!("{}", obj([("event", "error".into()), ("error", format!("{} is not a directory", root.display()).into())]));
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).and_then(|h| std::fs::canonicalize(h).ok());
+    let error = if !root.is_dir() {
+        Some(format!("{} is not a directory", root.display()))
+    } else if home.is_some() && std::fs::canonicalize(&root).ok() == home {
+        Some(format!("{} is the home directory, which is too large to index", root.display()))
+    } else {
+        None
+    };
+    if let Some(error) = error {
+        println!("{}", obj([("event", "error".into()), ("error", error.into())]));
         return 1;
     }
     let daemon = Arc::new(Daemon {
@@ -507,7 +575,7 @@ mod tests {
         Entry { path: path.into(), is_dir, size: 1, mtime }
     }
     fn paths(index: &Index, q: &str, kind: Kind) -> Vec<String> {
-        search(index, &Query::parse(q), kind, 0, 10).0.into_iter().map(|e| e.path.clone()).collect()
+        find(index, q, kind, 0, 10).0.into_iter().map(|e| e.path.clone()).collect()
     }
     #[test]
     fn query_syntax() {
@@ -518,18 +586,30 @@ mod tests {
             entry("web/app.tsx", false, 3),
             entry("web/logo.PNG", false, 4),
             entry("docs/main.md", false, 5),
+            entry("web/[id].tsx", false, 6),
+            entry("web/a{b}.ts", false, 7),
         ]);
         assert_eq!(paths(&index, "main", Kind::File)[0], "src/main.rs");
         assert_eq!(paths(&index, "main *.md", Kind::File), ["docs/main.md"]);
-        assert_eq!(paths(&index, "*.rs *.tsx", Kind::File).len(), 3);
+        assert_eq!(paths(&index, "*.rs *.tsx", Kind::File).len(), 4);
         assert_eq!(paths(&index, "**/*.[pP][nN][gG]", Kind::File), ["web/logo.PNG"]);
         assert_eq!(paths(&index, "main !docs", Kind::File), ["src/main.rs"]);
         assert_eq!(paths(&index, "src/", Kind::File).len(), 2);
-        assert_eq!(paths(&index, "/web", Kind::File).len(), 2);
+        assert_eq!(paths(&index, "/web", Kind::File).len(), 4);
         assert_eq!(paths(&index, "main.rs:12:3", Kind::File)[0], "src/main.rs");
-        assert_eq!(paths(&index, "", Kind::File)[0], "docs/main.md");
+        assert_eq!(paths(&index, "", Kind::File)[0], "web/a{b}.ts");
         assert_eq!(paths(&index, "sr", Kind::Dir), ["src"]);
-        assert_eq!(search(&index, &Query::parse(""), Kind::Mixed, 2, 2).1, 6);
+        assert_eq!(paths(&index, "[id].tsx", Kind::File), ["web/[id].tsx"]);
+        assert_eq!(paths(&index, "a{b}", Kind::File), ["web/a{b}.ts"]);
+        assert_eq!(paths(&index, "*.{tsx,md}", Kind::File).len(), 3);
+        assert_eq!(paths(&index, "src/{main}.rs", Kind::File), ["src/main.rs"]);
+        assert_eq!(paths(&index, "*.{md}", Kind::File), ["docs/main.md"]);
+        for q in ["", "a", "s"] {
+            let all = paths(&index, q, Kind::Mixed);
+            let page: Vec<_> = find(&index, q, Kind::Mixed, 1, 2).0.into_iter().map(|e| e.path.clone()).collect();
+            assert_eq!(page, all[1..3]);
+        }
+        assert_eq!(search(&index, &Query::parse(""), Kind::Mixed, 2, 2).1, 8);
     }
     #[test]
     fn diffs_indexes() {

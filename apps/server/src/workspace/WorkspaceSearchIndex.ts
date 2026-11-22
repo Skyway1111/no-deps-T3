@@ -57,8 +57,6 @@ const SYMLINK_SCAN_CONCURRENCY = 16;
 const UNWATCHED_SYMLINK_SCAN_TTL_MS = 2_000;
 // A rescan that outlasts this leaves the read on the previous scan.
 const SYMLINK_RESCAN_WAIT = "5 millis";
-// Each page is a synchronous native call; small pages let searches run between them.
-const SYMLINK_DIRECTORY_PAGE_SIZE = 1_000;
 
 export class WorkspaceSearchIndexCreateFailed extends Schema.TaggedError<WorkspaceSearchIndexCreateFailed>()(
   "WorkspaceSearchIndexCreateFailed",
@@ -599,10 +597,7 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
   }
 });
 
-export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
-  cwd: string,
-  variant: WorkspaceSearchIndexVariant = "paths",
-) {
+export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: string) {
   const hostIsWindows = yield* HostProcess.isWindows;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -613,9 +608,6 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
     }).pipe(Effect.orDie),
   );
   let initialScanTimedOut = false;
-  // The content index reads every file, which takes minutes where antivirus scans each open,
-  // so content searches do not wait for it; git grep answers until it is ready.
-  let contentIndexPending = variant === "content";
   const vcsProcess = yield* VcsProcess.VcsProcess;
 
   /** The nearest `.ignore` with a pattern matching `relativePath` itself decides. */
@@ -661,25 +653,23 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
     return ignored;
   });
   let ignoredPaths = yield* loadIgnoredPaths();
-  if (variant === "paths") {
-    yield* waitForIndexReady(
-      cwd,
-      finder,
-      ({ reason, cause }) =>
-        new WorkspaceSearchIndexCreateFailed({
-          cwd,
-          reason,
-          cause,
-        }),
-    ).pipe(
-      Effect.catchTags({
-        WorkspaceSearchIndexScanTimedOut: () =>
-          Effect.sync(() => {
-            initialScanTimedOut = true;
-          }),
+  yield* waitForIndexReady(
+    cwd,
+    finder,
+    ({ reason, cause }) =>
+      new WorkspaceSearchIndexCreateFailed({
+        cwd,
+        reason,
+        cause,
       }),
-    );
-  }
+  ).pipe(
+    Effect.catchTags({
+      WorkspaceSearchIndexScanTimedOut: () =>
+        Effect.sync(() => {
+          initialScanTimedOut = true;
+        }),
+    }),
+  );
 
   const isScanning = Effect.promise(async () => {
     try {
@@ -689,18 +679,14 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
       return true;
     }
   });
-  const hasIncompleteInitialScan = () => (initialScanTimedOut ? isScanning : Effect.succeed(false));
-
-  const isContentIndexReady = Effect.fn("WorkspaceSearchIndex.isContentIndexReady")(function* () {
-    if (!contentIndexPending) return true;
-    const progress = yield* Effect.promise(() =>
-      finder.getScanProgressAsync().catch(() => undefined),
-    );
-    if (progress?.ok && !progress.value.isScanning && progress.value.isWarmupComplete) {
-      contentIndexPending = false;
-    }
-    return !contentIndexPending;
-  });
+  // A scan that outlasted the initial wait leaves results partial and content searches on git grep until it lands.
+  const hasIncompleteInitialScan = Effect.fn("WorkspaceSearchIndex.hasIncompleteInitialScan")(
+    function* () {
+      if (!initialScanTimedOut) return false;
+      if (!(yield* isScanning)) initialScanTimedOut = false;
+      return initialScanTimedOut;
+    },
+  );
 
   const runGitGrep = Effect.fn("WorkspaceSearchIndex.runGitGrep")(function* (
     pattern: string,
@@ -898,26 +884,18 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
 
   const listIndexedDirectories = Effect.fn("WorkspaceSearchIndex.listIndexedDirectories")(
     function* () {
-      const directories: string[] = [];
-      // pageIndex is an offset into the results, not a page number.
-      for (let pageIndex = 0; ; pageIndex += SYMLINK_DIRECTORY_PAGE_SIZE) {
-        const result = yield* Effect.promise(async () => {
-          try {
-            return await finder.directorySearchAsync("", {
-              pageIndex,
-              pageSize: SYMLINK_DIRECTORY_PAGE_SIZE,
-            });
-          } catch {
-            return undefined;
-          }
-        });
-        if (!result?.ok) return directories;
-        for (const item of result.value.items) {
-          const directory = trimDirectorySeparator(toPosixPath(item.relativePath, hostIsWindows));
-          if (directory) directories.push(directory);
+      const result = yield* Effect.promise(async () => {
+        try {
+          return await finder.listDirsAsync();
+        } catch {
+          return undefined;
         }
-        if (result.value.items.length < SYMLINK_DIRECTORY_PAGE_SIZE) return directories;
-      }
+      });
+      if (!result?.ok) return [];
+      return result.value.flatMap((relativePath) => {
+        const directory = trimDirectorySeparator(toPosixPath(relativePath, hostIsWindows));
+        return directory ? [directory] : [];
+      });
     },
   );
 
@@ -1257,23 +1235,16 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
 
   const search: WorkspaceSearchIndex["Service"]["search"] = Effect.fn(
     "WorkspaceSearchIndex.search",
-  )(function* (rawQuery, limit, kind, imageOnly) {
-    // The index parses any word containing "[" or "{" as a glob and has no escape for them; fuzzy
-    // matching is subsequence-based, so dropping them still matches "[id]" and "a{b}" paths.
-    // "{" is dropped only when the query finds nothing as a glob, so "*.{ts,tsx}" keeps working.
-    const query = rawQuery.replaceAll("[", "");
+  )(function* (query, limit, kind, imageOnly) {
     const incompleteBeforeQuery = yield* hasIncompleteInitialScan();
-    let mapped = yield* searchNames(query, limit, kind, imageOnly);
-    if (mapped.entries.length === 0 && query.includes("{")) {
-      mapped = yield* searchNames(query.replaceAll("{", ""), limit, kind, imageOnly);
-    }
+    const mapped = yield* searchNames(query, limit, kind, imageOnly);
     return { ...mapped, truncated: incompleteBeforeQuery || mapped.truncated };
   });
 
   const searchContents: WorkspaceSearchIndex["Service"]["searchContents"] = Effect.fn(
     "WorkspaceSearchIndex.searchContents",
   )(function* (input) {
-    if (!(yield* isContentIndexReady())) {
+    if (yield* hasIncompleteInitialScan()) {
       const gitResult = yield* searchContentsWithGit(input);
       if (Option.isSome(gitResult)) return gitResult.value;
       yield* waitForIndexReady(
@@ -1288,7 +1259,7 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
             cause,
           }),
       );
-      contentIndexPending = false;
+      initialScanTimedOut = false;
     }
     // Only a bare ASCII word can be wrapped in `\b` without escaping.
     const wholeWordPrefilter = input.wholeWord && !input.useRegex && ASCII_WORD.test(input.query);
@@ -1358,28 +1329,13 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
   return WorkspaceSearchIndex.of({ list, refresh, search, searchContents });
 });
 
-export const WORKSPACE_SEARCH_INDEX_VARIANTS = ["paths", "content"] as const;
-export type WorkspaceSearchIndexVariant = (typeof WORKSPACE_SEARCH_INDEX_VARIANTS)[number];
-
-export const workspaceSearchIndexKey = (cwd: string, variant: WorkspaceSearchIndexVariant) =>
-  `${variant}\n${cwd}`;
-
-function parseWorkspaceSearchIndexKey(key: string): {
-  readonly cwd: string;
-  readonly variant: WorkspaceSearchIndexVariant;
-} {
-  const separatorIndex = key.indexOf("\n");
-  return {
-    variant: key.slice(0, separatorIndex) as WorkspaceSearchIndexVariant,
-    cwd: key.slice(separatorIndex + 1),
-  };
-}
+// One index per workspace answers both path and content searches.
+export const WORKSPACE_SEARCH_INDEX_VARIANTS = ["paths"] as const;
+export type WorkspaceSearchIndexVariant = "paths" | "content";
+export const workspaceSearchIndexKey = (cwd: string, _variant?: WorkspaceSearchIndexVariant) => cwd;
 
 /** @public */
-export const layer = (key: string) => {
-  const { cwd, variant } = parseWorkspaceSearchIndexKey(key);
-  return Layer.effect(WorkspaceSearchIndex, make(cwd, variant));
-};
+export const layer = (cwd: string) => Layer.effect(WorkspaceSearchIndex, make(cwd));
 
 export class WorkspaceSearchIndexMap extends LayerMap.Service<WorkspaceSearchIndexMap>()(
   "t3/workspace/WorkspaceSearchIndexMap",

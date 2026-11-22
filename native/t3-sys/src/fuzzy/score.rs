@@ -28,50 +28,79 @@ pub fn is_subsequence(needle: &[u8], hay: &[u8]) -> bool {
     n.peek().is_none()
 }
 
-/// Scores a lowercase `needle` against `hay`; callers check `is_subsequence` first.
-pub fn score(needle: &[u8], hay: &[u8]) -> f64 {
-    let (n, m) = (needle.len(), hay.len());
-    if n == 0 || m > MAX_LEN || n > m {
-        return 0.0;
-    }
-    if n == m {
-        return f64::INFINITY;
-    }
-    let mut bonuses = vec![0.0; m];
-    let mut prev = b'/';
-    for (i, &c) in hay.iter().enumerate() {
-        bonuses[i] = bonus(prev, c);
-        prev = c;
-    }
-    let lower: Vec<u8> = hay.iter().map(u8::to_ascii_lowercase).collect();
-    let mut d_prev = vec![f64::NEG_INFINITY; m];
-    let mut m_prev = vec![f64::NEG_INFINITY; m];
-    let mut d_cur = vec![f64::NEG_INFINITY; m];
-    let mut m_cur = vec![f64::NEG_INFINITY; m];
-    for (i, &nc) in needle.iter().enumerate() {
-        let mut prev_score = f64::NEG_INFINITY;
-        let gap = if i == n - 1 { GAP_TRAILING } else { GAP_INNER };
-        for j in 0..m {
-            if lower[j] == nc {
-                let s = if i == 0 {
-                    j as f64 * GAP_LEADING + bonuses[j]
-                } else if j > 0 {
-                    (m_prev[j - 1] + bonuses[j]).max(d_prev[j - 1] + CONSECUTIVE)
-                } else {
-                    f64::NEG_INFINITY
-                };
-                d_cur[j] = s;
-                prev_score = s.max(prev_score + gap);
-            } else {
-                d_cur[j] = f64::NEG_INFINITY;
-                prev_score += gap;
-            }
-            m_cur[j] = prev_score;
+/// Per-thread buffers reused across candidates so scoring allocates nothing per path.
+#[derive(Default)]
+pub struct Scratch {
+    bonuses: Vec<f64>,
+    lower: Vec<u8>,
+    d_prev: Vec<f64>,
+    m_prev: Vec<f64>,
+    d_cur: Vec<f64>,
+    m_cur: Vec<f64>,
+}
+
+impl Scratch {
+    /// Loads `hay`'s bonuses and lowercase bytes; any suffix that starts after a `/` scores the same.
+    pub fn load(&mut self, hay: &[u8]) {
+        self.bonuses.clear();
+        self.lower.clear();
+        let mut prev = b'/';
+        for &c in hay {
+            self.bonuses.push(bonus(prev, c));
+            self.lower.push(c.to_ascii_lowercase());
+            prev = c;
         }
-        std::mem::swap(&mut d_prev, &mut d_cur);
-        std::mem::swap(&mut m_prev, &mut m_cur);
     }
-    m_prev[m - 1]
+
+    /// Scores a lowercase `needle` against the loaded hay's last `len` bytes; callers check
+    /// `is_subsequence` first.
+    pub fn score(&mut self, needle: &[u8], len: usize) -> f64 {
+        let (n, m) = (needle.len(), len);
+        if n == 0 || m > MAX_LEN || n > m {
+            return 0.0;
+        }
+        if n == m {
+            return f64::INFINITY;
+        }
+        let from = self.lower.len() - m;
+        let (lower, bonuses) = (&self.lower[from..], &self.bonuses[from..]);
+        for v in [&mut self.d_prev, &mut self.m_prev, &mut self.d_cur, &mut self.m_cur] {
+            v.clear();
+            v.resize(m, f64::NEG_INFINITY);
+        }
+        let (mut d_prev, mut m_prev, mut d_cur, mut m_cur) = (&mut self.d_prev, &mut self.m_prev, &mut self.d_cur, &mut self.m_cur);
+        for (i, &nc) in needle.iter().enumerate() {
+            let mut prev_score = f64::NEG_INFINITY;
+            let gap = if i == n - 1 { GAP_TRAILING } else { GAP_INNER };
+            for j in 0..m {
+                if lower[j] == nc {
+                    let s = if i == 0 {
+                        j as f64 * GAP_LEADING + bonuses[j]
+                    } else if j > 0 {
+                        (m_prev[j - 1] + bonuses[j]).max(d_prev[j - 1] + CONSECUTIVE)
+                    } else {
+                        f64::NEG_INFINITY
+                    };
+                    d_cur[j] = s;
+                    prev_score = s.max(prev_score + gap);
+                } else {
+                    d_cur[j] = f64::NEG_INFINITY;
+                    prev_score += gap;
+                }
+                m_cur[j] = prev_score;
+            }
+            std::mem::swap(&mut d_prev, &mut d_cur);
+            std::mem::swap(&mut m_prev, &mut m_cur);
+        }
+        m_prev[m - 1]
+    }
+}
+
+#[cfg(test)]
+fn score(needle: &[u8], hay: &[u8]) -> f64 {
+    let mut scratch = Scratch::default();
+    scratch.load(hay);
+    scratch.score(needle, hay.len())
 }
 
 #[cfg(test)]

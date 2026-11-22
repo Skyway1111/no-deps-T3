@@ -1,5 +1,5 @@
 //! Gitignore-style globs: `*` stays in one segment, `**/` spans folders, `?`, `[a-z]`, `[!x]`,
-//! `\` escapes, and `{a,b}` alternatives (expanded up front).
+//! `\` escapes, and `{a,b}` alternatives (expanded up front; `{a}` is just `a`).
 
 /// Expands `{a,b}` alternatives, nested ones included.
 pub fn expand_braces(pat: &str) -> Vec<String> {
@@ -21,7 +21,7 @@ pub fn expand_braces(pat: &str) -> Vec<String> {
             b',' if depth == 1 => commas.push(i),
             b'}' if depth > 0 => {
                 depth -= 1;
-                if depth == 0 && !commas.is_empty() {
+                if depth == 0 {
                     let start = open.unwrap_or(0);
                     let (head, tail) = (&pat[..start], &pat[i + 1..]);
                     let mut bounds = vec![start];
@@ -151,5 +151,6 @@ mod tests {
         assert!(m("[!x]y", "ay") && !m("[!x]y", "xy"));
         assert!(Glob::new("**/*.[pP][nN][gG]").is_match("Icon.PNG", false));
         assert_eq!(expand_braces("a{b,c{d,e}}f"), vec!["abf", "acdf", "acef"]);
+        assert_eq!(expand_braces("src/{foo{bar},notes}.md"), vec!["src/foobar.md", "src/notes.md"]);
     }
 }

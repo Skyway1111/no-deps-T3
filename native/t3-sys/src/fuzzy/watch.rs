@@ -14,18 +14,34 @@ pub fn is_git_internal(path: &str) -> bool {
 #[cfg(target_os = "linux")]
 pub struct Watcher {
     fd: i32,
+    /// Watched folder (root is `""`) → watch descriptor.
+    watched: std::sync::Mutex<std::collections::HashMap<String, i32>>,
+    root_wd: Arc<std::sync::atomic::AtomicI32>,
+    /// Descriptors the kernel dropped (IN_IGNORED), whose paths must be watched afresh.
+    dropped: Arc<std::sync::Mutex<Vec<i32>>>,
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn inotify_add_watch(fd: i32, path: *const std::ffi::c_char, mask: u32) -> i32;
+    fn inotify_rm_watch(fd: i32, wd: i32) -> i32;
 }
 
 #[cfg(target_os = "linux")]
 impl Watcher {
     pub fn start(_root: &Path, on_change: OnChange) -> Option<Watcher> {
+        use std::sync::atomic::{AtomicI32, Ordering};
         unsafe extern "C" {
             fn inotify_init1(flags: i32) -> i32;
         }
+        const IN_IGNORED: u32 = 0x8000;
         let fd = unsafe { inotify_init1(0o2000000) };
         if fd < 0 {
             return None;
         }
+        let root_wd = Arc::new(AtomicI32::new(-2));
+        let dropped: Arc<std::sync::Mutex<Vec<i32>>> = Default::default();
+        let (root, dead) = (root_wd.clone(), dropped.clone());
         std::thread::spawn(move || {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
@@ -36,25 +52,59 @@ impl Watcher {
                 if n <= 0 {
                     return;
                 }
-                on_change();
+                // struct inotify_event { int wd; u32 mask, cookie, len; char name[len]; }
+                let (events, root_wd) = (&buf[..n as usize], root.load(Ordering::Relaxed));
+                let (mut off, mut relevant) = (0, false);
+                while off + 16 <= events.len() {
+                    let word = |i: usize| u32::from_ne_bytes(events[off + i..off + i + 4].try_into().unwrap_or_default());
+                    let (wd, mask, len) = (word(0) as i32, word(4), word(12) as usize);
+                    let name = events.get(off + 16..off + 16 + len).unwrap_or_default();
+                    let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
+                    if mask & IN_IGNORED != 0 {
+                        dead.lock().unwrap_or_else(|e| e.into_inner()).push(wd);
+                    }
+                    relevant |= !(wd == root_wd && name == b".git");
+                    off += 16 + len;
+                }
+                if relevant {
+                    on_change();
+                }
             }
         });
-        Some(Watcher { fd })
+        Some(Watcher { fd, watched: Default::default(), root_wd, dropped })
     }
 
-    /// Watches each folder; re-adding one already watched is a no-op in the kernel.
+    /// Watches new folders and drops vanished ones, so an unchanged tree costs no syscalls.
     pub fn watch_dirs<'a>(&self, root: &Path, dirs: impl Iterator<Item = &'a str>) {
         use std::os::unix::ffi::OsStrExt;
-        unsafe extern "C" {
-            fn inotify_add_watch(fd: i32, path: *const std::ffi::c_char, mask: u32) -> i32;
-        }
         // CREATE | DELETE | MOVED_FROM | MOVED_TO | CLOSE_WRITE | ATTRIB | DELETE_SELF | ONLYDIR
         const MASK: u32 = 0x100 | 0x200 | 0x40 | 0x80 | 0x8 | 0x4 | 0x400 | 0x0100_0000;
+        let mut watched = self.watched.lock().unwrap_or_else(|e| e.into_inner());
+        let mut old = std::mem::take(&mut *watched);
+        let dropped = std::mem::take(&mut *self.dropped.lock().unwrap_or_else(|e| e.into_inner()));
+        old.retain(|_, wd| !dropped.contains(wd));
         for dir in std::iter::once("").chain(dirs) {
-            let path = if dir.is_empty() { root.to_path_buf() } else { root.join(dir) };
-            if let Ok(c) = std::ffi::CString::new(path.as_os_str().as_bytes()) {
-                unsafe { inotify_add_watch(self.fd, c.as_ptr(), MASK) };
+            let wd = match old.remove(dir) {
+                Some(wd) => wd,
+                None => {
+                    let path = if dir.is_empty() { root.to_path_buf() } else { root.join(dir) };
+                    let Ok(c) = std::ffi::CString::new(path.as_os_str().as_bytes()) else { continue };
+                    let wd = unsafe { inotify_add_watch(self.fd, c.as_ptr(), MASK) };
+                    if wd < 0 {
+                        continue;
+                    }
+                    wd
+                }
+            };
+            if dir.is_empty() {
+                self.root_wd.store(wd, std::sync::atomic::Ordering::Relaxed);
             }
+            watched.insert(dir.to_owned(), wd);
+        }
+        // A renamed folder keeps its inode and so its descriptor under the new path.
+        let live: std::collections::HashSet<i32> = watched.values().copied().collect();
+        for wd in old.into_values().filter(|wd| !live.contains(wd)) {
+            unsafe { inotify_rm_watch(self.fd, wd) };
         }
     }
 }
