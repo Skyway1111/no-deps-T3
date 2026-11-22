@@ -12,6 +12,7 @@ import {
   type SyntheticEvent,
 } from "react";
 import {
+  pageStep,
   partsFor,
   RootView,
   usePopup,
@@ -65,7 +66,7 @@ interface ListApi {
   virtualized: boolean;
   highlighted: { value: unknown; index: number } | null;
   highlight: (value: unknown, index: number, reason: HighlightReason) => void;
-  move: (delta: 1 | -1 | "first" | "last", event: KeyboardEvent) => void;
+  move: (delta: number | "first" | "last", event: KeyboardEvent) => void;
   select: (value: unknown, event: SyntheticEvent) => void;
   isSelected: (value: unknown) => boolean;
   label: (value: unknown) => string;
@@ -230,14 +231,23 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
   // autoHighlight puts the first result under the cursor while a query is typed ("always": even when empty).
   const autoFirst =
     (autoHighlight === "always" || (autoHighlight && filterQuery !== "")) && filtered.length > 0;
+  const isSelected = (item: unknown) =>
+    multiple && Array.isArray(value)
+      ? value.some((v) => equal(item, v))
+      : kind === "combobox" && equal(item, value);
+  // Until a query is typed, an open list highlights its first selected item, as Base UI does.
+  const selectedIndex =
+    filterQuery === "" && (popup.open || inline) ? filtered.findIndex(isSelected) : -1;
   const effectiveHighlight =
     highlighted && filtered.some((item) => equal(item, highlighted.value))
       ? highlighted
-      : autoFirst
-        ? { value: filtered[0], index: 0 }
-        : virtualized
-          ? highlighted
-          : null;
+      : selectedIndex >= 0
+        ? { value: filtered[selectedIndex], index: selectedIndex }
+        : autoFirst
+          ? { value: filtered[0], index: 0 }
+          : virtualized
+            ? highlighted
+            : null;
   const reported = useRef<unknown>(undefined);
   const reportHighlight = useEvent(() => {
     const value = effectiveHighlight?.value;
@@ -254,7 +264,7 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
       ...list.current.querySelectorAll<HTMLElement>('[role="option"]:not([data-disabled])'),
     ].map((el, index) => ({ value: [...elements].find(([, node]) => node === el)?.[0], index }));
   };
-  const move = (delta: 1 | -1 | "first" | "last", event: KeyboardEvent) => {
+  const move = (delta: number | "first" | "last", event: KeyboardEvent) => {
     const all = navigable();
     if (all.length === 0) return;
     const current = effectiveHighlight
@@ -270,19 +280,17 @@ function useListRoot(kind: ListApi["kind"], props: ListRootProps) {
               ? 0
               : all.length - 1
             : current + delta;
+    // Single steps loop; page jumps stop at the ends.
     if (next < 0 || next >= all.length)
-      next = loopFocus
-        ? (next + all.length) % all.length
-        : Math.max(0, Math.min(all.length - 1, next));
+      next =
+        loopFocus && Math.abs(delta as number) === 1
+          ? (next + all.length) % all.length
+          : Math.max(0, Math.min(all.length - 1, next));
     const entry = all[next]!;
     highlight(entry.value, entry.index, "keyboard");
     elements.get(entry.value)?.scrollIntoView({ block: "nearest" });
     event.preventDefault();
   };
-  const isSelected = (item: unknown) =>
-    multiple && Array.isArray(value)
-      ? value.some((v) => equal(item, v))
-      : kind === "combobox" && equal(item, value);
   const setQuery = (next: string, event: SyntheticEvent | undefined, reason: string) => {
     const details = changeDetails(reason, event);
     if (kind === "autocomplete") {
@@ -389,11 +397,16 @@ function ListInput({ value: valueProp, ...props }: InputProps) {
       if (!popup.open && !list.inline) {
         popup.setOpenType("keyboard");
         popup.setOpen(true, event, "list-navigation");
+        // Opening lands on the selected item; only an unselected list steps onto an end.
+        if (list.filtered.some(list.isSelected)) return event.preventDefault();
       }
       list.move(event.key === "ArrowDown" ? 1 : -1, event);
     } else if ((event.key === "Home" || event.key === "End") && event.ctrlKey)
       list.move(event.key === "Home" ? "first" : "last", event);
-    else if (event.key === "Enter" && active) {
+    else if ((event.key === "PageDown" || event.key === "PageUp") && popup.open) {
+      const el = active ? list.elements.get(active.value) : undefined;
+      list.move((event.key === "PageDown" ? 1 : -1) * (el ? pageStep([el], 0) : 10), event);
+    } else if (event.key === "Enter" && active) {
       event.preventDefault();
       const el = list.elements.get(active.value);
       if (el) el.click();

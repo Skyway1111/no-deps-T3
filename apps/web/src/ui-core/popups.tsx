@@ -166,6 +166,23 @@ const TABBABLE =
   'a[href],button:not(:disabled),input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"]),[contenteditable="true"]';
 const tabbables = (root: HTMLElement) =>
   [...root.querySelectorAll<HTMLElement>(TABBABLE)].filter((el) => el.getClientRects().length > 0);
+const LIST_ITEM = '[role="option"],[role^="menuitem"]';
+const ACTIVE_ITEM =
+  '[role="option"][aria-selected="true"],[role="option"][data-selected],[role^="menuitem"][data-checked]';
+/** Tab out of a list popup continues from its trigger, as if the popup sat right after it. */
+function tabFromTrigger(api: PopupApi, event: KeyboardEvent) {
+  const trigger = api.getTrigger();
+  if (!trigger) return;
+  const scope = trigger.closest<HTMLElement>('[aria-modal="true"]') ?? document.body;
+  const items = tabbables(scope).filter((el) => !api.popup.current?.contains(el));
+  const at = items.indexOf(trigger);
+  const next = at === -1 ? trigger : items.at((at + (event.shiftKey ? -1 : 1)) % items.length);
+  event.preventDefault();
+  const target = next ?? trigger;
+  target.focus();
+  // Focus that left the popup tree already closed it ("focus-out").
+  if (isInsidePopupTree(api, target)) api.setOpen(false, event, "focus-out");
+}
 
 // Handles: triggers rendered apart from their Root (`createHandle`).
 export interface PopupHandle<P = unknown> {
@@ -742,6 +759,8 @@ export function computePlacement(
     shift: boolean;
     rtl: boolean;
     mainShift?: boolean;
+    alignFlip?: boolean;
+    fallbackAxisSide?: "start" | "end" | undefined;
   },
 ): Placement {
   const pad =
@@ -766,39 +785,60 @@ export function computePlacement(
     right: viewport.width - anchorRect.right - pad.right - opts.sideOffset,
   };
   const opposite = { top: "bottom", bottom: "top", left: "right", right: "left" } as const;
-  const need = side === "top" || side === "bottom" ? size.height : size.width;
-  if (opts.flip && space[side] < need && space[opposite[side]] > space[side]) side = opposite[side];
-  const vertical = side === "top" || side === "bottom";
-  let top: number;
-  let left: number;
-  const alignPos = (start: number, length: number, anchorStart: number, anchorLength: number) =>
-    opts.align === "start"
-      ? anchorStart + opts.alignOffset
-      : opts.align === "end"
-        ? anchorStart + anchorLength - length - opts.alignOffset
-        : anchorStart + (anchorLength - length) / 2 + opts.alignOffset;
-  if (vertical) {
-    top =
-      side === "bottom"
-        ? anchorRect.bottom + opts.sideOffset
-        : anchorRect.top - opts.sideOffset - size.height;
-    left =
-      opts.rtl && opts.align !== "center"
-        ? alignPos(0, size.width, anchorRect.left, anchorRect.width)
-        : alignPos(0, size.width, anchorRect.left, anchorRect.width);
-    if (opts.rtl && opts.align === "start") left = anchorRect.right - size.width - opts.alignOffset;
-    if (opts.rtl && opts.align === "end") left = anchorRect.left + opts.alignOffset;
-    if (opts.shift)
-      left = Math.min(Math.max(left, pad.left), viewport.width - pad.right - size.width);
-  } else {
-    left =
-      side === "right"
-        ? anchorRect.right + opts.sideOffset
-        : anchorRect.left - opts.sideOffset - size.width;
-    top = alignPos(0, size.height, anchorRect.top, anchorRect.height);
-    if (opts.shift)
-      top = Math.min(Math.max(top, pad.top), viewport.height - pad.bottom - size.height);
+  const fits = (s: Placement["side"]) =>
+    space[s] >= (s === "top" || s === "bottom" ? size.height : size.width);
+  if (opts.flip && !fits(side)) {
+    const flipped = opposite[side];
+    // Neither side fits: try the perpendicular axis before settling for the roomier side.
+    const fallback = !opts.fallbackAxisSide
+      ? null
+      : side === "top" || side === "bottom"
+        ? physical(opts.fallbackAxisSide === "end" ? "inline-end" : "inline-start")
+        : opts.fallbackAxisSide === "end"
+          ? "bottom"
+          : "top";
+    side = fits(flipped)
+      ? flipped
+      : fallback && fits(fallback)
+        ? fallback
+        : space[flipped] > space[side]
+          ? flipped
+          : side;
   }
+  const vertical = side === "top" || side === "bottom";
+  const crossPos = (a: Align) => {
+    const [anchorStart, anchorLength, length] = vertical
+      ? [anchorRect.left, anchorRect.width, size.width]
+      : [anchorRect.top, anchorRect.height, size.height];
+    // Inline alignment follows the reading direction.
+    const start = vertical && opts.rtl ? a === "end" : a === "start";
+    return a === "center"
+      ? anchorStart + (anchorLength - length) / 2 + opts.alignOffset
+      : start
+        ? anchorStart + opts.alignOffset
+        : anchorStart + anchorLength - length - opts.alignOffset;
+  };
+  const [min, max] = vertical
+    ? [pad.left, viewport.width - pad.right - size.width]
+    : [pad.top, viewport.height - pad.bottom - size.height];
+  const overflow = (pos: number) => Math.max(0, min - pos) + Math.max(0, pos - max);
+  let align = opts.align;
+  let cross = crossPos(align);
+  if (opts.alignFlip && align !== "center" && overflow(cross) > 0) {
+    const flipped = align === "start" ? "end" : "start";
+    if (overflow(crossPos(flipped)) < overflow(cross)) cross = crossPos((align = flipped));
+  }
+  if (opts.shift) cross = Math.min(Math.max(cross, min), max);
+  let top = vertical
+    ? side === "bottom"
+      ? anchorRect.bottom + opts.sideOffset
+      : anchorRect.top - opts.sideOffset - size.height
+    : cross;
+  let left = vertical
+    ? cross
+    : side === "right"
+      ? anchorRect.right + opts.sideOffset
+      : anchorRect.left - opts.sideOffset - size.width;
   // "shift" on the side axis slides the popup over its anchor instead of off screen.
   if (opts.mainShift) {
     if (vertical)
@@ -838,7 +878,7 @@ export function computePlacement(
     top,
     left,
     side,
-    align: opts.align,
+    align,
     vars: {
       "--anchor-width": `${anchorRect.width}px`,
       "--anchor-height": `${anchorRect.height}px`,
@@ -846,6 +886,66 @@ export function computePlacement(
       "--available-height": `${availableHeight}px`,
       "--transform-origin": `${originX} ${originY}`,
     },
+  };
+}
+
+type ItemPlacement = Placement & { itemAligned?: true };
+/** `el`'s layout offset inside `root`, unaffected by the popup's enter transform. */
+function offsetIn(el: HTMLElement, root: HTMLElement) {
+  let x = 0;
+  let y = 0;
+  for (let n: HTMLElement | null = el; n && n !== root; n = n.offsetParent as HTMLElement | null) {
+    x += n.offsetLeft;
+    y += n.offsetTop;
+  }
+  return { x, y };
+}
+/**
+ * Base UI's `alignItemWithTrigger`: lays the selected item's text over the trigger's value,
+ * scrolling the list when the viewport clips it. Null when the trigger sits too near an edge.
+ */
+function alignItem(
+  positioner: HTMLElement,
+  trigger: Element,
+  rect: DOMRect,
+  size: { width: number; height: number },
+  rtl: boolean,
+) {
+  const option =
+    positioner.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
+    positioner.querySelector<HTMLElement>('[role="option"]');
+  const text = option?.querySelector<HTMLElement>("[data-select-item-text]") ?? option;
+  const value = trigger.querySelector("[data-select-value]")?.getBoundingClientRect();
+  const list = positioner.querySelector<HTMLElement>("[data-list-root]");
+  const margin = 10;
+  const vh = window.innerHeight;
+  const t = text ? offsetIn(text, positioner) : { x: 0, y: 0 };
+  const textCenter = t.y + (text?.offsetHeight ?? 0) / 2;
+  const offsetY = text && value ? textCenter - (value.top - rect.top + value.height / 2) : 0;
+  const idealTop = rect.top - offsetY;
+  const top = Math.max(margin, idealTop);
+  const height = Math.min(vh - margin, idealTop + size.height) - top;
+  if (
+    rect.top < 20 ||
+    rect.bottom > vh - 20 ||
+    height + 1 < Math.min(size.height, 100) ||
+    (!list && height < size.height)
+  )
+    return null;
+  const left =
+    text && value
+      ? rtl
+        ? value.right - t.x - text.offsetWidth
+        : value.left - t.x
+      : rtl
+        ? rect.right - size.width
+        : rect.left;
+  return {
+    top,
+    left: Math.min(Math.max(left, 5), window.innerWidth - 5 - size.width),
+    scrollTop: top - idealTop,
+    listHeight: height - (size.height - (list?.offsetHeight ?? size.height)),
+    originY: textCenter - (top - idealTop),
   };
 }
 
@@ -862,83 +962,99 @@ function PopupPositioner({
   sticky: _s,
   arrowPadding: _a,
   trackAnchor: _t,
-  alignItemWithTrigger: _ai,
+  alignItemWithTrigger = true,
   disableAnchorTracking: _d,
   ...props
 }: PositionerProps & { kind: Kind }) {
   const api = usePopup(kind);
   const side =
     sideProp ?? (api.parent?.kind === "menu" && api.kind === "menu" ? "inline-end" : "bottom");
-  const [placement, setPlacement] = useState<Placement | null>(null);
+  const [placement, setPlacement] = useState<ItemPlacement | null>(null);
   const el = useRef<HTMLElement | null>(null);
-  const getTrigger = useEvent(() => api.getTrigger());
+  // An item-aligned select's trigger rect and the list scroll still to apply.
+  const aligned = useRef<{ rect: DOMRect; scrollTop: number | null } | null>(null);
   const setRef = useEvent((node: HTMLElement | null) => {
     el.current = node;
     api.setPositioner(node);
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- positions the popup against its anchor as layout, scroll, and size change.
-  useLayoutEffect(() => {
-    if (!api.mounted) return;
-    let frame = 0;
-    const update = () => {
-      const positioner = el.current;
-      const target = resolveAnchor(anchor, getTrigger());
-      if (!positioner || !target) return;
-      const rect = target.getBoundingClientRect();
-      // Measure the natural size: a height already capped by --available-height would make flipping oscillate.
-      const saved = positioner.style.cssText;
-      positioner.style.setProperty("--available-height", "100000px");
-      positioner.style.setProperty("--available-width", "100000px");
-      const size = { width: positioner.offsetWidth, height: positioner.offsetHeight };
-      positioner.style.cssText = saved;
-      const next = computePlacement(
-        rect,
-        size,
-        { width: window.innerWidth, height: window.innerHeight },
-        {
-          side,
-          align,
-          sideOffset,
-          alignOffset,
-          padding: collisionPadding,
-          flip: collisionAvoidance?.side !== "none" && collisionAvoidance?.side !== "shift",
-          mainShift: collisionAvoidance?.side === "shift",
-          shift: collisionAvoidance?.align !== "none",
-          rtl: getComputedStyle(positioner).direction === "rtl",
-        },
-      );
-      setPlacement((prev) =>
-        prev &&
-        prev.top === next.top &&
-        prev.left === next.left &&
-        prev.side === next.side &&
-        JSON.stringify(prev.vars) === JSON.stringify(next.vars)
-          ? prev
-          : next,
-      );
-    };
-    const schedule = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener("scroll", schedule, true);
-    window.addEventListener("resize", schedule);
-    const target = resolveAnchor(anchor, getTrigger());
-    const observed = [el.current, target instanceof Element ? target : null].filter(
-      (node): node is Element => node !== null,
+  const getTarget = useEvent(() => resolveAnchor(anchor, api.getTrigger()));
+  const update = useEvent(() => {
+    const positioner = el.current;
+    const target = getTarget();
+    if (!positioner || !target) return;
+    const rect = target.getBoundingClientRect();
+    if (aligned.current) {
+      // Follow the trigger without re-fitting, so the list keeps the scroll the alignment chose.
+      const dx = rect.left - aligned.current.rect.left;
+      const dy = rect.top - aligned.current.rect.top;
+      aligned.current.rect = rect;
+      if (dx || dy) setPlacement((p) => p && { ...p, left: p.left + dx, top: p.top + dy });
+      return;
+    }
+    // Measure the natural size: a height already capped by --available-height would make flipping oscillate.
+    const saved = positioner.style.cssText;
+    positioner.style.setProperty("--available-height", "100000px");
+    positioner.style.setProperty("--available-width", "100000px");
+    const size = { width: positioner.offsetWidth, height: positioner.offsetHeight };
+    const rtl = getComputedStyle(positioner).direction === "rtl";
+    const item =
+      api.kind === "select" &&
+      alignItemWithTrigger &&
+      api.openType.current !== "touch" &&
+      target instanceof Element
+        ? alignItem(positioner, target, rect, size, rtl)
+        : null;
+    positioner.style.cssText = saved;
+    const next = computePlacement(
+      rect,
+      size,
+      { width: window.innerWidth, height: window.innerHeight },
+      {
+        side,
+        align,
+        sideOffset,
+        alignOffset,
+        padding: collisionPadding,
+        flip: collisionAvoidance?.side !== "none" && collisionAvoidance?.side !== "shift",
+        mainShift: collisionAvoidance?.side === "shift",
+        shift: collisionAvoidance?.align !== "none",
+        alignFlip: collisionAvoidance?.align === undefined || collisionAvoidance.align === "flip",
+        fallbackAxisSide:
+          collisionAvoidance?.fallbackAxisSide === "start" ||
+          collisionAvoidance?.fallbackAxisSide === "end"
+            ? collisionAvoidance.fallbackAxisSide
+            : undefined,
+        rtl,
+      },
     );
-    const stopObserving = observeResize(observed, update);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", schedule, true);
-      window.removeEventListener("resize", schedule);
-      stopObserving();
-    };
-  }, [
-    api.mounted,
-    getTrigger,
-    anchor,
+    if (item) {
+      aligned.current = { rect, scrollTop: item.scrollTop };
+      setPlacement({
+        ...next,
+        top: item.top,
+        left: item.left,
+        itemAligned: true,
+        vars: {
+          ...next.vars,
+          "--available-height": `${item.listHeight}px`,
+          "--transform-origin": `50% ${item.originY}px`,
+        },
+      });
+      return;
+    }
+    setPlacement((prev) =>
+      prev &&
+      prev.top === next.top &&
+      prev.left === next.left &&
+      prev.side === next.side &&
+      prev.align === next.align &&
+      JSON.stringify(prev.vars) === JSON.stringify(next.vars)
+        ? prev
+        : next,
+    );
+  });
+  // Inline option objects must not re-subscribe on every render.
+  const optionsKey = JSON.stringify([
     side,
     align,
     sideOffset,
@@ -946,7 +1062,51 @@ function PopupPositioner({
     collisionPadding,
     collisionAvoidance,
   ]);
-  const state = { open: api.open, side: placement?.side ?? side, align, anchorHidden: false };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- positions the popup against its anchor as layout, scroll, and size change.
+  useLayoutEffect(() => {
+    if (!api.mounted) return;
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
+    const target = getTarget();
+    const observed = [el.current, target instanceof Element ? target : null].filter(
+      (node): node is Element => node !== null,
+    );
+    const stopObserving = observeResize(observed, update);
+    return () => {
+      aligned.current = null;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
+      stopObserving();
+    };
+  }, [
+    api.mounted,
+    update,
+    getTarget,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- update reads the latest props; a new anchor or option re-places and re-observes.
+    anchor,
+    optionsKey,
+  ]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the item-aligned list once its height cap has rendered.
+  useLayoutEffect(() => {
+    const pending = aligned.current;
+    if (pending?.scrollTop == null || !placement?.itemAligned) return;
+    const list = el.current?.querySelector<HTMLElement>("[data-list-root]");
+    if (list) list.scrollTop = pending.scrollTop;
+    pending.scrollTop = null;
+  });
+  const state = {
+    open: api.open,
+    side: placement?.itemAligned ? "none" : (placement?.side ?? side),
+    align: placement?.align ?? align,
+    anchorHidden: false,
+  };
   const style = {
     // Translate rather than top/left: a fixed element's shrink-to-fit width depends on its left.
     position: "fixed",
@@ -963,7 +1123,7 @@ function PopupPositioner({
       role: "presentation",
       style,
       "data-side": state.side,
-      "data-align": align,
+      "data-align": state.align,
       ...(api.open ? { "data-open": "" } : { "data-closed": "" }),
       ...(api.instant ? { "data-instant": "" } : {}),
       hidden: !api.mounted || undefined,
@@ -1028,19 +1188,28 @@ function usePopupFocus(
     returnTo.current = (document.activeElement as HTMLElement | null) ?? null;
     // Like Base UI, move focus in on the next frame, once the popup is laid out.
     const frame = requestAnimationFrame(() => {
-      // A non-modal popup leaves focus that already moved elsewhere (autoFocus, the user) alone.
       const now = document.activeElement;
-      const modal = (api.kind === "dialog" || api.kind === "alertdialog") && api.modal;
-      if (
-        !modal &&
-        now &&
-        now !== document.body &&
-        now !== returnTo.current &&
-        !popup.contains(now)
-      )
-        return;
-      const target = resolveFocus(initialFocus, api.openType.current, popup, () => fallback(popup));
-      target?.focus({ preventScroll: true });
+      const isDialog = api.kind === "dialog" || api.kind === "alertdialog";
+      // Focus already inside (autoFocus) stays; a non-modal popup also leaves focus the user moved elsewhere.
+      const settled =
+        (now && now !== popup && popup.contains(now)) ||
+        (!(isDialog && api.modal) &&
+          now &&
+          now !== document.body &&
+          now !== returnTo.current &&
+          !popup.contains(now));
+      if (!settled)
+        resolveFocus(initialFocus, api.openType.current, popup, () => fallback(popup))?.focus({
+          preventScroll: true,
+        });
+      // Lists open scrolled to their selected or active item, whatever the pointer modality.
+      if (!isDialog && api.kind !== "tooltip" && api.kind !== "previewcard") {
+        const active = document.activeElement;
+        (active instanceof HTMLElement && popup.contains(active) && active.matches(LIST_ITEM)
+          ? active
+          : popup.querySelector(ACTIVE_ITEM)
+        )?.scrollIntoView({ block: "nearest" });
+      }
     });
     const keyboard =
       api.openType.current === "keyboard" ||
@@ -1159,7 +1328,8 @@ function PopupView({
         : {}),
       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
         // Modal dialogs keep Tab inside.
-        if (!isDialog || !api.modal || event.key !== "Tab") return;
+        // A nested popup's Tab (bubbled through the React tree) already moved focus.
+        if (!isDialog || !api.modal || event.key !== "Tab" || event.defaultPrevented) return;
         const items = tabbables(event.currentTarget);
         if (items.length === 0) {
           event.preventDefault();
@@ -1561,15 +1731,24 @@ function useTypeahead() {
   const buffer = useRef({ text: "", at: 0 });
   return (key: string, items: HTMLElement[], from: number) => {
     const now = performance.now();
-    buffer.current = {
-      text: (now - buffer.current.at < 500 ? buffer.current.text : "") + key.toLowerCase(),
-      at: now,
-    };
-    const ordered = [...items.slice(from + 1), ...items.slice(0, from + 1)];
-    return ordered.find((el) =>
-      (el.textContent ?? "").trim().toLowerCase().startsWith(buffer.current.text),
-    );
+    const text = (now - buffer.current.at < 500 ? buffer.current.text : "") + key.toLowerCase();
+    buffer.current = { text, at: now };
+    // Repeating one letter cycles through the items starting with it.
+    const query = [...text].every((c) => c === text[0]) ? text[0]! : text;
+    // A growing query may still match the current item; a cycling one moves on.
+    const start = query.length > 1 ? Math.max(0, from) : from + 1;
+    const ordered = [...items.slice(start), ...items.slice(0, start)];
+    return ordered.find((el) => (el.textContent ?? "").trim().toLowerCase().startsWith(query));
   };
+}
+/** Items per visible page of the list's scroller (unbounded when it doesn't scroll). */
+function pageStep(items: readonly HTMLElement[], current: number) {
+  const item = items[Math.max(0, current)];
+  let box = item?.parentElement ?? null;
+  while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
+  const height = item?.offsetHeight ?? 0;
+  if (!box || box === document.body || box === document.documentElement || !height) return Infinity;
+  return Math.max(1, Math.floor(box.clientHeight / height) - 1);
 }
 function listKeyDown(
   event: KeyboardEvent<HTMLElement>,
@@ -1589,7 +1768,13 @@ function listKeyDown(
         : (items[current - 1] ?? (loop ? items.at(-1) : items[current]));
   else if (event.key === "Home") next = items[0];
   else if (event.key === "End") next = items.at(-1);
-  else if (
+  else if (event.key === "PageDown" || event.key === "PageUp") {
+    const step = pageStep(items, current);
+    next =
+      items[
+        Math.max(0, Math.min(items.length - 1, current + (event.key === "PageDown" ? step : -step)))
+      ];
+  } else if (
     event.key.length === 1 &&
     !event.ctrlKey &&
     !event.metaKey &&
@@ -1698,7 +1883,11 @@ function MenuPopup(props: PopupPartProps) {
             api.getTrigger()?.focus();
           }
         }
-        if (event.key === "Tab") api.setOpen(false, event, "focus-out");
+        if (event.key === "Tab") {
+          let root = api;
+          while (root.parent?.kind === "menu") root = root.parent;
+          tabFromTrigger(root, event);
+        }
       }}
     />
   );
@@ -2241,7 +2430,7 @@ function SelectValue({
     "span",
     { ...props, children: content },
     { value: select.value, placeholder: empty },
-    empty ? { "data-placeholder": "" } : {},
+    { "data-select-value": "", ...(empty ? { "data-placeholder": "" } : {}) },
   );
 }
 function SelectIcon(props: PartProps<"span", object>) {
@@ -2249,6 +2438,7 @@ function SelectIcon(props: PartProps<"span", object>) {
 }
 function SelectPopup(props: PopupPartProps) {
   const select = useSelect();
+  const api = usePopup("select");
   return (
     <PopupView
       kind="select"
@@ -2256,7 +2446,9 @@ function SelectPopup(props: PopupPartProps) {
       role="presentation"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         props.onKeyDown?.(event);
-        if (!event.defaultPrevented) listKeyDown(event, '[role="option"]', select.typeahead, false);
+        if (event.defaultPrevented) return;
+        if (event.key === "Tab") tabFromTrigger(api, event);
+        else listKeyDown(event, '[role="option"]', select.typeahead, false);
       }}
     />
   );
@@ -2397,6 +2589,7 @@ export declare namespace Select {
 }
 
 export {
+  pageStep,
   usePopup,
   usePopupRoot,
   RootView,

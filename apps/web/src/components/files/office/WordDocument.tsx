@@ -1,5 +1,6 @@
+/* oxlint-disable react/no-unstable-nested-components -- The overlay callback is a render function, not a component. */
 import { msg } from "@t3tools/shared/i18n/react";
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { m } from "~/i18n/messages";
 import { FileSurfaceLoading } from "../fileSurfaceChrome";
 import { OfficePages, type PaintPage } from "./OfficePages";
@@ -8,7 +9,9 @@ import { FrameText, paintFrame, useOfficeDocument, type OfficeEngine } from "./o
 const openDocument = (engine: OfficeEngine, bytes: ArrayBuffer, signal: AbortSignal) =>
   engine.call("docx", { bytes }, { transfer: [bytes], signal });
 const describe = (model: { pages: readonly unknown[] }) =>
-  m(msg("{count, plural, one {{count} page} other {{count} pages}}", { count: model.pages.length }));
+  m(
+    msg("{count, plural, one {{count} page} other {{count} pages}}", { count: model.pages.length }),
+  );
 
 export default function WordDocument(props: {
   bytes: ArrayBuffer;
@@ -18,13 +21,16 @@ export default function WordDocument(props: {
   const { bytes, onDetails, onError } = props;
   const opened = useOfficeDocument(bytes, openDocument, describe, onDetails, onError);
   const scroll = useRef<((index: number, y?: number) => void) | null>(null);
-  const paint = useMemo<PaintPage | undefined>(
-    () =>
-      opened &&
-      (async (index, canvas, scale) =>
-        paintFrame(canvas, opened.model.pages[index]!, opened.images, scale * (window.devicePixelRatio || 1))),
-    [opened],
-  );
+  const paint: PaintPage | undefined =
+    opened &&
+    (async (index, canvas, scale) =>
+      paintFrame(
+        canvas,
+        opened.model.pages[index]!,
+        opened.images,
+        scale * (window.devicePixelRatio || 1),
+      ));
+
   if (!opened || !paint) return <FileSurfaceLoading />;
   const { model } = opened;
   return (

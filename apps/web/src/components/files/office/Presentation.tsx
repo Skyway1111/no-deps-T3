@@ -1,6 +1,6 @@
 /* oxlint-disable react/no-unstable-nested-components -- These callbacks return overlays, and are invoked as render functions. */
 import { msg, T, useGT } from "@t3tools/shared/i18n/react";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "~/ui-core/icons";
 import {
   FileSurfaceAction,
@@ -18,7 +18,11 @@ const openPresentation = async (engine: OfficeEngine, bytes: ArrayBuffer, signal
   return model;
 };
 const describe = (model: { slides: readonly unknown[] }) =>
-  m(msg("{count, plural, one {{count} slide} other {{count} slides}}", { count: model.slides.length }));
+  m(
+    msg("{count, plural, one {{count} slide} other {{count} slides}}", {
+      count: model.slides.length,
+    }),
+  );
 
 export default function Presentation(props: {
   bytes: ArrayBuffer;
@@ -30,13 +34,16 @@ export default function Presentation(props: {
   const [page, setPage] = useState(0);
   const scroll = useRef<((index: number, y?: number) => void) | null>(null);
   const opened = useOfficeDocument(bytes, openPresentation, describe, onDetails, onError);
-  const paint = useMemo<PaintPage | undefined>(
-    () =>
-      opened &&
-      (async (index, canvas, scale) =>
-        paintFrame(canvas, opened.model.slides[index]!, opened.images, scale * (window.devicePixelRatio || 1))),
-    [opened],
-  );
+  const paint: PaintPage | undefined =
+    opened &&
+    (async (index, canvas, scale) =>
+      paintFrame(
+        canvas,
+        opened.model.slides[index]!,
+        opened.images,
+        scale * (window.devicePixelRatio || 1),
+      ));
+
   if (!opened || !paint) return <FileSurfaceLoading />;
   const slides = opened.model.slides;
   const select = (index: number) => {

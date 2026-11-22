@@ -136,7 +136,11 @@ function PdfPage(props: {
           return (
             // oxlint-disable-next-line react/no-array-index-key -- Runs keep their reading order within an immutable page.
             <Fragment key={position}>
-              <span role="presentation" className={hit ? "pdf-find-match" : undefined} style={style}>
+              <span
+                role="presentation"
+                className={hit ? "pdf-find-match" : undefined}
+                style={style}
+              >
                 {span.str}
               </span>
               {span.hasEOL ? <br /> : null}
@@ -263,6 +267,8 @@ export default function PdfViewer(props: {
       clearTimeout(timeout);
     };
   }, [props.src, revision, savedPosition]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Release a replaced or unmounted document's embedded fonts from the page's font set.
+  useEffect(() => () => pdf?.destroy(), [pdf]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Measure the PDF viewport before paint and observe resizes for fit-width sizing and visible-page selection.
   useLayoutEffect(() => {
     const node = scroll.current;

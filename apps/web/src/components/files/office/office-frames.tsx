@@ -28,7 +28,9 @@ export function useOfficeDocument<T extends { images: OfficeImage[] }>(
       .then(async (model) => {
         images = await Promise.all(
           model.images.map((image) =>
-            officeImageBitmap(new Blob([image.bytes as Uint8Array<ArrayBuffer>], { type: image.mime })).catch(() => null),
+            officeImageBitmap(
+              new Blob([image.bytes as Uint8Array<ArrayBuffer>], { type: image.mime }),
+            ).catch(() => null),
           ),
         );
         if (controller.signal.aborted) return images.forEach((bitmap) => bitmap?.close());
@@ -50,7 +52,9 @@ export function useOfficeDocument<T extends { images: OfficeImage[] }>(
 function shapePath(context: CanvasRenderingContext2D, item: Extract<Paint, { t: "rect" }>) {
   const { x, y, w, h } = item;
   const polygon = (points: number[][]) => {
-    points.forEach(([px, py], i) => (i ? context.lineTo(x + px! * w, y + py! * h) : context.moveTo(x + px! * w, y + py! * h)));
+    points.forEach(([px, py], i) =>
+      i ? context.lineTo(x + px! * w, y + py! * h) : context.moveTo(x + px! * w, y + py! * h),
+    );
     context.closePath();
   };
   context.beginPath();
@@ -62,34 +66,156 @@ function shapePath(context: CanvasRenderingContext2D, item: Extract<Paint, { t: 
     case "roundRect":
     case "flowChartAlternateProcess":
     case "flowChartTerminator":
-      context.roundRect(x, y, w, h, Math.min(w, h) * (item.shape === "flowChartTerminator" ? 0.5 : 0.17));
+      context.roundRect(
+        x,
+        y,
+        w,
+        h,
+        Math.min(w, h) * (item.shape === "flowChartTerminator" ? 0.5 : 0.17),
+      );
       break;
     case "triangle":
-      polygon([[0.5, 0], [1, 1], [0, 1]]);
+      polygon([
+        [0.5, 0],
+        [1, 1],
+        [0, 1],
+      ]);
       break;
     case "rtTriangle":
-      polygon([[0, 0], [1, 1], [0, 1]]);
+      polygon([
+        [0, 0],
+        [1, 1],
+        [0, 1],
+      ]);
       break;
     case "diamond":
     case "flowChartDecision":
-      polygon([[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]]);
+      polygon([
+        [0.5, 0],
+        [1, 0.5],
+        [0.5, 1],
+        [0, 0.5],
+      ]);
       break;
     case "parallelogram":
-      polygon([[0.25, 0], [1, 0], [0.75, 1], [0, 1]]);
+      polygon([
+        [0.25, 0],
+        [1, 0],
+        [0.75, 1],
+        [0, 1],
+      ]);
       break;
     case "hexagon":
-      polygon([[0.25, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0.25, 1], [0, 0.5]]);
+      polygon([
+        [0.25, 0],
+        [0.75, 0],
+        [1, 0.5],
+        [0.75, 1],
+        [0.25, 1],
+        [0, 0.5],
+      ]);
       break;
     case "chevron":
     case "homePlate":
     case "pentagon":
-      polygon([[0, 0], [0.8, 0], [1, 0.5], [0.8, 1], [0, 1], ...(item.shape === "chevron" ? [[0.2, 0.5]] : [])]);
+      polygon([
+        [0, 0],
+        [0.8, 0],
+        [1, 0.5],
+        [0.8, 1],
+        [0, 1],
+        ...(item.shape === "chevron" ? [[0.2, 0.5]] : []),
+      ]);
       break;
     case "rightArrow":
-      polygon([[0, 0.25], [0.7, 0.25], [0.7, 0], [1, 0.5], [0.7, 1], [0.7, 0.75], [0, 0.75]]);
+      polygon([
+        [0, 0.25],
+        [0.7, 0.25],
+        [0.7, 0],
+        [1, 0.5],
+        [0.7, 1],
+        [0.7, 0.75],
+        [0, 0.75],
+      ]);
       break;
     case "leftArrow":
-      polygon([[1, 0.25], [0.3, 0.25], [0.3, 0], [0, 0.5], [0.3, 1], [0.3, 0.75], [1, 0.75]]);
+      polygon([
+        [1, 0.25],
+        [0.3, 0.25],
+        [0.3, 0],
+        [0, 0.5],
+        [0.3, 1],
+        [0.3, 0.75],
+        [1, 0.75],
+      ]);
+      break;
+    case "upArrow":
+      polygon([
+        [0.25, 1],
+        [0.25, 0.3],
+        [0, 0.3],
+        [0.5, 0],
+        [1, 0.3],
+        [0.75, 0.3],
+        [0.75, 1],
+      ]);
+      break;
+    case "downArrow":
+      polygon([
+        [0.25, 0],
+        [0.25, 0.7],
+        [0, 0.7],
+        [0.5, 1],
+        [1, 0.7],
+        [0.75, 0.7],
+        [0.75, 0],
+      ]);
+      break;
+    case "plus":
+      polygon([
+        [0.25, 0],
+        [0.75, 0],
+        [0.75, 0.25],
+        [1, 0.25],
+        [1, 0.75],
+        [0.75, 0.75],
+        [0.75, 1],
+        [0.25, 1],
+        [0.25, 0.75],
+        [0, 0.75],
+        [0, 0.25],
+        [0.25, 0.25],
+      ]);
+      break;
+    case "octagon":
+      polygon([
+        [0.29, 0],
+        [0.71, 0],
+        [1, 0.29],
+        [1, 0.71],
+        [0.71, 1],
+        [0.29, 1],
+        [0, 0.71],
+        [0, 0.29],
+      ]);
+      break;
+    case "snip1Rect":
+      polygon([
+        [0, 0],
+        [0.83, 0],
+        [1, 0.17],
+        [1, 1],
+        [0, 1],
+      ]);
+      break;
+    case "star5":
+      polygon(
+        Array.from({ length: 10 }, (_, i) => {
+          const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+          const radius = i % 2 ? 0.19 : 0.5;
+          return [0.5 + radius * Math.cos(angle), 0.5 + radius * 1.05 * Math.sin(angle) + 0.03];
+        }),
+      );
       break;
     default:
       context.rect(x, y, w, h);
@@ -97,7 +223,12 @@ function shapePath(context: CanvasRenderingContext2D, item: Extract<Paint, { t: 
 }
 
 /** Paints a laid-out page or slide at `scale` device pixels per layout pixel. */
-export function paintFrame(canvas: HTMLCanvasElement, frame: OfficeFrame, images: readonly (ImageBitmap | null)[], scale: number) {
+export function paintFrame(
+  canvas: HTMLCanvasElement,
+  frame: OfficeFrame,
+  images: readonly (ImageBitmap | null)[],
+  scale: number,
+) {
   canvas.width = Math.max(1, Math.round(frame.width * scale));
   canvas.height = Math.max(1, Math.round(frame.height * scale));
   const context = canvas.getContext("2d");
@@ -134,7 +265,20 @@ export function paintFrame(canvas: HTMLCanvasElement, frame: OfficeFrame, images
       context.stroke();
     } else if (item.t === "image") {
       const bitmap = images[item.image];
-      if (bitmap) context.drawImage(bitmap, item.x, item.y, item.w, item.h);
+      const [l, t, r, b] = item.crop ?? [0, 0, 0, 0];
+      if (bitmap && item.crop)
+        context.drawImage(
+          bitmap,
+          bitmap.width * l,
+          bitmap.height * t,
+          bitmap.width * (1 - l - r),
+          bitmap.height * (1 - t - b),
+          item.x,
+          item.y,
+          item.w,
+          item.h,
+        );
+      else if (bitmap) context.drawImage(bitmap, item.x, item.y, item.w, item.h);
       else {
         context.fillStyle = "#e5e5e5";
         context.fillRect(item.x, item.y, item.w, item.h);
@@ -152,7 +296,10 @@ export function paintFrame(canvas: HTMLCanvasElement, frame: OfficeFrame, images
 }
 
 /** Selectable, transparent copies of a frame's text over its canvas, with links a reader can follow. */
-export function FrameText(props: { frame: OfficeFrame; onInternalLink?: (target: string) => void }) {
+export function FrameText(props: {
+  frame: OfficeFrame;
+  onInternalLink?: (target: string) => void;
+}) {
   const { frame } = props;
   return (
     <div
@@ -181,7 +328,8 @@ export function FrameText(props: { frame: OfficeFrame; onInternalLink?: (target:
               cursor: url || internal ? "pointer" : "text",
             }}
             onClick={(event) => {
-              if ((url || internal) && event.button === 0 && (getSelection()?.isCollapsed ?? true)) follow();
+              if ((url || internal) && event.button === 0 && (getSelection()?.isCollapsed ?? true))
+                follow();
             }}
             onKeyDown={(event) => {
               if ((url || internal) && event.key === "Enter") {

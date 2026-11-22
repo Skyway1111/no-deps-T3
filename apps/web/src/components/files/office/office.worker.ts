@@ -20,7 +20,11 @@ export type OfficeMethods = {
   readonly pptx: Method<{ readonly bytes: ArrayBuffer }, PresentationModel>;
   readonly workbook: Method<
     { readonly bytes: ArrayBuffer; readonly view: WorkbookView },
-    { readonly tabs: readonly { index: number; name: string }[]; readonly active: number; readonly styles: readonly CellStyle[] }
+    {
+      readonly tabs: readonly { index: number; name: string }[];
+      readonly active: number;
+      readonly styles: readonly CellStyle[];
+    }
   >;
   readonly sheet: Method<{ readonly sheet: number }, SheetData>;
 };
@@ -39,7 +43,9 @@ serveWorker<OfficeMethods>({
   async workbook({ bytes }) {
     state.workbook = await openXlsx(bytes);
     const { workbook } = state.workbook;
-    const tabs = workbook.sheets.flatMap((sheet, index) => (sheet.hidden ? [] : [{ index, name: sheet.name }]));
+    const tabs = workbook.sheets.flatMap((sheet, index) =>
+      sheet.hidden ? [] : [{ index, name: sheet.name }],
+    );
     const active = tabs.find((tab) => tab.index === workbook.active)?.index ?? tabs[0]?.index ?? -1;
     return { tabs, active, styles: workbook.styles };
   },

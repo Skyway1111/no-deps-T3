@@ -544,6 +544,7 @@ class DndManager {
       onMove: (coordinates) => {
         this.pointer = coordinates;
         this.update();
+        if (native instanceof KeyboardEvent) this.revealKeyboardTarget();
       },
       onEnd: finish(false),
       onCancel: finish(true),
@@ -625,10 +626,12 @@ class DndManager {
     const node = this.draggables.get(active.id)?.node.current;
     const activeNodeRect = translateRect(initialRect, { x: -scroll.x, y: -scroll.y });
     const parent = node?.parentElement;
+    // Pointer coordinates are client-space; keyboard ones are already drag-start rects.
+    const keyboard = activatorEvent instanceof KeyboardEvent;
     const raw = {
       ...ZERO,
-      x: pointer.x - this.origin.x + scroll.x,
-      y: pointer.y - this.origin.y + scroll.y,
+      x: pointer.x - this.origin.x + (keyboard ? 0 : scroll.x),
+      y: pointer.y - this.origin.y + (keyboard ? 0 : scroll.y),
     };
     const transform = (this.props.modifiers ?? []).reduce(
       (t, modifier) =>
@@ -672,6 +675,25 @@ class DndManager {
         collisions: this.collisions,
         delta: transform,
       });
+    }
+  }
+
+  /** Scrolls the nearest clipping ancestor so a keyboard-moved item stays in view. */
+  private revealKeyboardTarget() {
+    const target = this.collisionRect;
+    if (!target) return;
+    const scroll = this.scrollDelta();
+    const r = translateRect(target, { x: -scroll.x, y: -scroll.y });
+    const past = (lo: number, hi: number, min: number, max: number) =>
+      lo < min ? lo - min : hi > max ? hi - max : 0;
+    for (const el of this.ancestors) {
+      const v = viewportRect(el);
+      const top = past(r.top, r.bottom, v.top, v.bottom);
+      const left = past(r.left, r.right, v.left, v.right);
+      if (top || left) {
+        el.scrollBy({ top, left, behavior: "smooth" });
+        return;
+      }
     }
   }
 

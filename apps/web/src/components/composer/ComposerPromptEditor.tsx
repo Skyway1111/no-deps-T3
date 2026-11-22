@@ -1,5 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
-import { COMPOSER_CONTEXT_CLIPBOARD_MIME, encodeComposerContextClipboardHtml } from "@t3tools/shared/composerContextClipboard";
+import {
+  COMPOSER_CONTEXT_CLIPBOARD_MIME,
+  encodeComposerContextClipboardHtml,
+} from "@t3tools/shared/composerContextClipboard";
 import {
   Fragment,
   use,
@@ -9,14 +12,22 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type FormEvent as ReactFormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
 } from "react";
 
-import { clampCollapsedComposerCursor, collapseExpandedComposerCursor, expandCollapsedComposerCursor, pastedPathQueryLength } from "~/composer-logic";
+import {
+  clampCollapsedComposerCursor,
+  collapseExpandedComposerCursor,
+  expandCollapsedComposerCursor,
+  pastedPathQueryLength,
+} from "~/composer-logic";
 import { indentCodeBlock, selectionInOneCodeBlock } from "~/composer-code-block";
-import { collectComposerPromptInlineTokens, selectionTouchesMentionBoundary } from "~/composer-editor-mentions";
+import { listIndentForTab, listOutdentForTab } from "~/composer-list-continuation";
+import {
+  collectComposerPromptInlineTokens,
+  selectionTouchesMentionBoundary,
+} from "~/composer-editor-mentions";
 import { normalizeMarkdownSource, touchesMarkdownSource } from "~/composer-markdown-source";
 import {
   applySkillChipReplacements,
@@ -44,13 +55,33 @@ import { resolveAssistantCitationCommentDismissal } from "../chat/assistantCitat
 import { modelMentionKey, modelMentionKeysAtom } from "../chat/ModelMentionChip";
 import { getTimelinePageScrollKey } from "../chat/pageScrollController";
 import { captureComposerAttachmentInsertion } from "../composerAttachmentInsertion";
-import { createCodeBlockHighlighter, type ComposerCodeBlockHighlighter } from "../composerCodeBlockHighlight";
-import { ComposerContextActionsContext, ComposerContextRecordsContext } from "../composerContextPresentation";
-import { importPastedComposerText, readPastedComposerContext, readPastedPlainText } from "../composerInlineTokenPaste";
+import {
+  createCodeBlockHighlighter,
+  type ComposerCodeBlockHighlighter,
+} from "../composerCodeBlockHighlight";
+import {
+  ComposerContextActionsContext,
+  ComposerContextRecordsContext,
+} from "../composerContextPresentation";
+import {
+  importPastedComposerText,
+  readPastedComposerContext,
+  readPastedPlainText,
+} from "../composerInlineTokenPaste";
 import { didComposerSelectionChangeVisibly } from "../composerSelection";
-import { ComposerCitationCommentContext, RichComposerSkillsContext, composerSkillMeta } from "./ComposerChips";
+import {
+  ComposerCitationCommentContext,
+  RichComposerSkillsContext,
+  composerSkillMeta,
+} from "./ComposerChips";
 import { ComposerDocView } from "./ComposerDocView";
-import { applyFlatSelectionToDom, domSelectionToFlat, isCaretOnVisualEdge, readDocFromDom, revealCaretInScroller } from "./domSync";
+import {
+  applyFlatSelectionToDom,
+  domSelectionToFlat,
+  isCaretOnVisualEdge,
+  readDocFromDom,
+  revealCaretInScroller,
+} from "./domSync";
 import {
   deleteBackward,
   deleteForward,
@@ -92,15 +123,40 @@ import {
   selectionTo,
 } from "./types";
 
-export type { ComposerCitationCommentRequest, ComposerPromptEditorHandle, ComposerPromptEditorProps };
+export type {
+  ComposerCitationCommentRequest,
+  ComposerPromptEditorHandle,
+  ComposerPromptEditorProps,
+};
 
-const SURROUND_CLOSE: Record<string, string> = { "(": ")", "[": "]", "{": "}", "'": "'", '"': '"', "“": "”", "`": "`", "<": ">", "«": "»", "*": "*", _: "_" };
+const SURROUND_CLOSE: Record<string, string> = {
+  "(": ")",
+  "[": "]",
+  "{": "}",
+  "'": "'",
+  '"': '"',
+  "“": "”",
+  "`": "`",
+  "<": ">",
+  "«": "»",
+  "*": "*",
+  _: "_",
+};
 
 export function ComposerPromptEditor(props: ComposerPromptEditorProps) {
   const restoreFocusRef = useRef(false);
   const { onChange: onPromptChange } = props;
-  const [selection, setSelection] = useState<{ value: string; cursor: number; expandedCursor: number } | null>(null);
-  const onChange: ComposerPromptEditorProps["onChange"] = (value, cursor, expandedCursor, ...rest) => {
+  const [selection, setSelection] = useState<{
+    value: string;
+    cursor: number;
+    expandedCursor: number;
+  } | null>(null);
+  const onChange: ComposerPromptEditorProps["onChange"] = (
+    value,
+    cursor,
+    expandedCursor,
+    ...rest
+  ) => {
     setSelection({ value, cursor, expandedCursor });
     onPromptChange(value, cursor, expandedCursor, ...rest);
   };
@@ -121,25 +177,65 @@ export function ComposerPromptEditor(props: ComposerPromptEditorProps) {
 
 export const ComposerPromptEditorTiptap = ComposerPromptEditor;
 
-function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialExpandedCursor: number; restoreFocusRef: RefObject<boolean> }) {
+function ComposerPromptEditorInner(
+  props: ComposerPromptEditorProps & {
+    initialExpandedCursor: number;
+    restoreFocusRef: RefObject<boolean>;
+  },
+) {
   const {
-    value, cursor, richTextEnabled, literalText = false, contextRecords, buildContextClipboardFragment,
-    importContextFragment, skills, disabled, placeholder, ariaLabel, suggestionListId, activeSuggestionId,
-    isPathQueryActive, containerClassName, className, placeholderClassName, placeholderSuffix,
-    onChange, onVisibleSelectionChange, onCommandKeyDown, onPageScrollKeyDown, onPageScrollKeyUp,
-    onPageScrollRelease, onCitationSubmitAndSend, onCitationDraftSave, onPaste, editorRef, restoreFocusRef,
+    value,
+    cursor,
+    richTextEnabled,
+    literalText = false,
+    contextRecords,
+    buildContextClipboardFragment,
+    importContextFragment,
+    skills,
+    disabled,
+    placeholder,
+    ariaLabel,
+    suggestionListId,
+    activeSuggestionId,
+    isPathQueryActive,
+    containerClassName,
+    className,
+    placeholderClassName,
+    placeholderSuffix,
+    onChange,
+    onVisibleSelectionChange,
+    onCommandKeyDown,
+    onPageScrollKeyDown,
+    onPageScrollKeyUp,
+    onPageScrollRelease,
+    onCitationSubmitAndSend,
+    onCitationDraftSave,
+    onPaste,
+    editorRef,
+    restoreFocusRef,
   } = props;
 
   const richText = !literalText && (richTextEnabled ?? false);
   const clampCursor = (t: string, p: number) =>
-    literalText ? Math.max(0, Math.min(t.length, Number.isFinite(p) ? Math.floor(p) : t.length)) : clampCollapsedComposerCursor(t, p);
-  const expandCursor = (t: string, p: number) => (literalText ? p : expandCollapsedComposerCursor(t, p));
+    literalText
+      ? Math.max(0, Math.min(t.length, Number.isFinite(p) ? Math.floor(p) : t.length))
+      : clampCollapsedComposerCursor(t, p);
+  const expandCursor = (t: string, p: number) =>
+    literalText ? p : expandCollapsedComposerCursor(t, p);
 
   const { environmentId } = use(ComposerContextActionsContext);
   const modelKeys = useAtomValue(modelMentionKeysAtom(environmentId ?? ""));
   const skillLabelFor = useStableCallback((name: string) => composerSkillMeta(skills, name));
-  const isKnownModel = useStableCallback((instanceId: string, model: string) => modelKeys.has(modelMentionKey(instanceId, model)));
-  const readCallbacks = useStableCallback(() => ({ onChange, onVisibleSelectionChange, onCommandKeyDown, isPathQueryActive, importContextFragment }));
+  const isKnownModel = useStableCallback((instanceId: string, model: string) =>
+    modelKeys.has(modelMentionKey(instanceId, model)),
+  );
+  const readCallbacks = useStableCallback(() => ({
+    onChange,
+    onVisibleSelectionChange,
+    onCommandKeyDown,
+    isPathQueryActive,
+    importContextFragment,
+  }));
 
   const initialCursor = clampCursor(value, cursor);
   const initialExpandedCursor = Math.max(0, Math.min(value.length, props.initialExpandedCursor));
@@ -151,7 +247,12 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
       isKnownModel: (inst, mod) => modelKeys.has(modelMentionKey(inst, mod)),
     });
     const map = serializeEditorDoc(doc);
-    return { doc, selection: collapsedSelection(markdownToFlat(map, serializedMarkdownOffset(value, map.value, initialExpandedCursor))) };
+    return {
+      doc,
+      selection: collapsedSelection(
+        markdownToFlat(map, serializedMarkdownOffset(value, map.value, initialExpandedCursor)),
+      ),
+    };
   });
 
   const [domRevision, setDomRevision] = useState(0);
@@ -174,26 +275,46 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
   const appliedControlledRef = useRef(false);
   const citationReqRef = useRef<ComposerCitationCommentRequest | null>(null);
   const citationDraftRef = useRef<{ key: string; comment: string } | null>(null);
-  const snapshotRef = useRef({ value, cursor: initialCursor, expandedCursor: initialExpandedCursor, contextIds: literalText ? [] : collectInlineContextIds(value) });
+  const snapshotRef = useRef({
+    value,
+    cursor: initialCursor,
+    expandedCursor: initialExpandedCursor,
+    contextIds: literalText ? [] : collectInlineContextIds(value),
+  });
   const selRangeRef = useRef({ start: initialExpandedCursor, end: initialExpandedCursor });
 
   const highlighterRef = useRef<ComposerCodeBlockHighlighter | null>(null);
   highlighterRef.current ??= createCodeBlockHighlighter({
-    resolveTheme: () => resolveDiffThemeName(typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"),
+    resolveTheme: () =>
+      resolveDiffThemeName(
+        typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+          ? "dark"
+          : "light",
+      ),
     onUpdate: () => setHighlightTick((t) => t + 1),
   });
 
   useEffect(() => {
     destroyedRef.current = false;
     const hl = highlighterRef.current;
-    return () => { destroyedRef.current = true; hl?.dispose(); };
+    return () => {
+      destroyedRef.current = true;
+      hl?.dispose();
+    };
   }, []);
 
-  useEffect(() => { if (richText) highlighterRef.current?.syncDoc(editorState.doc, true); }, [editorState.doc, richText]);
+  useEffect(() => {
+    if (richText) highlighterRef.current?.syncDoc(editorState.doc, true);
+  }, [editorState.doc, richText]);
 
-  const emitChange = (e: ComposerDocChangeEvent) => { for (const fn of listenersRef.current) fn(e); };
+  const emitChange = (e: ComposerDocChangeEvent) => {
+    for (const fn of listenersRef.current) fn(e);
+  };
 
-  const notifyHost = (next: ComposerEditorState, opts?: { silentSelection?: boolean; skipEmit?: boolean }) => {
+  const notifyHost = (
+    next: ComposerEditorState,
+    opts?: { silentSelection?: boolean; skipEmit?: boolean },
+  ) => {
     const map = serializeEditorDoc(next.doc);
     const contextIds = literalText ? [] : [...map.contextIds];
     const fromFlat = selectionFrom(next.selection);
@@ -216,26 +337,60 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
       prev.contextIds.every((id, i) => id === contextIds[i])
     );
     if (!changed) {
-      if (didComposerSelectionChangeVisibly(prevRange, nextRange)) readCallbacks().onVisibleSelectionChange?.();
+      if (didComposerSelectionChangeVisibly(prevRange, nextRange))
+        readCallbacks().onVisibleSelectionChange?.();
       return;
     }
     if (prev.value === nextValue && nextValue !== latestValueRef.current) return;
-    snapshotRef.current = { value: nextValue, cursor: nextCursor, expandedCursor: nextExpanded, contextIds };
-    const suppressTrigger = literalText || resolveFlatOffset(next.doc, fromFlat).block.kind === "codeBlock" || isCaretAdjacentToChip(next.doc, fromFlat);
-    readCallbacks().onChange(nextValue, nextCursor, nextExpanded, suppressTrigger, contextIds, prev.value !== nextValue);
+    snapshotRef.current = {
+      value: nextValue,
+      cursor: nextCursor,
+      expandedCursor: nextExpanded,
+      contextIds,
+    };
+    const suppressTrigger =
+      literalText ||
+      resolveFlatOffset(next.doc, fromFlat).block.kind === "codeBlock" ||
+      isCaretAdjacentToChip(next.doc, fromFlat);
+    readCallbacks().onChange(
+      nextValue,
+      nextCursor,
+      nextExpanded,
+      suppressTrigger,
+      contextIds,
+      prev.value !== nextValue,
+    );
   };
 
   const commit = (
     next: ComposerEditResult,
     opts?: {
-      addToHistory?: boolean; clipboardEvent?: "paste" | "cut"; compositionReplace?: boolean; isComposition?: boolean;
-      silentSelection?: boolean; skipEmit?: boolean; revealCaret?: boolean; bumpDom?: boolean; changeEvent?: ComposerDocChangeEvent;
+      addToHistory?: boolean;
+      clipboardEvent?: "paste" | "cut";
+      compositionReplace?: boolean;
+      isComposition?: boolean;
+      silentSelection?: boolean;
+      skipEmit?: boolean;
+      revealCaret?: boolean;
+      bumpDom?: boolean;
+      changeEvent?: ComposerDocChangeEvent;
     },
   ) => {
     const prev = stateRef.current;
     const docChanged = next.doc !== prev.doc;
     if (docChanged && opts?.addToHistory !== false) {
-      historyRef.current.record(prev, { docChanged: true, clipboardEvent: opts?.clipboardEvent, compositionReplace: opts?.compositionReplace, isComposition: opts?.isComposition, changeKind: next.changeKind ?? "other" }, Date.now(), next.inputRuleUndo);
+      historyRef.current.record(
+        prev,
+        {
+          docChanged: true,
+          clipboardEvent: opts?.clipboardEvent,
+          compositionReplace: opts?.compositionReplace,
+          isComposition: opts?.isComposition,
+          changeKind: next.changeKind ?? "other",
+        },
+        Date.now(),
+        next.inputRuleUndo,
+      );
     } else if (!docChanged && !sameSelection(prev.selection, next.selection)) {
       historyRef.current.clearInputRuleUndo();
     }
@@ -249,11 +404,18 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     if (opts?.bumpDom) setDomRevision((r) => r + 1);
     setEditorState(finalState);
     if (docChanged) {
-      emitChange(opts?.changeEvent ?? {
-        from: selectionFrom(prev.selection),
-        to: selectionTo(prev.selection),
-        insertedLength: Math.max(0, docFlatLength(finalState.doc) - docFlatLength(prev.doc) + (selectionTo(prev.selection) - selectionFrom(prev.selection))),
-      });
+      emitChange(
+        opts?.changeEvent ?? {
+          from: selectionFrom(prev.selection),
+          to: selectionTo(prev.selection),
+          insertedLength: Math.max(
+            0,
+            docFlatLength(finalState.doc) -
+              docFlatLength(prev.doc) +
+              (selectionTo(prev.selection) - selectionFrom(prev.selection)),
+          ),
+        },
+      );
     }
     notifyHost(finalState, opts);
   };
@@ -263,7 +425,12 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     isDestroyed: () => destroyedRef.current,
     isEditable: () => !disabledRef.current,
     getState: () => stateRef.current,
-    subscribeChanges: (fn) => { listenersRef.current.add(fn); return () => { listenersRef.current.delete(fn); }; },
+    subscribeChanges: (fn) => {
+      listenersRef.current.add(fn);
+      return () => {
+        listenersRef.current.delete(fn);
+      };
+    },
     applyEdit: (next, opts) => commit(next, { ...opts, revealCaret: true }),
   };
 
@@ -273,8 +440,13 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     if (document.activeElement === root) {
       syncingSelRef.current = true;
       applyFlatSelectionToDom(root, editorState.selection);
-      if (pendingRevealRef.current) { pendingRevealRef.current = false; revealCaretInScroller(root); }
-      queueMicrotask(() => { syncingSelRef.current = false; });
+      if (pendingRevealRef.current) {
+        pendingRevealRef.current = false;
+        revealCaretInScroller(root);
+      }
+      queueMicrotask(() => {
+        syncingSelRef.current = false;
+      });
     } else {
       pendingRevealRef.current = false;
     }
@@ -286,7 +458,12 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
       const root = domRef.current;
       if (!root || document.activeElement !== root) return;
       const sel = domSelectionToFlat(root, stateRef.current.doc);
-      if (!sel || (sel.anchor === stateRef.current.selection.anchor && sel.head === stateRef.current.selection.head)) return;
+      if (
+        !sel ||
+        (sel.anchor === stateRef.current.selection.anchor &&
+          sel.head === stateRef.current.selection.head)
+      )
+        return;
       commit({ doc: stateRef.current.doc, selection: sel }, { addToHistory: false });
     };
     document.addEventListener("selectionchange", onSel);
@@ -301,7 +478,9 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     if (disabled) {
       if (owner.activeElement === dom) resumeFocusRef.current = true;
       if (!resumeFocusRef.current) return;
-      const cancel = (e: FocusEvent) => { if (!e.composedPath().includes(dom)) resumeFocusRef.current = false; };
+      const cancel = (e: FocusEvent) => {
+        if (!e.composedPath().includes(dom)) resumeFocusRef.current = false;
+      };
       owner.addEventListener("focusin", cancel, true);
       return () => owner.removeEventListener("focusin", cancel, true);
     }
@@ -315,22 +494,40 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
 
   const readSnapshot = () => {
     const map = serializeEditorDoc(stateRef.current.doc);
-    const expanded = Math.max(0, Math.min(map.value.length, flatToMarkdown(map, selectionFrom(stateRef.current.selection))));
-    const next = { value: map.value, cursor: collapseExpandedComposerCursor(map.value, expanded, literalText), expandedCursor: expanded, contextIds: literalText ? [] : [...map.contextIds] };
+    const expanded = Math.max(
+      0,
+      Math.min(map.value.length, flatToMarkdown(map, selectionFrom(stateRef.current.selection))),
+    );
+    const next = {
+      value: map.value,
+      cursor: collapseExpandedComposerCursor(map.value, expanded, literalText),
+      expandedCursor: expanded,
+      contextIds: literalText ? [] : [...map.contextIds],
+    };
     const toMd = flatToMarkdown(map, selectionTo(stateRef.current.selection));
     selRangeRef.current = { start: Math.min(expanded, toMd), end: Math.max(expanded, toMd) };
     snapshotRef.current = next;
     return next;
   };
 
-  const openPendingCitation = (doc: ComposerEditorState["doc"], req: ComposerCitationCommentRequest) => {
+  const openPendingCitation = (
+    doc: ComposerEditorState["doc"],
+    req: ComposerCitationCommentRequest,
+  ) => {
     const map = serializeEditorDoc(doc);
     if (map.value !== req.value) return;
-    const run = map.runs.find((r) => r.kind === "token" && r.nodeName === "composer-citation" && r.mdStart === req.citationStart);
+    const run = map.runs.find(
+      (r) =>
+        r.kind === "token" && r.nodeName === "composer-citation" && r.mdStart === req.citationStart,
+    );
     const chip = run ? adjacentChipAt(doc, run.flatStart, 1)?.chip : null;
     if (chip?.kind === "composer-citation") {
       citationReqRef.current = null;
-      setOpenCitation({ key: chip.citeKey, sourceAnchor: req.sourceAnchor, removeOnCancel: req.insertedSpaces });
+      setOpenCitation({
+        key: chip.citeKey,
+        sourceAnchor: req.sourceAnchor,
+        removeOnCancel: req.insertedSpaces,
+      });
     }
   };
 
@@ -340,7 +537,11 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     if (!draft || !onCitationDraftSave) return;
     const target = findCitationByKey(stateRef.current.doc, draft.key);
     if (!target) return;
-    const dismissal = resolveAssistantCitationCommentDismissal({ reason: "none", draft: draft.comment, savedComment: target.citation.comment });
+    const dismissal = resolveAssistantCitationCommentDismissal({
+      reason: "none",
+      draft: draft.comment,
+      savedComment: target.citation.comment,
+    });
     if (dismissal.kind !== "commit") return;
     const updated = updateCitationComment(stateRef.current.doc, draft.key, dismissal.comment);
     if (updated) onCitationDraftSave(replacedValue, serializeEditorDoc(updated).value);
@@ -355,7 +556,12 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     if (!initial && prev.value === value && prev.cursor === normCursor) return;
 
     const normExpanded = initial ? initialExpandedCursor : expandCursor(value, normCursor);
-    snapshotRef.current = { value, cursor: normCursor, expandedCursor: normExpanded, contextIds: literalText ? [] : collectInlineContextIds(value) };
+    snapshotRef.current = {
+      value,
+      cursor: normCursor,
+      expandedCursor: normExpanded,
+      contextIds: literalText ? [] : collectInlineContextIds(value),
+    };
     selRangeRef.current = { start: normExpanded, end: normExpanded };
     const root = domRef.current;
     const focused = Boolean(root && document.activeElement === root);
@@ -364,17 +570,31 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     let nextDoc = stateRef.current.doc;
     if (prev.value !== value) {
       saveCitationDraft(prev.value);
-      nextDoc = buildComposerDoc(value, skillLabelFor, { styling: richText, literalText, isKnownModel });
+      nextDoc = buildComposerDoc(value, skillLabelFor, {
+        styling: richText,
+        literalText,
+        isKnownModel,
+      });
       historyRef.current.reset();
       emitChange({ from: 0, to: 0, insertedLength: 0, replacedWholeDoc: true });
     }
     const map = serializeEditorDoc(nextDoc);
-    let nextState: ComposerEditorState = { doc: nextDoc, selection: collapsedSelection(markdownToFlat(map, serializedMarkdownOffset(value, map.value, normExpanded))) };
+    let nextState: ComposerEditorState = {
+      doc: nextDoc,
+      selection: collapsedSelection(
+        markdownToFlat(map, serializedMarkdownOffset(value, map.value, normExpanded)),
+      ),
+    };
     if (richText) {
       const normalized = normalizeMarkdownSource(nextState, false);
       if (normalized) {
         const nm = serializeEditorDoc(normalized.doc);
-        nextState = { doc: normalized.doc, selection: collapsedSelection(markdownToFlat(nm, serializedMarkdownOffset(value, nm.value, normExpanded))) };
+        nextState = {
+          doc: normalized.doc,
+          selection: collapsedSelection(
+            markdownToFlat(nm, serializedMarkdownOffset(value, nm.value, normExpanded)),
+          ),
+        };
       }
     }
     stateRef.current = nextState;
@@ -388,16 +608,40 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
         }
       });
     }
-    if (citationReqRef.current?.value === value) openPendingCitation(nextState.doc, citationReqRef.current);
-  }, [clampCursor, cursor, expandCursor, initialExpandedCursor, isKnownModel, literalText, richText, skillLabelFor, value]);
+    if (citationReqRef.current?.value === value)
+      openPendingCitation(nextState.doc, citationReqRef.current);
+  }, [
+    clampCursor,
+    cursor,
+    expandCursor,
+    initialExpandedCursor,
+    isKnownModel,
+    literalText,
+    richText,
+    skillLabelFor,
+    value,
+  ]);
 
   useEffect(() => {
     if (literalText) return;
-    const reps = skillChipReplacements(stateRef.current.doc, (n) => composerSkillMeta(skills, n), (inst, mod) => modelKeys.has(modelMentionKey(inst, mod)));
+    const reps = skillChipReplacements(
+      stateRef.current.doc,
+      (n) => composerSkillMeta(skills, n),
+      (inst, mod) => modelKeys.has(modelMentionKey(inst, mod)),
+    );
     if (reps.length === 0) return;
     const nextDoc = applySkillChipReplacements(stateRef.current.doc, reps);
     const maxLen = docFlatLength(nextDoc);
-    commit({ doc: nextDoc, selection: { anchor: Math.min(stateRef.current.selection.anchor, maxLen), head: Math.min(stateRef.current.selection.head, maxLen) } }, { addToHistory: false, skipEmit: true });
+    commit(
+      {
+        doc: nextDoc,
+        selection: {
+          anchor: Math.min(stateRef.current.selection.anchor, maxLen),
+          head: Math.min(stateRef.current.selection.head, maxLen),
+        },
+      },
+      { addToHistory: false, skipEmit: true },
+    );
   }, [literalText, modelKeys, skills]);
 
   useLayoutEffect(() => {
@@ -409,7 +653,9 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
       applyFlatSelectionToDom(root, stateRef.current.selection);
       revealCaretInScroller(root);
     }
-    return () => { restoreFocusRef.current = document.activeElement === root; };
+    return () => {
+      restoreFocusRef.current = document.activeElement === root;
+    };
   }, [restoreFocusRef]);
 
   const focusAt = (nextCursor: number, exactExpanded?: number) => {
@@ -420,38 +666,86 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     const bounded = clampCursor(snapshotRef.current.value, nextCursor);
     const expanded = exactExpanded ?? expandCursor(snapshotRef.current.value, bounded);
     const map = serializeEditorDoc(stateRef.current.doc);
-    const flatPos = markdownToFlat(map, serializedMarkdownOffset(snapshotRef.current.value, map.value, expanded));
-    commit({ doc: stateRef.current.doc, selection: collapsedSelection(flatPos) }, { addToHistory: false, skipEmit: true, revealCaret: true });
+    const flatPos = markdownToFlat(
+      map,
+      serializedMarkdownOffset(snapshotRef.current.value, map.value, expanded),
+    );
+    commit(
+      { doc: stateRef.current.doc, selection: collapsedSelection(flatPos) },
+      { addToHistory: false, skipEmit: true, revealCaret: true },
+    );
     applyFlatSelectionToDom(root, stateRef.current.selection);
     revealCaretInScroller(root);
     if (bounded === snapshotRef.current.cursor) return;
     snapshotRef.current = { ...snapshotRef.current, cursor: bounded, expandedCursor: expanded };
     selRangeRef.current = { start: expanded, end: expanded };
-    readCallbacks().onChange(snapshotRef.current.value, bounded, expanded, literalText, snapshotRef.current.contextIds, false);
+    readCallbacks().onChange(
+      snapshotRef.current.value,
+      bounded,
+      expanded,
+      literalText,
+      snapshotRef.current.contextIds,
+      false,
+    );
   };
 
-  useImperativeHandle(editorRef, () => ({
-    focus: () => focusAt(snapshotRef.current.cursor, snapshotRef.current.expandedCursor),
-    focusAt: (c) => focusAt(c),
-    focusAtEnd: () => focusAt(literalText ? snapshotRef.current.value.length : collapseExpandedComposerCursor(snapshotRef.current.value, snapshotRef.current.value.length)),
-    readSelectionRange: () => { readSnapshot(); return selRangeRef.current; },
-    captureAttachmentInsertion: () => (controllerRef.current ? captureComposerAttachmentInsertion(controllerRef.current) : undefined),
-    requestCitationComment: (req) => { citationReqRef.current = req; openPendingCitation(stateRef.current.doc, req); },
-    readSnapshot,
-    isCaretOnVisualEdge: (edge) => { const s = readSnapshot(); return isCaretOnVisualEdge(domRef.current, s.value, s.expandedCursor, edge); },
-  }), [focusAt, literalText, readSnapshot]);
+  useImperativeHandle(
+    editorRef,
+    () => ({
+      focus: () => focusAt(snapshotRef.current.cursor, snapshotRef.current.expandedCursor),
+      focusAt: (c) => focusAt(c),
+      focusAtEnd: () =>
+        focusAt(
+          literalText
+            ? snapshotRef.current.value.length
+            : collapseExpandedComposerCursor(
+                snapshotRef.current.value,
+                snapshotRef.current.value.length,
+              ),
+        ),
+      readSelectionRange: () => {
+        readSnapshot();
+        return selRangeRef.current;
+      },
+      captureAttachmentInsertion: () =>
+        controllerRef.current
+          ? captureComposerAttachmentInsertion(controllerRef.current)
+          : undefined,
+      requestCitationComment: (req) => {
+        citationReqRef.current = req;
+        openPendingCitation(stateRef.current.doc, req);
+      },
+      readSnapshot,
+      isCaretOnVisualEdge: (edge) => {
+        const s = readSnapshot();
+        return isCaretOnVisualEdge(domRef.current, s.value, s.expandedCursor, edge);
+      },
+    }),
+    [focusAt, literalText, readSnapshot],
+  );
 
   const runHistory = (dir: "undo" | "redo") => {
     if (disabled) return;
-    const entry = dir === "undo" ? historyRef.current.undo(stateRef.current) : historyRef.current.redo(stateRef.current);
+    const entry =
+      dir === "undo"
+        ? historyRef.current.undo(stateRef.current)
+        : historyRef.current.redo(stateRef.current);
     if (!entry) return;
     let restored = entry;
     if (!literalText) {
-      const stale = skillChipReplacements(entry.doc, skillLabelFor, isKnownModel).filter((r) => r.inline.kind === "text");
+      const stale = skillChipReplacements(entry.doc, skillLabelFor, isKnownModel).filter(
+        (r) => r.inline.kind === "text",
+      );
       if (stale.length > 0) {
         const nextDoc = applySkillChipReplacements(entry.doc, stale);
         const maxLen = docFlatLength(nextDoc);
-        restored = { doc: nextDoc, selection: { anchor: Math.min(entry.selection.anchor, maxLen), head: Math.min(entry.selection.head, maxLen) } };
+        restored = {
+          doc: nextDoc,
+          selection: {
+            anchor: Math.min(entry.selection.anchor, maxLen),
+            head: Math.min(entry.selection.head, maxLen),
+          },
+        };
       }
     }
     commit(restored, { addToHistory: false, revealCaret: true });
@@ -461,155 +755,373 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     const state = stateRef.current;
     const from = selectionFrom(state.selection);
     const to = selectionTo(state.selection);
-    const closer = !literalText && !composingRef.current && text.length === 1 ? SURROUND_CLOSE[text] : undefined;
+    const closer =
+      !literalText && !composingRef.current && text.length === 1 ? SURROUND_CLOSE[text] : undefined;
     if (closer && from < to && !selectionHasNonSourceStyledOrAtom(state.doc, from, to)) {
       const map = serializeEditorDoc(state.doc);
-      if (!selectionTouchesMentionBoundary(map.value, flatToMarkdown(map, from), flatToMarkdown(map, to))) {
-        const edit = (richText ? surroundSelectionWithMark(state, from, to, text) : null) ?? surroundSelectionWithLiterals(state, from, to, text, closer);
-        if (edit) { commit(edit, { revealCaret: true }); return; }
+      if (
+        !selectionTouchesMentionBoundary(
+          map.value,
+          flatToMarkdown(map, from),
+          flatToMarkdown(map, to),
+        )
+      ) {
+        const edit =
+          (richText ? surroundSelectionWithMark(state, from, to, text) : null) ??
+          surroundSelectionWithLiterals(state, from, to, text, closer);
+        if (edit) {
+          commit(edit, { revealCaret: true });
+          return;
+        }
       }
     }
     commit(insertText(state, text, { richText, literalText }), { revealCaret: true });
   };
 
-  const handleBeforeInput = (e: ReactFormEvent<HTMLDivElement>) => {
-    if (disabled) { e.preventDefault(); return; }
-    const native = e.nativeEvent as InputEvent;
-    const type = native.inputType;
-    if (composingRef.current || native.isComposing || type === "insertCompositionText" || type === "deleteCompositionText") return;
-    if ((type === "insertText" || type === "insertReplacementText") && typeof native.data === "string") {
-      e.preventDefault(); handleInsertOrSurround(native.data); return;
+  const handleBeforeInput = useEffectEvent((e: InputEvent) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
+    const type = e.inputType;
+    if (
+      typeof type !== "string" ||
+      composingRef.current ||
+      e.isComposing ||
+      type === "insertCompositionText" ||
+      type === "deleteCompositionText"
+    )
+      return;
+    if ((type === "insertText" || type === "insertReplacementText") && typeof e.data === "string") {
+      e.preventDefault();
+      handleInsertOrSurround(e.data);
+      return;
     }
     if (type === "insertLineBreak" || type === "insertParagraph") {
-      e.preventDefault(); commit(insertLineBreak(stateRef.current, richText), { revealCaret: true }); return;
+      e.preventDefault();
+      commit(insertLineBreak(stateRef.current, richText), { revealCaret: true });
+      return;
     }
     if (type.startsWith("delete") && type.endsWith("Backward")) {
       e.preventDefault();
       if (type === "deleteContentBackward" && selectionEmpty(stateRef.current.selection)) {
         const undoRule = historyRef.current.consumeInputRuleUndo();
-        if (undoRule) { commit({ ...undoRule, changeKind: "delete" }, { revealCaret: true }); return; }
+        if (undoRule) {
+          commit({ ...undoRule, changeKind: "delete" }, { revealCaret: true });
+          return;
+        }
       }
-      const res = deleteBackward(stateRef.current, type === "deleteWordBackward" ? "word" : type === "deleteContentBackward" ? "char" : "line");
+      const res = deleteBackward(
+        stateRef.current,
+        type === "deleteWordBackward" ? "word" : type === "deleteContentBackward" ? "char" : "line",
+      );
       if (res) commit(res, { revealCaret: true });
       return;
     }
     if (type.startsWith("delete") && type.endsWith("Forward")) {
       e.preventDefault();
-      const res = deleteForward(stateRef.current, type === "deleteWordForward" ? "word" : type === "deleteContentForward" ? "char" : "line");
+      const res = deleteForward(
+        stateRef.current,
+        type === "deleteWordForward" ? "word" : type === "deleteContentForward" ? "char" : "line",
+      );
       if (res) commit(res, { revealCaret: true });
       return;
     }
-    if (type === "historyUndo" || type === "historyRedo") { e.preventDefault(); runHistory(type === "historyUndo" ? "undo" : "redo"); return; }
-    if (type === "deleteByCut" || type === "insertFromPaste") { e.preventDefault(); return; }
-    const fmt = richText ? ({ formatBold: "bold", formatItalic: "italic", formatStrikeThrough: "strike" } as const)[type] : undefined;
-    if (fmt) { e.preventDefault(); const res = toggleInlineMark(stateRef.current, fmt); if (res) commit(res, { revealCaret: true }); }
-  };
+    if (type === "historyUndo" || type === "historyRedo") {
+      e.preventDefault();
+      runHistory(type === "historyUndo" ? "undo" : "redo");
+      return;
+    }
+    if (type === "deleteByCut" || type === "insertFromPaste") {
+      e.preventDefault();
+      return;
+    }
+    const fmt = richText
+      ? ({ formatBold: "bold", formatItalic: "italic", formatStrikeThrough: "strike" } as const)[
+          type
+        ]
+      : undefined;
+    if (fmt) {
+      e.preventDefault();
+      const res = toggleInlineMark(stateRef.current, fmt);
+      if (res) commit(res, { revealCaret: true });
+    }
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- native beforeinput listener; React's onBeforeInput wraps legacy textInput, which has no inputType
+  useEffect(() => {
+    const root = domRef.current;
+    if (!root) return;
+    const listener = (e: InputEvent) => handleBeforeInput(e);
+    root.addEventListener("beforeinput", listener);
+    return () => root.removeEventListener("beforeinput", listener);
+  }, []);
 
   const syncDom = (isComposition: boolean) => {
     const root = domRef.current;
     if (!root) return;
     const { doc, selection } = readDocFromDom(root, stateRef.current.doc);
-    commit({ doc, selection, changeKind: "insert" }, { isComposition, bumpDom: true, revealCaret: true });
+    commit(
+      { doc, selection, changeKind: "insert" },
+      { isComposition, bumpDom: true, revealCaret: true },
+    );
   };
 
   const handleKeyDown = (re: ReactKeyboardEvent<HTMLDivElement>) => {
     const ev = re.nativeEvent;
-    if (ev.key === "Control" || ev.key === "Meta" || ev.key === "Alt" || ev.key === "Shift") onPageScrollRelease?.();
+    if (ev.key === "Control" || ev.key === "Meta" || ev.key === "Alt" || ev.key === "Shift")
+      onPageScrollRelease?.();
     if ((ev.key === "PageUp" || ev.key === "PageDown") && domRef.current) {
       const t = domRef.current;
-      const pk = getTimelinePageScrollKey({ altKey: ev.altKey, clientHeight: t.clientHeight, ctrlKey: ev.ctrlKey, defaultPrevented: ev.defaultPrevented, isComposing: ev.isComposing, key: ev.key, keyCode: ev.keyCode, metaKey: ev.metaKey, scrollHeight: t.scrollHeight, scrollTop: t.scrollTop, shiftKey: ev.shiftKey });
+      const pk = getTimelinePageScrollKey({
+        altKey: ev.altKey,
+        clientHeight: t.clientHeight,
+        ctrlKey: ev.ctrlKey,
+        defaultPrevented: ev.defaultPrevented,
+        isComposing: ev.isComposing,
+        key: ev.key,
+        keyCode: ev.keyCode,
+        metaKey: ev.metaKey,
+        scrollHeight: t.scrollHeight,
+        scrollTop: t.scrollTop,
+        shiftKey: ev.shiftKey,
+      });
       if (!pk) onPageScrollRelease?.();
-      else if (onPageScrollKeyDown) { re.preventDefault(); onPageScrollKeyDown(pk); return; }
+      else if (onPageScrollKeyDown) {
+        re.preventDefault();
+        onPageScrollKeyDown(pk);
+        return;
+      }
     }
     if (disabled) return;
     const mac = isMacPlatform(navigator.platform);
     const mod = mac ? ev.metaKey : ev.ctrlKey;
 
     if (isRichTextFormattingShortcut(ev)) {
-      if (readCallbacks().onCommandKeyDown?.(ev.key, ev)) { re.preventDefault(); re.stopPropagation(); return; }
+      if (readCallbacks().onCommandKeyDown?.(ev.key, ev)) {
+        re.preventDefault();
+        re.stopPropagation();
+        return;
+      }
       if (hasCommandForKeyDown(ev)) return;
       if (richText) {
         const k = ev.key.toLowerCase();
-        const mark = k === "b" && !ev.shiftKey ? "bold" : k === "i" && !ev.shiftKey ? "italic" : k === "s" && ev.shiftKey ? "strike" : k === "e" && !ev.shiftKey ? "code" : null;
-        if (mark) { re.preventDefault(); re.stopPropagation(); const r = toggleInlineMark(stateRef.current, mark); if (r) commit(r, { revealCaret: true }); return; }
+        const mark =
+          k === "b" && !ev.shiftKey
+            ? "bold"
+            : k === "i" && !ev.shiftKey
+              ? "italic"
+              : k === "s" && ev.shiftKey
+                ? "strike"
+                : k === "e" && !ev.shiftKey
+                  ? "code"
+                  : null;
+        if (mark) {
+          re.preventDefault();
+          re.stopPropagation();
+          const r = toggleInlineMark(stateRef.current, mark);
+          if (r) commit(r, { revealCaret: true });
+          return;
+        }
       }
     }
     if (mod && !ev.altKey && !ev.isComposing) {
       const k = ev.key.toLowerCase();
       if (k === "z" || (k === "y" && !mac && !ev.shiftKey)) {
-        re.preventDefault(); re.stopPropagation(); runHistory(k === "z" && !ev.shiftKey ? "undo" : "redo"); return;
+        re.preventDefault();
+        re.stopPropagation();
+        runHistory(k === "z" && !ev.shiftKey ? "undo" : "redo");
+        return;
       }
     }
 
     const state = stateRef.current;
     const backArrow = caretLineDirection(state) === "rtl" ? "ArrowRight" : "ArrowLeft";
     const boundary = ev.metaKey
-      ? ev.key === "ArrowLeft" || ev.key === "ArrowRight" ? "lineboundary" : ev.key === "ArrowUp" || ev.key === "ArrowDown" ? "documentboundary" : null
-      : ev.key === "Home" || ev.key === "End" ? "lineboundary" : null;
+      ? ev.key === "ArrowLeft" || ev.key === "ArrowRight"
+        ? "lineboundary"
+        : ev.key === "ArrowUp" || ev.key === "ArrowDown"
+          ? "documentboundary"
+          : null
+      : ev.key === "Home" || ev.key === "End"
+        ? "lineboundary"
+        : null;
     if (mac && boundary && !ev.altKey && !ev.ctrlKey && !ev.isComposing) {
-      if (isThreadNavigationShortcut(ev, appAtomRegistry.get(primaryServerKeybindingsAtom), { context: { editableFocus: true } })) return;
+      if (
+        isThreadNavigationShortcut(ev, appAtomRegistry.get(primaryServerKeybindingsAtom), {
+          context: { editableFocus: true },
+        })
+      )
+        return;
       const domSel = window.getSelection();
-      if (domRef.current && domSel?.anchorNode && domRef.current.contains(domSel.anchorNode) && typeof domSel.modify === "function") {
-        re.preventDefault(); re.stopPropagation();
+      if (
+        domRef.current &&
+        domSel?.anchorNode &&
+        domRef.current.contains(domSel.anchorNode) &&
+        typeof domSel.modify === "function"
+      ) {
+        re.preventDefault();
+        re.stopPropagation();
         const backward = ev.key === "Home" || ev.key === "ArrowUp" || ev.key === backArrow;
         domSel.modify(ev.shiftKey ? "extend" : "move", backward ? "backward" : "forward", boundary);
         const flat = domSelectionToFlat(domRef.current, state.doc);
-        if (flat) commit({ doc: state.doc, selection: flat }, { addToHistory: false, revealCaret: true });
+        if (flat)
+          commit({ doc: state.doc, selection: flat }, { addToHistory: false, revealCaret: true });
         return;
       }
     }
 
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key) && !ev.shiftKey && !ev.altKey && !ev.metaKey && !ev.ctrlKey && !ev.isComposing && selectionEmpty(state.selection)) {
+    if (
+      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key) &&
+      !ev.shiftKey &&
+      !ev.altKey &&
+      !ev.metaKey &&
+      !ev.ctrlKey &&
+      !ev.isComposing &&
+      selectionEmpty(state.selection)
+    ) {
       const dir: -1 | 1 = ev.key === "ArrowUp" || ev.key === backArrow ? -1 : 1;
       const horiz = ev.key === "ArrowLeft" || ev.key === "ArrowRight";
       const atEdge = state.selection.head === (dir === -1 ? 0 : docFlatLength(state.doc));
       const step = horiz || atEdge ? stepCaretAcrossStyledEdge(state, dir) : null;
-      if (step) { re.preventDefault(); re.stopPropagation(); commit(step, { addToHistory: false }); return; }
+      if (step) {
+        re.preventDefault();
+        re.stopPropagation();
+        commit(step, { addToHistory: false });
+        return;
+      }
       if (horiz && adjacentChipAt(state.doc, state.selection.head, dir)) {
-        re.preventDefault(); re.stopPropagation();
-        commit({ doc: state.doc, selection: collapsedSelection(state.selection.head + dir) }, { addToHistory: false, revealCaret: true });
+        re.preventDefault();
+        re.stopPropagation();
+        commit(
+          { doc: state.doc, selection: collapsedSelection(state.selection.head + dir) },
+          { addToHistory: false, revealCaret: true },
+        );
         return;
       }
     }
 
-    if (ev.key === "Tab" && ev.shiftKey && !ev.altKey && !ev.metaKey && !ev.ctrlKey && selectionEmpty(state.selection)) {
+    if (
+      ev.key === "Tab" &&
+      ev.shiftKey &&
+      !ev.altKey &&
+      !ev.metaKey &&
+      !ev.ctrlKey &&
+      selectionEmpty(state.selection)
+    ) {
       const before = adjacentChipAt(state.doc, state.selection.head, -1);
-      const btn = before?.chip.kind === "composer-citation"
-        ? domRef.current?.querySelector<HTMLElement>(`[data-composer-chip-flat="${before.start}"] [data-citation-comment-trigger]`)
-        : null;
-      if (btn) { re.preventDefault(); re.stopPropagation(); btn.focus(); return; }
+      const btn =
+        before?.chip.kind === "composer-citation"
+          ? domRef.current?.querySelector<HTMLElement>(
+              `[data-composer-chip-flat="${before.start}"] [data-citation-comment-trigger]`,
+            )
+          : null;
+      if (btn) {
+        re.preventDefault();
+        re.stopPropagation();
+        btn.focus();
+        return;
+      }
     }
 
-    if (ev.key === "Enter" && (ev.isComposing || ev.keyCode === 229)) { re.stopPropagation(); return; }
-    if (ev.key === "Enter" && ev.target instanceof HTMLInputElement) { re.preventDefault(); return; }
+    if (ev.key === "Enter" && (ev.isComposing || ev.keyCode === 229)) {
+      re.stopPropagation();
+      return;
+    }
+    if (ev.key === "Enter" && ev.target instanceof HTMLInputElement) {
+      re.preventDefault();
+      return;
+    }
     if (ev.key === "Tab" && !ev.metaKey && !ev.ctrlKey && selectionInOneCodeBlock(state)) {
-      re.preventDefault(); re.stopPropagation();
+      re.preventDefault();
+      re.stopPropagation();
       const indented = indentCodeBlock(state, ev.shiftKey ? "out" : "in");
       if (indented) commit(indented, { revealCaret: true });
       return;
     }
-    if (ev.key === "Enter" && richText && !ev.metaKey && !ev.ctrlKey && !ev.isComposing) {
-      if (selectionInOneCodeBlock(state)) { re.preventDefault(); re.stopPropagation(); commit(insertLineBreak(state, true), { revealCaret: true }); return; }
+    // List indent stays in the model so it lands in undo history; a suggestion menu keeps Tab.
+    if (
+      ev.key === "Tab" &&
+      richText &&
+      !activeSuggestionId &&
+      !ev.altKey &&
+      !ev.metaKey &&
+      !ev.ctrlKey &&
+      !ev.isComposing &&
+      selectionEmpty(state.selection)
+    ) {
       const res = resolveFlatOffset(state.doc, state.selection.head);
-      if (isPlainParagraph(res.block) && /^(`{3,}|~{3,})/.test(serializeSelection(state.doc, res.start, res.end))) {
+      const map = serializeEditorDoc(state.doc);
+      const at = flatToMarkdown(map, state.selection.head);
+      const edit =
+        res.block.kind === "line" && isListPrefix(res.block.prefix)
+          ? (ev.shiftKey ? listOutdentForTab : listIndentForTab)(map.value, at, at)
+          : null;
+      if (edit) {
+        re.preventDefault();
+        re.stopPropagation();
+        const doc = buildComposerDoc(
+          map.value.slice(0, edit.start) + edit.replacement + map.value.slice(edit.end),
+          skillLabelFor,
+          { styling: true, isKnownModel },
+        );
+        commit(
+          {
+            doc,
+            selection: collapsedSelection(
+              markdownToFlat(serializeEditorDoc(doc), edit.cursorAfter),
+            ),
+            changeKind: "other",
+          },
+          { revealCaret: true },
+        );
+        return;
+      }
+    }
+    if (ev.key === "Enter" && richText && !ev.metaKey && !ev.ctrlKey && !ev.isComposing) {
+      if (selectionInOneCodeBlock(state)) {
+        re.preventDefault();
+        re.stopPropagation();
+        commit(insertLineBreak(state, true), { revealCaret: true });
+        return;
+      }
+      const res = resolveFlatOffset(state.doc, state.selection.head);
+      if (
+        isPlainParagraph(res.block) &&
+        /^(`{3,}|~{3,})/.test(serializeSelection(state.doc, res.start, res.end))
+      ) {
         const fenceRes = insertLineBreak(state, true);
-        if (fenceRes.doc.blocks[res.blockIndex]?.kind === "codeBlock") { re.preventDefault(); re.stopPropagation(); commit(fenceRes, { revealCaret: true }); return; }
+        if (fenceRes.doc.blocks[res.blockIndex]?.kind === "codeBlock") {
+          re.preventDefault();
+          re.stopPropagation();
+          commit(fenceRes, { revealCaret: true });
+          return;
+        }
       }
     }
     const handler = readCallbacks().onCommandKeyDown;
     if (ev.key === "Enter") {
       const res = resolveFlatOffset(state.doc, state.selection.head);
       const isList = richText && res.block.kind === "line" && isListPrefix(res.block.prefix);
-      if (handler?.("Enter", ev, isList)) { re.preventDefault(); re.stopPropagation(); return; }
-      re.preventDefault(); commit(insertLineBreak(state, richText), { revealCaret: true }); return;
+      if (handler?.("Enter", ev, isList)) {
+        re.preventDefault();
+        re.stopPropagation();
+        return;
+      }
+      re.preventDefault();
+      commit(insertLineBreak(state, richText), { revealCaret: true });
+      return;
     }
-    if (handler?.(ev.key, ev)) { re.preventDefault(); re.stopPropagation(); }
+    if (handler?.(ev.key, ev)) {
+      re.preventDefault();
+      re.stopPropagation();
+    }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     if (e.defaultPrevented || disabled || !e.clipboardData) return;
     const cd = e.clipboardData;
-    if (cd.files.length > 0 && (literalText || !readPastedComposerContext(cd)?.records.length)) return;
+    if (cd.files.length > 0 && (literalText || !readPastedComposerContext(cd)?.records.length))
+      return;
     const plain = readPastedPlainText(cd);
     if (!plain) return;
     e.preventDefault();
@@ -618,30 +1130,62 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     const to = selectionTo(state.selection);
     const res = resolveFlatOffset(state.doc, from);
     if (res.block.kind === "codeBlock") {
-      commit(insertText(state, plain, { richText: false, literalText: true }), { clipboardEvent: "paste", revealCaret: true });
+      commit(insertText(state, plain, { richText: false, literalText: true }), {
+        clipboardEvent: "paste",
+        revealCaret: true,
+      });
       return;
     }
-    if (touchesMarkdownSource(state, from, to) && !plain.includes("\n") && collectComposerPromptInlineTokens(`${plain}\n`).length === 0) {
-      commit(insertText(state, plain, { richText: false, literalText: false, applyInputRules: false }), { clipboardEvent: "paste", revealCaret: true });
+    if (
+      touchesMarkdownSource(state, from, to) &&
+      !plain.includes("\n") &&
+      collectComposerPromptInlineTokens(`${plain}\n`).length === 0
+    ) {
+      commit(
+        insertText(state, plain, { richText: false, literalText: false, applyInputRules: false }),
+        { clipboardEvent: "paste", revealCaret: true },
+      );
       return;
     }
     const importFn = readCallbacks().importContextFragment;
     let text = !literalText && importFn ? importPastedComposerText(cd, importFn) : plain;
     const tokens = literalText ? [] : collectComposerPromptInlineTokens(`${text}\n`);
     const isChipTok = (t: (typeof tokens)[number] | undefined) =>
-      t?.type === "mention" || (t?.type === "skill" && skillLabelFor(t.value) !== null) || (t?.type === "model" && isKnownModel(t.instanceId, t.model));
+      t?.type === "mention" ||
+      (t?.type === "skill" && skillLabelFor(t.value) !== null) ||
+      (t?.type === "model" && isKnownModel(t.instanceId, t.model));
     if (isChipTok(tokens.at(-1)) && tokens.at(-1)?.end === text.length) text += " ";
     if (isChipTok(tokens[0]) && tokens[0]?.start === 0) {
       const map = serializeEditorDoc(state.doc);
       const off = flatToMarkdown(map, from);
       if (off > 0 && !/\s/.test(map.value[off - 1]!)) text = ` ${text}`;
     }
-    const literalLength = literalText ? 0 : pastedPathQueryLength(serializeSelection(state.doc, res.start, from), text, readCallbacks().isPathQueryActive?.());
-    const nested = res.block.kind === "line" && (isListPrefix(res.block.prefix) || res.block.prefix?.kind === "quote");
-    commit(insertPastedBlocks(state, buildComposerBlocks(text, skillLabelFor, { styling: richText, blocks: !nested, literalText, literalLength, isKnownModel })), {
-      clipboardEvent: "paste",
-      revealCaret: true,
-    });
+    const literalLength = literalText
+      ? 0
+      : pastedPathQueryLength(
+          serializeSelection(state.doc, res.start, from),
+          text,
+          readCallbacks().isPathQueryActive?.(),
+        );
+    const nested =
+      res.block.kind === "line" &&
+      (isListPrefix(res.block.prefix) || res.block.prefix?.kind === "quote");
+    commit(
+      insertPastedBlocks(
+        state,
+        buildComposerBlocks(text, skillLabelFor, {
+          styling: richText,
+          blocks: !nested,
+          literalText,
+          literalLength,
+          isKnownModel,
+        }),
+      ),
+      {
+        clipboardEvent: "paste",
+        revealCaret: true,
+      },
+    );
   };
 
   const handleCopyCut = (e: React.ClipboardEvent, cut: boolean) => {
@@ -669,7 +1213,9 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
       if (!open && citationDraftRef.current?.key === k) citationDraftRef.current = null;
       setOpenCitation((c) => (open ? (c?.key === k ? c : { key: k }) : c?.key === k ? null : c));
     },
-    onDraftChange: (k: string, comment: string) => { citationDraftRef.current = { key: k, comment }; },
+    onDraftChange: (k: string, comment: string) => {
+      citationDraftRef.current = { key: k, comment };
+    },
     onSaveComment: (k: string, comment: string) => {
       if (disabled) return false;
       const updated = updateCitationComment(stateRef.current.doc, k, comment);
@@ -686,9 +1232,15 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     onRestoreFocusAfterCitation: (k: string, sent: boolean) => {
       if (disabled || !domRef.current) return;
       const found = findCitationByKey(stateRef.current.doc, k);
-      if (!found) { if (sent) domRef.current.focus(); return; }
+      if (!found) {
+        if (sent) domRef.current.focus();
+        return;
+      }
       domRef.current.focus();
-      commit({ doc: stateRef.current.doc, selection: collapsedSelection(found.flatPos + 1) }, { addToHistory: false, silentSelection: sent, revealCaret: true });
+      commit(
+        { doc: stateRef.current.doc, selection: collapsedSelection(found.flatPos + 1) },
+        { addToHistory: false, silentSelection: sent, revealCaret: true },
+      );
     },
     onSubmitAndSend: onCitationSubmitAndSend ?? (() => false),
   };
@@ -699,8 +1251,18 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
     <RichComposerSkillsContext value={skills}>
       <ComposerContextRecordsContext value={contextRecords}>
         <ComposerCitationCommentContext value={citationCtx}>
-          <div className={cn("relative grid grid-cols-[minmax(0,1fr)] font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)", containerClassName)}>
-            <div className="col-start-1 row-start-1" onPasteCapture={onPaste} onCopyCapture={(e) => handleCopyCut(e, false)} onCutCapture={(e) => handleCopyCut(e, true)}>
+          <div
+            className={cn(
+              "relative grid grid-cols-[minmax(0,1fr)] font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
+              containerClassName,
+            )}
+          >
+            <div
+              className="col-start-1 row-start-1"
+              onPasteCapture={onPaste}
+              onCopyCapture={(e) => handleCopyCut(e, false)}
+              onCutCapture={(e) => handleCopyCut(e, true)}
+            >
               <div
                 ref={domRef}
                 contentEditable={!disabled}
@@ -719,21 +1281,38 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
                 aria-readonly={disabled ? "true" : undefined}
                 aria-autocomplete={!disabled && suggestionListId ? "list" : undefined}
                 aria-haspopup={!disabled && suggestionListId ? "listbox" : undefined}
-                aria-controls={!disabled && suggestionListId && activeSuggestionId ? suggestionListId : undefined}
-                aria-activedescendant={!disabled && suggestionListId && activeSuggestionId ? activeSuggestionId : undefined}
+                aria-controls={
+                  !disabled && suggestionListId && activeSuggestionId ? suggestionListId : undefined
+                }
+                aria-activedescendant={
+                  !disabled && suggestionListId && activeSuggestionId
+                    ? activeSuggestionId
+                    : undefined
+                }
                 aria-placeholder={placeholder}
                 onFocus={() => setIsFocused(true)}
-                onBlur={() => { setIsFocused(false); onPageScrollRelease?.(); }}
-                onBeforeInput={handleBeforeInput}
-                onInput={() => { if (!disabled && !composingRef.current) syncDom(false); }}
+                onBlur={() => {
+                  setIsFocused(false);
+                  onPageScrollRelease?.();
+                }}
+                onInput={() => {
+                  if (!disabled && !composingRef.current) syncDom(false);
+                }}
                 onCompositionStart={() => {
                   composingRef.current = true;
                   const s = stateRef.current;
                   const f = selectionFrom(s.selection);
                   const t = selectionTo(s.selection);
-                  if (selectionSpansChips(s.doc, f, t)) commit(deleteRange(s.doc, f, t), { compositionReplace: true, revealCaret: true });
+                  if (selectionSpansChips(s.doc, f, t))
+                    commit(deleteRange(s.doc, f, t), {
+                      compositionReplace: true,
+                      revealCaret: true,
+                    });
                 }}
-                onCompositionEnd={() => { composingRef.current = false; syncDom(true); }}
+                onCompositionEnd={() => {
+                  composingRef.current = false;
+                  syncDom(true);
+                }}
                 onKeyDown={handleKeyDown}
                 onKeyUp={(e) => onPageScrollKeyUp?.(e.key)}
                 onPaste={handlePaste}
@@ -743,22 +1322,38 @@ function ComposerPromptEditorInner(props: ComposerPromptEditorProps & { initialE
                     doc={editorState.doc}
                     selection={editorState.selection}
                     isEditable={!disabled}
-                    getCodeHighlightSpans={(lang, code) => highlighterRef.current?.getSpans(lang, code) ?? []}
+                    getCodeHighlightSpans={(lang, code) =>
+                      highlighterRef.current?.getSpans(lang, code) ?? []
+                    }
                     onChangeCodeLanguage={(bi, lang) => {
                       const res = updateCodeBlockLanguage(stateRef.current.doc, bi, lang);
-                      if (res) { commit(res, { revealCaret: true }); domRef.current?.focus(); }
+                      if (res) {
+                        commit(res, { revealCaret: true });
+                        domRef.current?.focus();
+                      }
                     }}
                     onToggleTaskItem={(bi) => {
-                      const res = toggleTaskItemChecked(stateRef.current.doc, bi, stateRef.current.selection);
+                      const res = toggleTaskItemChecked(
+                        stateRef.current.doc,
+                        bi,
+                        stateRef.current.selection,
+                      );
                       if (res) commit(res);
                     }}
-                    onDeleteReadOnlyChip={(flat) => commit(deleteRange(stateRef.current.doc, flat, flat + 1))}
+                    onDeleteReadOnlyChip={(flat) =>
+                      commit(deleteRange(stateRef.current.doc, flat, flat + 1))
+                    }
                   />
                 </Fragment>
               </div>
             </div>
             {isEmpty && contextRecords.size === 0 && placeholder ? (
-              <div className={cn("pointer-events-none col-start-1 row-start-1 leading-relaxed text-placeholder", placeholderClassName)}>
+              <div
+                className={cn(
+                  "pointer-events-none col-start-1 row-start-1 leading-relaxed text-placeholder",
+                  placeholderClassName,
+                )}
+              >
                 {placeholder}
                 {placeholderSuffix}
               </div>

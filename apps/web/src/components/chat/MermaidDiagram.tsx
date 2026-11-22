@@ -7,7 +7,8 @@ import { serializeCodeBlockToMarkdown } from "../../markdown-clipboard";
 import { Button } from "../ui/button";
 
 type Engine = typeof import("@t3tools/shared/diagrams/mermaid");
-const runtime = { Fragment, jsx, jsxs };
+// React types `jsx` for its own element types; the engine passes only intrinsic SVG tags.
+const runtime = { Fragment, jsx, jsxs } as Parameters<typeof elToReact>[1];
 let engineLoad: Promise<Engine | null> | null = null;
 // The engine is its own chunk, loaded by the first diagram a chat shows.
 function loadEngine() {

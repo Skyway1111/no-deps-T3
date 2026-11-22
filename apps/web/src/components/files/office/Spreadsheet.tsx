@@ -1,5 +1,5 @@
 import { msg, useGT } from "@t3tools/shared/i18n/react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { m } from "~/i18n/messages";
 import { observeResize } from "~/lib/observeResize";
 import { columnName, sheetTsv, type CellStyle, type SheetData } from "../decoders/officeEngine";
@@ -10,13 +10,24 @@ import type { OfficeMethods } from "./office.worker";
 import { createWorkerClient } from "./worker-rpc";
 
 type Engine = ReturnType<typeof createWorkerClient<OfficeMethods>>;
-type Opened = { engine: Engine; tabs: readonly { index: number; name: string }[]; styles: readonly CellStyle[] };
+type Opened = {
+  engine: Engine;
+  tabs: readonly { index: number; name: string }[];
+  styles: readonly CellStyle[];
+};
 type Selection = { row: number; column: number; anchorRow: number; anchorColumn: number };
 
 /** Offsets along one axis with O(log k) lookups, where k counts rows or columns of custom size. */
-function axis(count: number, base: number, custom: ReadonlyMap<number, number>, hidden: ReadonlySet<number>) {
+function axis(
+  count: number,
+  base: number,
+  custom: ReadonlyMap<number, number>,
+  hidden: ReadonlySet<number>,
+) {
   const size = (i: number) => (hidden.has(i) ? 0 : (custom.get(i) ?? base));
-  const exceptions = [...new Set([...custom.keys(), ...hidden])].filter((i) => i < count).sort((a, b) => a - b);
+  const exceptions = [...new Set([...custom.keys(), ...hidden])]
+    .filter((i) => i < count)
+    .sort((a, b) => a - b);
   const before: number[] = [];
   let delta = 0;
   for (const i of exceptions) {
@@ -48,6 +59,22 @@ function axis(count: number, base: number, custom: ReadonlyMap<number, number>, 
 
 const HEADER = 22;
 
+function wrapText(context: CanvasRenderingContext2D, text: string, width: number) {
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    let line = "";
+    for (const word of paragraph.split(/(\s+)/)) {
+      const next = line + word;
+      if (line.trim() && context.measureText(next).width > width) {
+        lines.push(line.trimEnd());
+        line = word.trimStart();
+      } else line = next;
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
 export default function Spreadsheet(props: {
   bytes: ArrayBuffer;
   view: WorkbookView;
@@ -73,7 +100,13 @@ export default function Spreadsheet(props: {
         const data = await engine.call("sheet", { sheet: active }, { signal: controller.signal });
         setOpened({ engine, tabs, styles });
         setSheet({ index: active, data });
-        onDetails(m(msg("{count, plural, one {{count} sheet} other {{count} sheets}}", { count: tabs.length })));
+        onDetails(
+          m(
+            msg("{count, plural, one {{count} sheet} other {{count} sheets}}", {
+              count: tabs.length,
+            }),
+          ),
+        );
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) onError(cause);
@@ -109,7 +142,9 @@ export default function Spreadsheet(props: {
         styles={opened.styles}
         gridlines={sheet.data.gridlines && !view.hiddenGridlines.includes(sheet.index)}
         onNavigate={(name) => {
-          const tab = opened.tabs.find((candidate) => candidate.name.toLowerCase() === name.toLowerCase());
+          const tab = opened.tabs.find(
+            (candidate) => candidate.name.toLowerCase() === name.toLowerCase(),
+          );
           if (tab) show(tab.index);
         }}
       />
@@ -120,7 +155,12 @@ export default function Spreadsheet(props: {
         onKeyDown={(event) => {
           const current = opened.tabs.findIndex((tab) => tab.index === sheet.index);
           const count = opened.tabs.length;
-          const next = { ArrowRight: (current + 1) % count, ArrowLeft: (current + count - 1) % count, Home: 0, End: count - 1 }[event.key];
+          const next = {
+            ArrowRight: (current + 1) % count,
+            ArrowLeft: (current + count - 1) % count,
+            Home: 0,
+            End: count - 1,
+          }[event.key];
           if (next === undefined) return;
           event.preventDefault();
           const tab = opened.tabs[next];
@@ -146,25 +186,42 @@ export default function Spreadsheet(props: {
   );
 }
 
-function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; gridlines: boolean; onNavigate: (sheet: string) => void }) {
+function SheetGrid(props: {
+  sheet: SheetData;
+  styles: readonly CellStyle[];
+  gridlines: boolean;
+  onNavigate: (sheet: string) => void;
+}) {
   const { sheet, styles, gridlines } = props;
   const gt = useGT();
   const scroller = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [viewport, setViewport] = useState({ left: 0, top: 0, width: 0, height: 0 });
-  const [selection, setSelection] = useState<Selection>({ row: 0, column: 0, anchorRow: 0, anchorColumn: 0 });
+  const [selection, setSelection] = useState<Selection>({
+    row: 0,
+    column: 0,
+    anchorRow: 0,
+    anchorColumn: 0,
+  });
   const dragging = useRef(false);
-  const grid = useMemo(() => {
-    const rows = axis(Math.max(sheet.maxRow + 50, 100), sheet.defaultHeight, sheet.rowHeights, sheet.hiddenRows);
-    const columns = axis(Math.max(sheet.maxColumn + 10, 26), sheet.defaultWidth, sheet.columnWidths, sheet.hiddenColumns);
-    const covered = new Map<string, SheetData["merges"][number]>();
-    for (const merge of sheet.merges)
-      if ((merge.r2 - merge.r1 + 1) * (merge.c2 - merge.c1 + 1) <= 10000)
-        for (let r = merge.r1; r <= merge.r2; r++) for (let c = merge.c1; c <= merge.c2; c++) covered.set(`${r}:${c}`, merge);
-    const gutter = Math.max(36, String(rows.count).length * 8 + 14);
-    return { rows, columns, covered, gutter };
-  }, [sheet]);
-  const { rows, columns, covered, gutter } = grid;
+  const rows = axis(
+    Math.max(sheet.maxRow + 50, 100),
+    sheet.defaultHeight,
+    sheet.rowHeights,
+    sheet.hiddenRows,
+  );
+  const columns = axis(
+    Math.max(sheet.maxColumn + 10, 26),
+    sheet.defaultWidth,
+    sheet.columnWidths,
+    sheet.hiddenColumns,
+  );
+  const covered = new Map<string, SheetData["merges"][number]>();
+  for (const merge of sheet.merges)
+    if ((merge.r2 - merge.r1 + 1) * (merge.c2 - merge.c1 + 1) <= 10000)
+      for (let r = merge.r1; r <= merge.r2; r++)
+        for (let c = merge.c1; c <= merge.c2; c++) covered.set(`${r}:${c}`, merge);
+  const gutter = Math.max(36, String(rows.count).length * 8 + 14);
   const frozenRows = Math.min(sheet.frozen.rows, rows.count);
   const frozenColumns = Math.min(sheet.frozen.columns, columns.count);
   const frozenHeight = rows.start(frozenRows);
@@ -175,7 +232,8 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
   const cellAt = (x: number, y: number) => {
     const ix = x - gutter;
     const iy = y - HEADER;
-    const column = ix < frozenWidth ? columns.index(Math.max(0, ix)) : columns.index(ix + viewport.left);
+    const column =
+      ix < frozenWidth ? columns.index(Math.max(0, ix)) : columns.index(ix + viewport.left);
     const row = iy < frozenHeight ? rows.index(Math.max(0, iy)) : rows.index(iy + viewport.top);
     return { row, column };
   };
@@ -184,7 +242,13 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
   useEffect(() => {
     const node = scroller.current;
     if (!node) return;
-    const update = () => setViewport({ left: node.scrollLeft, top: node.scrollTop, width: node.clientWidth, height: node.clientHeight });
+    const update = () =>
+      setViewport({
+        left: node.scrollLeft,
+        top: node.scrollTop,
+        width: node.clientWidth,
+        height: node.clientHeight,
+      });
     update();
     return observeResize(node, update);
   }, []);
@@ -202,15 +266,48 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, viewport.width, viewport.height);
     context.textBaseline = "middle";
-    const rangeOf = (frozen: number, frozenSize: number, scroll: number, extent: number, header: number, along: typeof rows) => {
+    const rangeOf = (
+      frozen: number,
+      frozenSize: number,
+      scroll: number,
+      extent: number,
+      header: number,
+      along: typeof rows,
+    ) => {
       const first = along.index(frozenSize + scroll);
       const last = along.index(frozenSize + scroll + Math.max(0, extent - header - frozenSize));
       return { first: Math.max(frozen, first), last };
     };
-    const visibleRows = rangeOf(frozenRows, frozenHeight, viewport.top, viewport.height, HEADER, rows);
-    const visibleColumns = rangeOf(frozenColumns, frozenWidth, viewport.left, viewport.width, gutter, columns);
-    const rowList = [...Array.from({ length: frozenRows }, (_, i) => i), ...Array.from({ length: visibleRows.last - visibleRows.first + 1 }, (_, i) => visibleRows.first + i)];
-    const columnList = [...Array.from({ length: frozenColumns }, (_, i) => i), ...Array.from({ length: visibleColumns.last - visibleColumns.first + 1 }, (_, i) => visibleColumns.first + i)];
+    const visibleRows = rangeOf(
+      frozenRows,
+      frozenHeight,
+      viewport.top,
+      viewport.height,
+      HEADER,
+      rows,
+    );
+    const visibleColumns = rangeOf(
+      frozenColumns,
+      frozenWidth,
+      viewport.left,
+      viewport.width,
+      gutter,
+      columns,
+    );
+    const rowList = [
+      ...Array.from({ length: frozenRows }, (_, i) => i),
+      ...Array.from(
+        { length: visibleRows.last - visibleRows.first + 1 },
+        (_, i) => visibleRows.first + i,
+      ),
+    ];
+    const columnList = [
+      ...Array.from({ length: frozenColumns }, (_, i) => i),
+      ...Array.from(
+        { length: visibleColumns.last - visibleColumns.first + 1 },
+        (_, i) => visibleColumns.first + i,
+      ),
+    ];
     const region = (r: number, c: number) => ({
       x: r < 0 ? 0 : c < frozenColumns ? gutter : gutter + frozenWidth,
       y: r < frozenRows ? HEADER : HEADER + frozenHeight,
@@ -219,12 +316,25 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
       const { x, y } = region(r, c);
       context.save();
       context.beginPath();
-      context.rect(x, y, c < frozenColumns ? frozenWidth : viewport.width - x, r < frozenRows ? frozenHeight : viewport.height - y);
+      context.rect(
+        x,
+        y,
+        c < frozenColumns ? frozenWidth : viewport.width - x,
+        r < frozenRows ? frozenHeight : viewport.height - y,
+      );
       context.clip();
       draw();
       context.restore();
     };
-    const drawCell = (r: number, c: number, x: number, y: number, w: number, h: number, overflowRight: number) => {
+    const drawCell = (
+      r: number,
+      c: number,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      overflowRight: number,
+    ) => {
       const cell = sheet.rows.get(r)?.get(c);
       const style = cell ? styles[cell.style] : undefined;
       if (style?.fill) {
@@ -235,33 +345,81 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
         context.font = style?.font ?? "400 14.67px Carlito, Calibri, sans-serif";
         context.fillStyle = cell.error ? "#c00000" : (style?.color ?? "#000");
         const numeric = typeof cell.value === "number" && !style?.align;
-        const align = style?.align === "general" || !style?.align ? (numeric ? "right" : typeof cell.value === "boolean" || cell.error ? "center" : "left") : style.align;
+        const align =
+          style?.align === "general" || !style?.align
+            ? numeric
+              ? "right"
+              : typeof cell.value === "boolean" || cell.error
+                ? "center"
+                : "left"
+            : style.align;
+        const size = style?.size ?? 14.67;
+        const inset = 4 + (style?.indent ?? 0) * 9;
+        // Wrapped cells break on words within the column; others stay one line and may spill right.
+        const lines = style?.wrap ? wrapText(context, cell.text, w - 8) : [cell.text];
+        const lineHeight = size * 1.2;
+        const block = lines.length * lineHeight;
         context.save();
         context.beginPath();
-        context.rect(x, y, align === "left" ? w + overflowRight : w, h);
+        context.rect(x, y, align === "left" && !style?.wrap ? w + overflowRight : w, h);
         context.clip();
-        const ty = style?.valign === "top" ? y + 9 : style?.valign === "center" ? y + h / 2 : y + h - 9;
-        context.textAlign = align === "right" ? "right" : align === "center" || align === "centerContinuous" ? "center" : "left";
-        context.fillText(cell.text, context.textAlign === "right" ? x + w - 4 : context.textAlign === "center" ? x + w / 2 : x + 4, ty);
+        const top =
+          style?.valign === "top"
+            ? y + 2
+            : style?.valign === "center"
+              ? y + (h - block) / 2
+              : y + h - block - 2;
+        context.textAlign =
+          align === "right"
+            ? "right"
+            : align === "center" || align === "centerContinuous"
+              ? "center"
+              : "left";
+        const tx =
+          context.textAlign === "right"
+            ? x + w - inset
+            : context.textAlign === "center"
+              ? x + w / 2
+              : x + inset;
+        lines.forEach((line, i) => {
+          const ty = top + lineHeight * (i + 0.5);
+          context.fillText(line, tx, ty);
+          if (style?.underline || style?.strike) {
+            const width = context.measureText(line).width;
+            const left =
+              context.textAlign === "right"
+                ? tx - width
+                : context.textAlign === "center"
+                  ? tx - width / 2
+                  : tx;
+            if (style.underline) context.fillRect(left, ty + size * 0.4, width, 1);
+            if (style.strike) context.fillRect(left, ty, width, 1);
+          }
+        });
         context.restore();
       }
       const borders = style?.borders;
       if (borders) {
-        context.lineWidth = 1;
-        for (const [side, color] of Object.entries(borders)) {
-          context.strokeStyle = color;
-          context.beginPath();
-          if (side === "left" || side === "right") {
-            const bx = Math.round(side === "left" ? x : x + w) + 0.5;
-            context.moveTo(bx, y);
-            context.lineTo(bx, y + h);
-          } else {
-            const by = Math.round(side === "top" ? y : y + h) + 0.5;
-            context.moveTo(x, by);
-            context.lineTo(x + w, by);
+        for (const [side, border] of Object.entries(borders)) {
+          context.strokeStyle = border.color;
+          context.lineWidth = border.double ? 1 : border.width;
+          context.setLineDash(border.dash ?? []);
+          const offsets = border.double ? [-1, 1] : [0];
+          for (const offset of offsets) {
+            context.beginPath();
+            if (side === "left" || side === "right") {
+              const bx = Math.round(side === "left" ? x : x + w) + 0.5 + offset;
+              context.moveTo(bx, y);
+              context.lineTo(bx, y + h);
+            } else {
+              const by = Math.round(side === "top" ? y : y + h) + 0.5 + offset;
+              context.moveTo(x, by);
+              context.lineTo(x + w, by);
+            }
+            context.stroke();
           }
-          context.stroke();
         }
+        context.setLineDash([]);
       }
     };
     for (const r of rowList) {
@@ -293,7 +451,14 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
             return;
           }
           let overflow = 0;
-          for (let next = c + 1; next < Math.min(columns.count, c + 8) && !sheet.rows.get(r)?.get(next)?.text && !covered.has(`${r}:${next}`); next++) overflow += columns.size(next);
+          for (
+            let next = c + 1;
+            next < Math.min(columns.count, c + 8) &&
+            !sheet.rows.get(r)?.get(next)?.text &&
+            !covered.has(`${r}:${next}`);
+            next++
+          )
+            overflow += columns.size(next);
           drawCell(r, c, x, y, w, h, overflow);
         });
       }
@@ -367,13 +532,15 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
     if (!node) return;
     if (row >= frozenRows) {
       const top = rows.start(row) - frozenHeight;
-      const bottom = rows.start(row + 1) - frozenHeight - (node.clientHeight - HEADER - frozenHeight);
+      const bottom =
+        rows.start(row + 1) - frozenHeight - (node.clientHeight - HEADER - frozenHeight);
       if (top < node.scrollTop) node.scrollTop = top;
       else if (bottom > node.scrollTop) node.scrollTop = bottom;
     }
     if (column >= frozenColumns) {
       const left = columns.start(column) - frozenWidth;
-      const right = columns.start(column + 1) - frozenWidth - (node.clientWidth - gutter - frozenWidth);
+      const right =
+        columns.start(column + 1) - frozenWidth - (node.clientWidth - gutter - frozenWidth);
       if (left < node.scrollLeft) node.scrollLeft = left;
       else if (right > node.scrollLeft) node.scrollLeft = right;
     }
@@ -396,19 +563,40 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
     }
     if (modifier && event.key.toLowerCase() === "a") {
       event.preventDefault();
-      setSelection({ row: Math.max(0, sheet.maxRow - 1), column: Math.max(0, sheet.maxColumn - 1), anchorRow: 0, anchorColumn: 0 });
+      setSelection({
+        row: Math.max(0, sheet.maxRow - 1),
+        column: Math.max(0, sheet.maxColumn - 1),
+        anchorRow: 0,
+        anchorColumn: 0,
+      });
       return;
     }
     const page = Math.max(1, Math.floor((viewport.height - HEADER) / sheet.defaultHeight) - 1);
-    const moves: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1], PageUp: [-page, 0], PageDown: [page, 0], Enter: [1, 0], Tab: [0, event.shiftKey ? -1 : 1] };
+    const moves: Record<string, [number, number]> = {
+      ArrowUp: [-1, 0],
+      ArrowDown: [1, 0],
+      ArrowLeft: [0, -1],
+      ArrowRight: [0, 1],
+      PageUp: [-page, 0],
+      PageDown: [page, 0],
+      Enter: [1, 0],
+      Tab: [0, event.shiftKey ? -1 : 1],
+    };
     let next: { row: number; column: number } | undefined;
     if (event.key === "Home") next = { row: modifier ? 0 : selection.row, column: 0 };
-    else if (event.key === "End") next = modifier ? { row: Math.max(0, sheet.maxRow - 1), column: Math.max(0, sheet.maxColumn - 1) } : { row: selection.row, column: Math.max(0, sheet.maxColumn - 1) };
+    else if (event.key === "End")
+      next = modifier
+        ? { row: Math.max(0, sheet.maxRow - 1), column: Math.max(0, sheet.maxColumn - 1) }
+        : { row: selection.row, column: Math.max(0, sheet.maxColumn - 1) };
     else if (moves[event.key]) next = step(selection.row, selection.column, ...moves[event.key]!);
     if (!next) return;
     event.preventDefault();
     const extend = event.shiftKey && event.key !== "Tab" && event.key !== "Enter";
-    setSelection((current) => ({ ...next, anchorRow: extend ? current.anchorRow : next.row, anchorColumn: extend ? current.anchorColumn : next.column }));
+    setSelection((current) => ({
+      ...next,
+      anchorRow: extend ? current.anchorRow : next.row,
+      anchorColumn: extend ? current.anchorColumn : next.column,
+    }));
     reveal(next.row, next.column);
   };
   const point = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -423,11 +611,20 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
           {active?.formula ? `=${active.formula}` : (active?.text ?? "")}
         </span>
         {external ? (
-          <a href={external} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary underline">
+          <a
+            href={external}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-primary underline"
+          >
             {gt("Open link")}
           </a>
         ) : link?.startsWith("#") ? (
-          <button type="button" className="shrink-0 text-primary underline" onClick={() => props.onNavigate(link.slice(1).split("!")[0]!.replace(/^'|'$/g, ""))}>
+          <button
+            type="button"
+            className="shrink-0 text-primary underline"
+            onClick={() => props.onNavigate(link.slice(1).split("!")[0]!.replace(/^'|'$/g, ""))}
+          >
             {gt("Go to {target}", { target: link.slice(1) })}
           </button>
         ) : null}
@@ -443,7 +640,12 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
         onKeyDown={onKeyDown}
         onScroll={(event) => {
           const node = event.currentTarget;
-          setViewport({ left: node.scrollLeft, top: node.scrollTop, width: node.clientWidth, height: node.clientHeight });
+          setViewport({
+            left: node.scrollLeft,
+            top: node.scrollTop,
+            width: node.clientWidth,
+            height: node.clientHeight,
+          });
         }}
       >
         <div style={{ width: gutter + columns.total, height: HEADER + rows.total }}>
@@ -456,12 +658,20 @@ function SheetGrid(props: { sheet: SheetData; styles: readonly CellStyle[]; grid
               const cell = point(event);
               event.currentTarget.setPointerCapture(event.pointerId);
               dragging.current = true;
-              setSelection((current) => ({ ...cell, anchorRow: event.shiftKey ? current.anchorRow : cell.row, anchorColumn: event.shiftKey ? current.anchorColumn : cell.column }));
+              setSelection((current) => ({
+                ...cell,
+                anchorRow: event.shiftKey ? current.anchorRow : cell.row,
+                anchorColumn: event.shiftKey ? current.anchorColumn : cell.column,
+              }));
             }}
             onPointerMove={(event) => {
               if (!dragging.current) return;
               const cell = point(event);
-              setSelection((current) => (current.row === cell.row && current.column === cell.column ? current : { ...current, ...cell }));
+              setSelection((current) =>
+                current.row === cell.row && current.column === cell.column
+                  ? current
+                  : { ...current, ...cell },
+              );
             }}
             onPointerUp={() => {
               dragging.current = false;

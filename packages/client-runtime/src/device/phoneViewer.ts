@@ -73,6 +73,8 @@ export function createPhoneViewer(options: {
   let textureWidth = options.source.width;
   let textureHeight = options.source.height;
   const scene = new Scene();
+  scene.environment = 1;
+  scene.shadow = 0.6;
   const camera = new PerspectiveCamera(32, 1, 0.1, 30);
   camera.position.z = 5.5;
   const ambient = new AmbientLight(0xffffff, 2.4);

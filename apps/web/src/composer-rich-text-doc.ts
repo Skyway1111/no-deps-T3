@@ -59,9 +59,12 @@ export function isClosingFence(line: string, fence: string): boolean {
   return match !== null && match[1]![0] === fence[0] && match[1]!.length >= fence.length;
 }
 
-export function parseListPrefix(
+function parseListPrefix(
   line: string,
-): { prefix: Extract<LinePrefix, { kind: "bullet" | "ordered" | "task" }>; markerLength: number } | null {
+): {
+  prefix: Extract<LinePrefix, { kind: "bullet" | "ordered" | "task" }>;
+  markerLength: number;
+} | null {
   const task = /^([ \t]*)-([ \t]+)\[([ xX])\]([ \t]*)/.exec(line);
   if (task && (line.length === task[0].length || task[4])) {
     return {
@@ -96,18 +99,36 @@ function chipForSegment(
   segment: Exclude<ReturnType<typeof splitPromptIntoComposerSegments>[number], { type: "text" }>,
   chips: ChipResolver,
 ): ComposerChip | null {
-  if (segment.type === "mention") return { kind: "composer-mention", path: segment.path, source: segment.source };
+  if (segment.type === "mention")
+    return { kind: "composer-mention", path: segment.path, source: segment.source };
   if (segment.type === "skill") {
     const meta = chips.skill(segment.name);
-    return meta ? { kind: "composer-skill", skillName: segment.name, skillLabel: meta.label, skillDescription: meta.description } : null;
+    return meta
+      ? {
+          kind: "composer-skill",
+          skillName: segment.name,
+          skillLabel: meta.label,
+          skillDescription: meta.description,
+        }
+      : null;
   }
   if (segment.type === "model") {
     return chips.model(segment.instanceId, segment.model)
-      ? { kind: "composer-model", instanceId: segment.instanceId, model: segment.model, source: segment.source }
+      ? {
+          kind: "composer-model",
+          instanceId: segment.instanceId,
+          model: segment.model,
+          source: segment.source,
+        }
       : null;
   }
   if (segment.type === "citation") {
-    return { kind: "composer-citation", citation: segment.citation, source: segment.source, citeKey: randomCiteKey() };
+    return {
+      kind: "composer-citation",
+      citation: segment.citation,
+      source: segment.source,
+      citeKey: randomCiteKey(),
+    };
   }
   return {
     kind: "composer-context-reference",
@@ -122,7 +143,13 @@ function chipForSegment(
 export function buildComposerBlocks(
   value: string,
   skillLabelFor: (name: string) => SkillMeta | null,
-  options?: { styling?: boolean; blocks?: boolean; literalText?: boolean; literalLength?: number; isKnownModel?: IsKnownModel },
+  options?: {
+    styling?: boolean;
+    blocks?: boolean;
+    literalText?: boolean;
+    literalLength?: number;
+    isKnownModel?: IsKnownModel;
+  },
 ): ComposerBlock[] {
   if (options?.literalText) {
     return value.split("\n").map((line) => ({
@@ -178,7 +205,9 @@ export function buildComposerBlocks(
       span.text.split(sentinel).forEach((piece, idx) => {
         if (idx > 0) {
           const atom = atoms[atomIndex++]!;
-          out.push(atom.kind === "text" ? { ...atom, marks } : marks.length ? { ...atom, marks } : atom);
+          out.push(
+            atom.kind === "text" ? { ...atom, marks } : marks.length ? { ...atom, marks } : atom,
+          );
         }
         if (piece) out.push({ kind: "text", text: piece, marks });
       });
@@ -187,7 +216,12 @@ export function buildComposerBlocks(
   };
 
   const restoreSources = (line: string) =>
-    line.split(sentinel).reduce((acc, piece, idx) => (idx === 0 ? piece : acc + atomSources[atomIndex++]! + piece), "");
+    line
+      .split(sentinel)
+      .reduce(
+        (acc, piece, idx) => (idx === 0 ? piece : acc + atomSources[atomIndex++]! + piece),
+        "",
+      );
 
   const sourceLines = masked.split("\n");
   const rawBlocks: ComposerBlock[] = [];
@@ -197,7 +231,10 @@ export function buildComposerBlocks(
       rawBlocks.push({
         kind: "line",
         prefix: null,
-        inlines: normalizeInlines([{ kind: "text", text: literal, marks: [] }, ...buildInline(line)]),
+        inlines: normalizeInlines([
+          { kind: "text", text: literal, marks: [] },
+          ...buildInline(line),
+        ]),
       });
       continue;
     }
@@ -215,7 +252,13 @@ export function buildComposerBlocks(
         body.push(restoreSources(sourceLines[j]!));
         j += 1;
       }
-      rawBlocks.push({ kind: "codeBlock", language, fence: opening.fence, close, code: body.join("\n") });
+      rawBlocks.push({
+        kind: "codeBlock",
+        language,
+        fence: opening.fence,
+        close,
+        code: body.join("\n"),
+      });
       i = j < sourceLines.length ? j : sourceLines.length;
       continue;
     }
@@ -234,12 +277,20 @@ export function buildComposerBlocks(
     }
     const quote = blockSyntax ? /^(>[ \t]*)([^\n]*)$/.exec(line) : null;
     if (quote) {
-      rawBlocks.push({ kind: "line", prefix: { kind: "quote", prefix: quote[1]! }, inlines: buildInline(quote[2]!) });
+      rawBlocks.push({
+        kind: "line",
+        prefix: { kind: "quote", prefix: quote[1]! },
+        inlines: buildInline(quote[2]!),
+      });
       continue;
     }
     const list = blockSyntax ? parseListPrefix(line) : null;
     if (list) {
-      rawBlocks.push({ kind: "line", prefix: list.prefix, inlines: buildInline(line.slice(list.markerLength)) });
+      rawBlocks.push({
+        kind: "line",
+        prefix: list.prefix,
+        inlines: buildInline(line.slice(list.markerLength)),
+      });
       continue;
     }
     rawBlocks.push({ kind: "line", prefix: null, inlines: buildInline(line) });
@@ -255,7 +306,10 @@ export function buildComposerBlocks(
     if ((prevIsQuote || prevIsList) && isPlainParagraph(curr) && curr.inlines.length === 0) {
       let nextIdx = i + 1;
       if (prevIsList) {
-        while (isPlainParagraph(rawBlocks[nextIdx]) && (rawBlocks[nextIdx] as Extract<ComposerBlock, { kind: "line" }>).inlines.length === 0) {
+        while (
+          isPlainParagraph(rawBlocks[nextIdx]) &&
+          (rawBlocks[nextIdx] as Extract<ComposerBlock, { kind: "line" }>).inlines.length === 0
+        ) {
           nextIdx += 1;
         }
       }
@@ -274,12 +328,10 @@ export function buildComposerDoc(
 ): ComposerDoc {
   const blocks = buildComposerBlocks(value, skillLabelFor, options);
   if (blocks.length === 0) blocks.push({ kind: "line", prefix: null, inlines: [] });
-  if (blocks.at(-1)?.kind === "horizontalRule") blocks.push({ kind: "line", prefix: null, inlines: [] });
+  if (blocks.at(-1)?.kind === "horizontalRule")
+    blocks.push({ kind: "line", prefix: null, inlines: [] });
   return { blocks };
 }
-
-export const buildTiptapContent = buildComposerBlocks;
-export const buildDocJson = buildComposerDoc;
 
 export interface RichRun {
   kind: "text" | "token" | "break" | "prefix";
@@ -294,21 +346,58 @@ export interface RichRun {
 }
 
 /** A block plus its leading separator, serialized with runs relative to the part start; cached per block object. */
-interface RichPart { readonly value: string; readonly runs: readonly RichRun[]; readonly flat: number; readonly md: number; readonly contextIds: readonly string[]; readonly variant: number }
+interface RichPart {
+  readonly value: string;
+  readonly runs: readonly RichRun[];
+  readonly flat: number;
+  readonly md: number;
+  readonly contextIds: readonly string[];
+  readonly variant: number;
+}
 
-interface RichAcc { runs: RichRun[]; value: string; flat: number; md: number }
+interface RichAcc {
+  runs: RichRun[];
+  value: string;
+  flat: number;
+  md: number;
+}
 const newAcc = (): RichAcc => ({ runs: [], value: "", flat: 0, md: 0 });
-const toPart = ({ value, runs, flat, md }: RichAcc, variant: number): RichPart => ({ value, runs, flat, md, variant, contextIds: collectInlineContextIds(value) });
+const toPart = ({ value, runs, flat, md }: RichAcc, variant: number): RichPart => ({
+  value,
+  runs,
+  flat,
+  md,
+  variant,
+  contextIds: collectInlineContextIds(value),
+});
 
 const pushBreak = (acc: RichAcc) => {
-  acc.runs.push({ kind: "break", flatStart: acc.flat, docLen: 1, mdLen: 1, openLen: 0, closeLen: 0, pmPos: acc.flat, mdStart: acc.md });
+  acc.runs.push({
+    kind: "break",
+    flatStart: acc.flat,
+    docLen: 1,
+    mdLen: 1,
+    openLen: 0,
+    closeLen: 0,
+    pmPos: acc.flat,
+    mdStart: acc.md,
+  });
   acc.value += "\n";
   acc.flat += 1;
   acc.md += 1;
 };
 
 const pushPrefix = (acc: RichAcc, text: string) => {
-  acc.runs.push({ kind: "prefix", flatStart: acc.flat, docLen: 0, mdLen: text.length, openLen: 0, closeLen: 0, pmPos: acc.flat, mdStart: acc.md });
+  acc.runs.push({
+    kind: "prefix",
+    flatStart: acc.flat,
+    docLen: 0,
+    mdLen: text.length,
+    openLen: 0,
+    closeLen: 0,
+    pmPos: acc.flat,
+    mdStart: acc.md,
+  });
   acc.value += text;
   acc.md += text.length;
 };
@@ -317,7 +406,12 @@ function linePrefixText(prefix: LinePrefix, empty: boolean): string {
   if (prefix.kind === "heading") return `${"#".repeat(prefix.level)}${prefix.space}`;
   if (prefix.kind === "quote") return prefix.prefix;
   if (prefix.kind === "task") {
-    const cs = typeof prefix.contentSpace === "string" ? prefix.contentSpace || (empty ? "" : " ") : empty ? "" : " ";
+    const cs =
+      typeof prefix.contentSpace === "string"
+        ? prefix.contentSpace || (empty ? "" : " ")
+        : empty
+          ? ""
+          : " ";
     return `${prefix.indent}-${prefix.markerSpace || " "}[${prefix.checked ? "x" : " "}]${cs}`;
   }
   return `${prefix.indent}${prefix.marker || "-"}${prefix.space || (empty ? "" : " ")}`;
@@ -328,7 +422,10 @@ function codeBlockSource(block: Extract<ComposerBlock, { kind: "codeBlock" }>, f
   let close = block.close;
   const longest = Math.max(
     0,
-    ...block.code.split("\n").filter((l) => isClosingFence(l, fence)).map((l) => /^[`~]+/.exec(l)![0].length),
+    ...block.code
+      .split("\n")
+      .filter((l) => isClosingFence(l, fence))
+      .map((l) => /^[`~]+/.exec(l)![0].length),
   );
   if (longest > 0) {
     fence = fence[0]!.repeat(longest + 1);
@@ -343,7 +440,16 @@ function pushInlineRun(acc: RichAcc, p: ComposerInline, open: string, close: str
   const source = isText ? p.text : readChipSource(p);
   const docLen = isText ? source.length : 1;
   const mdLen = open.length + source.length + close.length;
-  const run: RichRun = { kind: isText ? "text" : "token", flatStart: acc.flat, docLen, mdLen, openLen: open.length, closeLen: close.length, pmPos: acc.flat, mdStart: acc.md };
+  const run: RichRun = {
+    kind: isText ? "text" : "token",
+    flatStart: acc.flat,
+    docLen,
+    mdLen,
+    openLen: open.length,
+    closeLen: close.length,
+    pmPos: acc.flat,
+    mdStart: acc.md,
+  };
   if (!isText) run.nodeName = p.kind;
   acc.runs.push(run);
   acc.value += open + source + close;
@@ -354,14 +460,25 @@ function pushInlineRun(acc: RichAcc, p: ComposerInline, open: string, close: str
 function needsBlankLineBetween(blocks: readonly ComposerBlock[], index: number): boolean {
   const prev = blocks[index - 1]!;
   const curr = blocks[index]!;
-  if (prev.kind === "line" && isListPrefix(prev.prefix) && !(curr.kind === "line" && isListPrefix(curr.prefix))) {
+  if (
+    prev.kind === "line" &&
+    isListPrefix(prev.prefix) &&
+    !(curr.kind === "line" && isListPrefix(curr.prefix))
+  ) {
     let next = index;
-    while (isPlainParagraph(blocks[next]) && (blocks[next] as Extract<ComposerBlock, { kind: "line" }>).inlines.length === 0) {
+    while (
+      isPlainParagraph(blocks[next]) &&
+      (blocks[next] as Extract<ComposerBlock, { kind: "line" }>).inlines.length === 0
+    ) {
       next += 1;
     }
     return isPlainParagraph(blocks[next]);
   }
-  if (prev.kind === "line" && prev.prefix?.kind === "quote" && !(curr.kind === "line" && curr.prefix?.kind === "quote")) {
+  if (
+    prev.kind === "line" &&
+    prev.prefix?.kind === "quote" &&
+    !(curr.kind === "line" && curr.prefix?.kind === "quote")
+  ) {
     return isPlainParagraph(curr) && curr.inlines.length > 0;
   }
   return (
@@ -372,15 +489,25 @@ function needsBlankLineBetween(blocks: readonly ComposerBlock[], index: number):
   );
 }
 
-const isUnmarked = (i: ComposerInline) => (i.kind === "text" ? i.isMarkdownSource || i.marks.length === 0 : !i.marks?.length);
+const isUnmarked = (i: ComposerInline) =>
+  i.kind === "text" ? i.isMarkdownSource || i.marks.length === 0 : !i.marks?.length;
 
 // Unmarked inlines reset all delimiter state, so only the marked islands between them need the full pass.
 function appendInlineRuns(inlines: readonly ComposerInline[], acc: RichAcc): void {
   if (inlines.length === 0) {
-    acc.runs.push({ kind: "text", flatStart: acc.flat, docLen: 0, mdLen: 0, openLen: 0, closeLen: 0, pmPos: acc.flat, mdStart: acc.md });
+    acc.runs.push({
+      kind: "text",
+      flatStart: acc.flat,
+      docLen: 0,
+      mdLen: 0,
+      openLen: 0,
+      closeLen: 0,
+      pmPos: acc.flat,
+      mdStart: acc.md,
+    });
     return;
   }
-  for (let i = 0; i < inlines.length; ) {
+  for (let i = 0; i < inlines.length;) {
     if (isUnmarked(inlines[i]!)) {
       pushInlineRun(acc, inlines[i++]!, "", "");
       continue;
@@ -388,7 +515,13 @@ function appendInlineRuns(inlines: readonly ComposerInline[], acc: RichAcc): voi
     let j = i + 1;
     while (j < inlines.length && !isUnmarked(inlines[j]!)) j += 1;
     const island = markedIsland(inlines, i, j);
-    for (const r of island.runs) acc.runs.push({ ...r, flatStart: r.flatStart + acc.flat, pmPos: r.pmPos + acc.flat, mdStart: r.mdStart + acc.md });
+    for (const r of island.runs)
+      acc.runs.push({
+        ...r,
+        flatStart: r.flatStart + acc.flat,
+        pmPos: r.pmPos + acc.flat,
+        mdStart: r.mdStart + acc.md,
+      });
     acc.value += island.value;
     acc.flat += island.flat;
     acc.md += island.md;
@@ -397,11 +530,19 @@ function appendInlineRuns(inlines: readonly ComposerInline[], acc: RichAcc): voi
 }
 
 // Keyed by the island's first inline; edits elsewhere in the line keep these inline objects.
-const islandCache = new WeakMap<ComposerInline, { readonly items: readonly ComposerInline[]; readonly acc: RichAcc }>();
+const islandCache = new WeakMap<
+  ComposerInline,
+  { readonly items: readonly ComposerInline[]; readonly acc: RichAcc }
+>();
 
 function markedIsland(inlines: readonly ComposerInline[], from: number, to: number): RichAcc {
   const hit = islandCache.get(inlines[from]!);
-  if (hit && hit.items.length === to - from && hit.items.every((item, k) => item === inlines[from + k])) return hit.acc;
+  if (
+    hit &&
+    hit.items.length === to - from &&
+    hit.items.every((item, k) => item === inlines[from + k])
+  )
+    return hit.acc;
   const items = inlines.slice(from, to);
   const acc = newAcc();
   appendMarkedIsland(items, acc);
@@ -412,7 +553,12 @@ function markedIsland(inlines: readonly ComposerInline[], from: number, to: numb
 function appendMarkedIsland(inlines: readonly ComposerInline[], acc: RichAcc): void {
   const pieces: ComposerInline[] = [];
   for (const item of inlines) {
-    if (item.kind !== "text" || item.isMarkdownSource || item.marks.includes("code") || item.marks.length === 0) {
+    if (
+      item.kind !== "text" ||
+      item.isMarkdownSource ||
+      item.marks.includes("code") ||
+      item.marks.length === 0
+    ) {
       pieces.push(item);
       continue;
     }
@@ -447,7 +593,10 @@ function appendMarkedIsland(inlines: readonly ComposerInline[], acc: RichAcc): v
       if (!marks.includes(mark)) markEnds.delete(mark);
       else if (!markEnds.has(mark)) markEnds.set(mark, i);
     }
-    ordered[i] = marks.sort((a, b) => markEnds.get(b)! - markEnds.get(a)! || MARK_ORDER.indexOf(a) - MARK_ORDER.indexOf(b));
+    ordered[i] = marks.sort(
+      (a, b) =>
+        markEnds.get(b)! - markEnds.get(a)! || MARK_ORDER.indexOf(a) - MARK_ORDER.indexOf(b),
+    );
   }
   for (let i = 1; i < ordered.length; i += 1) {
     const marks = ordered[i]!;
@@ -466,8 +615,15 @@ function appendMarkedIsland(inlines: readonly ComposerInline[], acc: RichAcc): v
   for (let i = 0; i < pieces.length; i += 1) {
     const p = pieces[i]!;
     const marks = ordered[i]!;
-    const open = marks.slice(common(marks, ordered[i - 1] ?? [])).map((m) => RICH_TEXT_DELIMITERS[m]).join("");
-    const close = marks.slice(common(marks, ordered[i + 1] ?? [])).toReversed().map((m) => RICH_TEXT_DELIMITERS[m]).join("");
+    const open = marks
+      .slice(common(marks, ordered[i - 1] ?? []))
+      .map((m) => RICH_TEXT_DELIMITERS[m])
+      .join("");
+    const close = marks
+      .slice(common(marks, ordered[i + 1] ?? []))
+      .toReversed()
+      .map((m) => RICH_TEXT_DELIMITERS[m])
+      .join("");
     pushInlineRun(acc, p, open, close);
   }
 }
@@ -492,7 +648,17 @@ function buildPart(block: ComposerBlock, variant: number): RichPart {
   if (block.kind === "codeBlock") {
     const { open, content, close } = codeBlockSource(block, (variant & 4) !== 0);
     const mdLen = open.length + content.length + close.length;
-    acc.runs.push({ kind: "text", flatStart: acc.flat, docLen: content.length, mdLen, openLen: open.length, closeLen: close.length, pmPos: acc.flat, mdStart: acc.md, nodeName: "codeBlock" });
+    acc.runs.push({
+      kind: "text",
+      flatStart: acc.flat,
+      docLen: content.length,
+      mdLen,
+      openLen: open.length,
+      closeLen: close.length,
+      pmPos: acc.flat,
+      mdStart: acc.md,
+      nodeName: "codeBlock",
+    });
     acc.flat += content.length;
     acc.md += mdLen;
     acc.value += open + content + close;
@@ -505,7 +671,10 @@ function buildPart(block: ComposerBlock, variant: number): RichPart {
   return toPart(acc, variant);
 }
 
-interface PendingLineEdit { readonly prev: RichDocMap; readonly index: number }
+interface PendingLineEdit {
+  readonly prev: RichDocMap;
+  readonly index: number;
+}
 // A doc maps to its serialization, or to the single-line edit it can be derived from.
 const serializedDocs = new WeakMap<ComposerDoc, RichDocMap | PendingLineEdit>();
 const NO_IDS: readonly string[] = [];
@@ -514,7 +683,12 @@ const NO_IDS: readonly string[] = [];
  * `doc` with line `index` replaced by `block`: same prefix, non-empty before and after, `delta` flat chars longer.
  * Those invariants keep every separator unchanged, so spans and serialization derive from `doc`'s in O(1) amortized.
  */
-export function withLineBlock(doc: ComposerDoc, index: number, block: ComposerBlock, delta: number): ComposerDoc {
+export function withLineBlock(
+  doc: ComposerDoc,
+  index: number,
+  block: ComposerBlock,
+  delta: number,
+): ComposerDoc {
   const blocks = doc.blocks.slice();
   blocks[index] = block;
   const next: ComposerDoc = { blocks };
@@ -524,7 +698,10 @@ export function withLineBlock(doc: ComposerDoc, index: number, block: ComposerBl
   return next;
 }
 
-function deriveSerialization(doc: ComposerDoc, { prev, index }: PendingLineEdit): RichDocMap | null {
+function deriveSerialization(
+  doc: ComposerDoc,
+  { prev, index }: PendingLineEdit,
+): RichDocMap | null {
   const old = prev.parts[index]!;
   // Uncached: the next keystroke replaces this block, and later full passes rebuild it once if needed.
   const part = buildPart(doc.blocks[index]!, old.variant);
@@ -539,7 +716,13 @@ function deriveSerialization(doc: ComposerDoc, { prev, index }: PendingLineEdit)
     flats[i]! += dFlat;
     mds[i]! += dMd;
   }
-  return new RichDocMap(prev.value.slice(0, prev.mds[index]) + part.value + prev.value.slice(prev.mds[index + 1]), parts, flats, mds, prev.contextIds);
+  return new RichDocMap(
+    prev.value.slice(0, prev.mds[index]) + part.value + prev.value.slice(prev.mds[index + 1]),
+    parts,
+    flats,
+    mds,
+    prev.contextIds,
+  );
 }
 
 export function serializeEditorDoc(doc: ComposerDoc): RichDocMap {
@@ -568,7 +751,13 @@ export function serializeEditorDoc(doc: ComposerDoc): RichDocMap {
     mds.push(mds[i]! + part.md);
     if (part.contextIds.length > 0) (ids ??= []).push(...part.contextIds);
   }
-  const map = new RichDocMap(value, parts, flats, mds, ids ? Array.from(new Set<string>(ids)) : NO_IDS);
+  const map = new RichDocMap(
+    value,
+    parts,
+    flats,
+    mds,
+    ids ? Array.from(new Set<string>(ids)) : NO_IDS,
+  );
   serializedDocs.set(doc, map);
   return map;
 }
@@ -581,7 +770,13 @@ export class RichDocMap {
   readonly flats: readonly number[];
   readonly mds: readonly number[];
   #runs: RichRun[] | undefined;
-  constructor(value: string, parts: readonly RichPart[], flats: readonly number[], mds: readonly number[], contextIds: readonly string[]) {
+  constructor(
+    value: string,
+    parts: readonly RichPart[],
+    flats: readonly number[],
+    mds: readonly number[],
+    contextIds: readonly string[],
+  ) {
     this.value = value;
     this.parts = parts;
     this.flats = flats;
@@ -596,7 +791,12 @@ export class RichDocMap {
     return (this.#runs ??= this.parts.flatMap((p, i) => {
       const flat = this.flats[i]!;
       const md = this.mds[i]!;
-      return p.runs.map((r) => ({ ...r, flatStart: r.flatStart + flat, pmPos: r.pmPos + flat, mdStart: r.mdStart + md }));
+      return p.runs.map((r) => ({
+        ...r,
+        flatStart: r.flatStart + flat,
+        pmPos: r.pmPos + flat,
+        mdStart: r.mdStart + md,
+      }));
     }));
   }
 }
@@ -621,7 +821,11 @@ export function visitRuns(
   to = Infinity,
 ): void {
   const { parts, flats, mds } = map;
-  for (let i = firstPart(flats, parts.length, (end) => end >= from); i < parts.length && flats[i]! <= to; i += 1) {
+  for (
+    let i = firstPart(flats, parts.length, (end) => end >= from);
+    i < parts.length && flats[i]! <= to;
+    i += 1
+  ) {
     for (const run of parts[i]!.runs) if (visit(run, flats[i]!, mds[i]!)) return;
   }
 }
@@ -639,18 +843,33 @@ export function serializeSelection(doc: ComposerDoc, from: number, to: number): 
     } else if (b.kind === "codeBlock") {
       if (start <= span.start && end >= span.end) selected.push(b);
       else {
-        const text = b.code.slice(Math.max(0, start - span.start), Math.min(b.code.length, end - span.start));
-        selected.push({ kind: "line", prefix: null, inlines: text ? [{ kind: "text", text, marks: [] }] : [] });
+        const text = b.code.slice(
+          Math.max(0, start - span.start),
+          Math.min(b.code.length, end - span.start),
+        );
+        selected.push({
+          kind: "line",
+          prefix: null,
+          inlines: text ? [{ kind: "text", text, marks: [] }] : [],
+        });
       }
     } else {
-      const inlines = sliceInlines(b.inlines, Math.max(0, start - span.start), Math.min(span.end - span.start, end - span.start));
+      const inlines = sliceInlines(
+        b.inlines,
+        Math.max(0, start - span.start),
+        Math.min(span.end - span.start, end - span.start),
+      );
       selected.push({ kind: "line", prefix: start <= span.start ? b.prefix : null, inlines });
     }
   }
   return selected.length > 0 ? serializeEditorDoc({ blocks: selected }).value : "";
 }
 
-export function serializedMarkdownOffset(value: string, serialized: string, offset: number): number {
+export function serializedMarkdownOffset(
+  value: string,
+  serialized: string,
+  offset: number,
+): number {
   if (value === serialized) return offset;
   let i = 0;
   let mapped = 0;
@@ -667,20 +886,32 @@ export function serializedMarkdownOffset(value: string, serialized: string, offs
 export function flatToMarkdown(map: RichDocMap, flatOffset: number): number {
   const bounded = Math.max(0, Math.min(flatOffset, map.docLength));
   let result = map.value.length;
-  visitRuns(map, (run, flat, md) => {
-    const start = flat + run.flatStart;
-    const end = start + run.docLen;
-    if (bounded < end || (bounded === end && run.nodeName === "codeBlock")) {
-      result = md + run.mdStart + (run.kind === "text" || run.kind === "token" ? run.openLen : 0) + (bounded - start);
-      return true;
-    }
-  }, bounded);
+  visitRuns(
+    map,
+    (run, flat, md) => {
+      const start = flat + run.flatStart;
+      const end = start + run.docLen;
+      if (bounded < end || (bounded === end && run.nodeName === "codeBlock")) {
+        result =
+          md +
+          run.mdStart +
+          (run.kind === "text" || run.kind === "token" ? run.openLen : 0) +
+          (bounded - start);
+        return true;
+      }
+    },
+    bounded,
+  );
   return result;
 }
 
 export function markdownToFlat(map: RichDocMap, markdownOffset: number): number {
   const { parts, flats, mds } = map;
-  for (let i = firstPart(mds, parts.length, (end) => end > markdownOffset); i < parts.length; i += 1) {
+  for (
+    let i = firstPart(mds, parts.length, (end) => end > markdownOffset);
+    i < parts.length;
+    i += 1
+  ) {
     for (const run of parts[i]!.runs) {
       const mdStart = mds[i]! + run.mdStart;
       if (markdownOffset >= mdStart + run.mdLen) continue;
@@ -689,7 +920,8 @@ export function markdownToFlat(map: RichDocMap, markdownOffset: number): number 
       if (run.kind === "text" || run.kind === "token") {
         const within = markdownOffset - mdStart;
         if (within <= run.openLen) return flatStart;
-        if (run.kind === "token" || within >= run.openLen + run.docLen) return flatStart + run.docLen;
+        if (run.kind === "token" || within >= run.openLen + run.docLen)
+          return flatStart + run.docLen;
         return flatStart + (within - run.openLen);
       }
       return flatStart + (markdownOffset - mdStart);
@@ -698,10 +930,11 @@ export function markdownToFlat(map: RichDocMap, markdownOffset: number): number 
   return map.docLength;
 }
 
-export const flatToPm = (map: RichDocMap, flatOffset: number): number => Math.max(0, Math.min(flatOffset, map.docLength));
-export const pmToFlat = (map: RichDocMap, pmPos: number): number => Math.max(0, Math.min(pmPos, map.docLength));
-
-export interface SkillChipReplacement { readonly from: number; readonly to: number; readonly inline: ComposerInline }
+export interface SkillChipReplacement {
+  readonly from: number;
+  readonly to: number;
+  readonly inline: ComposerInline;
+}
 
 export function skillChipReplacements(
   doc: ComposerDoc,
@@ -718,7 +951,11 @@ export function skillChipReplacements(
         (item.kind === "composer-skill" && item.skillName !== "" && !chips.skill(item.skillName)) ||
         (item.kind === "composer-model" && !chips.model(item.instanceId, item.model))
       ) {
-        replacements.push({ from: pos, to: pos + 1, inline: { kind: "text", text: readChipSource(item), marks: item.marks ?? [] } });
+        replacements.push({
+          from: pos,
+          to: pos + 1,
+          inline: { kind: "text", text: readChipSource(item), marks: item.marks ?? [] },
+        });
       }
       pos += inlineFlatLength(item);
     }
@@ -732,18 +969,32 @@ export function skillChipReplacements(
     const chip = chipForSegment(seg, chips);
     if (!chip) continue;
     const run = map.runs.find(
-      (r) => r.kind === "text" && r.nodeName !== "codeBlock" && start >= r.mdStart + r.openLen && end <= r.mdStart + r.openLen + r.docLen,
+      (r) =>
+        r.kind === "text" &&
+        r.nodeName !== "codeBlock" &&
+        start >= r.mdStart + r.openLen &&
+        end <= r.mdStart + r.openLen + r.docLen,
     );
     if (!run) continue;
     const from = run.flatStart + (start - run.mdStart - run.openLen);
     const res = resolveFlatOffset(doc, from);
-    const marks = res.block.kind === "line" ? inlineAfterOffset(res.block.inlines, res.offsetInBlock)?.marks ?? [] : [];
-    replacements.push({ from, to: from + seg.source.length, inline: marks.length ? { ...chip, marks } : chip });
+    const marks =
+      res.block.kind === "line"
+        ? (inlineAfterOffset(res.block.inlines, res.offsetInBlock)?.marks ?? [])
+        : [];
+    replacements.push({
+      from,
+      to: from + seg.source.length,
+      inline: marks.length ? { ...chip, marks } : chip,
+    });
   }
   return replacements.sort((a, b) => b.from - a.from);
 }
 
-export function applySkillChipReplacements(doc: ComposerDoc, replacements: readonly SkillChipReplacement[]): ComposerDoc {
+export function applySkillChipReplacements(
+  doc: ComposerDoc,
+  replacements: readonly SkillChipReplacement[],
+): ComposerDoc {
   let current = doc;
   for (const { from, to, inline } of replacements) {
     const res = resolveFlatOffset(current, from);
@@ -753,7 +1004,11 @@ export function applySkillChipReplacements(doc: ComposerDoc, replacements: reado
       inline,
       ...sliceInlines(res.block.inlines, to - res.start, res.end - res.start),
     ]);
-    current = { blocks: current.blocks.map((b, i) => (i === res.blockIndex ? { ...res.block, inlines: nextInlines } : b)) };
+    current = {
+      blocks: current.blocks.map((b, i) =>
+        i === res.blockIndex ? { ...res.block, inlines: nextInlines } : b,
+      ),
+    };
   }
   return current;
 }
@@ -773,7 +1028,10 @@ export function surroundSelectionWithMark(
   if (startRes.blockIndex !== endRes.blockIndex || startRes.block.kind !== "line") return null;
   const selected = sliceInlines(startRes.block.inlines, from - startRes.start, to - startRes.start);
   if (selected.some((i) => i.kind === "text" && i.isMarkdownSource)) return null;
-  const marked = selected.map((i) => ({ ...i, marks: sortMarks([...(i.marks ?? []), mark].filter((v, idx, arr) => arr.indexOf(v) === idx)) }));
+  const marked = selected.map((i) => ({
+    ...i,
+    marks: sortMarks([...(i.marks ?? []), mark].filter((v, idx, arr) => arr.indexOf(v) === idx)),
+  }));
   const nextInlines = normalizeInlines([
     ...sliceInlines(startRes.block.inlines, 0, from - startRes.start),
     ...marked,
@@ -782,25 +1040,88 @@ export function surroundSelectionWithMark(
   const testLine: ComposerBlock = {
     kind: "line",
     prefix: null,
-    inlines: normalizeInlines(nextInlines.map((i) => (isChipInline(i) ? { kind: "text", text: "\uFFFC", marks: i.marks ?? [] } : i))),
+    inlines: normalizeInlines(
+      nextInlines.map((i) =>
+        isChipInline(i) ? { kind: "text", text: "\uFFFC", marks: i.marks ?? [] } : i,
+      ),
+    ),
   };
-  const restored = buildComposerBlocks(serializeEditorDoc({ blocks: [testLine] }).value, () => null, { blocks: false })[0];
+  const restored = buildComposerBlocks(
+    serializeEditorDoc({ blocks: [testLine] }).value,
+    () => null,
+    { blocks: false },
+  )[0];
   if (
     !restored ||
     restored.kind !== "line" ||
     restored.inlines.length !== testLine.inlines.length ||
     !testLine.inlines.every((a, i) => {
       const b = restored.inlines[i]!;
-      return a.kind === "text" && b.kind === "text" && a.text === b.text && sameMarkSet(a.marks, b.marks);
+      return (
+        a.kind === "text" && b.kind === "text" && a.text === b.text && sameMarkSet(a.marks, b.marks)
+      );
     })
   ) {
     return null;
   }
   return {
-    doc: { blocks: state.doc.blocks.map((b, i) => (i === startRes.blockIndex ? { ...startRes.block, inlines: nextInlines } : b)) },
+    doc: {
+      blocks: state.doc.blocks.map((b, i) =>
+        i === startRes.blockIndex ? { ...startRes.block, inlines: nextInlines } : b,
+      ),
+    },
     selection: { anchor: from, head: to },
     changeKind: "other",
   };
+}
+
+type ListPrefix = Extract<LinePrefix, { kind: "bullet" | "ordered" | "task" }>;
+
+/** The item a nested list line hangs under, or null at the top level. */
+export function parentListPrefix(
+  blocks: readonly ComposerBlock[],
+  index: number,
+): ListPrefix | null {
+  const line = blocks[index];
+  if (line?.kind !== "line" || !isListPrefix(line.prefix) || !line.prefix.indent) return null;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const above = blocks[i]!;
+    if (above.kind !== "line" || !isListPrefix(above.prefix)) return null;
+    if (above.prefix.indent.length < line.prefix.indent.length) return above.prefix;
+  }
+  return null;
+}
+
+/** The prefix of a new item right after `prefix` at its level. */
+export const siblingPrefixOf = (prefix: ListPrefix): ListPrefix =>
+  prefix.kind === "ordered"
+    ? { ...prefix, marker: nextOrderedMarkerText(prefix.marker) }
+    : prefix.kind === "task"
+      ? { ...prefix, checked: false }
+      : prefix;
+
+/** Renumbers the ordered items that follow `from` at its level, starting at `index`. */
+export function renumberOrderedAfter(
+  blocks: ComposerBlock[],
+  index: number,
+  from: LinePrefix,
+): void {
+  if (from.kind !== "ordered") return;
+  const delim = from.marker.slice(-1);
+  let prevMarker = from.marker;
+  for (let i = index; i < blocks.length; i += 1) {
+    const sib = blocks[i]!;
+    if (
+      sib.kind !== "line" ||
+      !isListPrefix(sib.prefix) ||
+      sib.prefix.indent.length < from.indent.length
+    )
+      break;
+    if (sib.prefix.indent !== from.indent) continue;
+    if (sib.prefix.kind !== "ordered" || sib.prefix.marker.slice(-1) !== delim) break;
+    prevMarker = nextOrderedMarkerText(prevMarker);
+    blocks[i] = { ...sib, prefix: { ...sib.prefix, marker: prevMarker } };
+  }
 }
 
 export function splitOrLiftListItem(state: ComposerEditorState): ComposerEditResult | null {
@@ -808,16 +1129,22 @@ export function splitOrLiftListItem(state: ComposerEditorState): ComposerEditRes
   const to = selectionTo(state.selection);
   const startRes = resolveFlatOffset(state.doc, from);
   const endRes = resolveFlatOffset(state.doc, to);
-  if (startRes.blockIndex !== endRes.blockIndex || startRes.block.kind !== "line" || !isListPrefix(startRes.block.prefix)) {
+  if (
+    startRes.blockIndex !== endRes.blockIndex ||
+    startRes.block.kind !== "line" ||
+    !isListPrefix(startRes.block.prefix)
+  ) {
     return null;
   }
   const { prefix, inlines } = startRes.block;
+  const blocks = [...state.doc.blocks];
   if (inlines.length === 0) {
-    return {
-      doc: { blocks: state.doc.blocks.map((b, i) => (i === startRes.blockIndex ? { kind: "line", prefix: null, inlines: [] } : b)) },
-      selection: collapsedSelection(startRes.start),
-      changeKind: "other",
-    };
+    // An empty nested item lifts into its parent list; a top-level one leaves the list.
+    const parent = parentListPrefix(blocks, startRes.blockIndex);
+    const lifted = parent && siblingPrefixOf(parent);
+    blocks[startRes.blockIndex] = { kind: "line", prefix: lifted, inlines: [] };
+    if (lifted) renumberOrderedAfter(blocks, startRes.blockIndex + 1, lifted);
+    return { doc: { blocks }, selection: collapsedSelection(startRes.start), changeKind: "other" };
   }
   const before = sliceInlines(inlines, 0, from - startRes.start);
   const after = sliceInlines(inlines, to - startRes.start, startRes.end - startRes.start);
@@ -827,20 +1154,13 @@ export function splitOrLiftListItem(state: ComposerEditorState): ComposerEditRes
       : prefix.kind === "ordered"
         ? { ...prefix, marker: nextOrderedMarkerText(prefix.marker), space: " " }
         : { ...prefix, space: " " };
-  const blocks = [...state.doc.blocks];
-  blocks.splice(startRes.blockIndex, 1, { kind: "line", prefix, inlines: before }, { kind: "line", prefix: nextPrefix, inlines: after });
-  if (nextPrefix.kind === "ordered") {
-    const delim = nextPrefix.marker.slice(-1);
-    let prevMarker = nextPrefix.marker;
-    for (let i = startRes.blockIndex + 2; i < blocks.length; i += 1) {
-      const sib = blocks[i]!;
-      if (sib.kind !== "line" || !isListPrefix(sib.prefix) || sib.prefix.indent.length < nextPrefix.indent.length) break;
-      if (sib.prefix.indent !== nextPrefix.indent) continue;
-      if (sib.prefix.kind !== "ordered" || sib.prefix.marker.slice(-1) !== delim) break;
-      prevMarker = nextOrderedMarkerText(prevMarker);
-      blocks[i] = { ...sib, prefix: { ...sib.prefix, marker: prevMarker } };
-    }
-  }
+  blocks.splice(
+    startRes.blockIndex,
+    1,
+    { kind: "line", prefix, inlines: before },
+    { kind: "line", prefix: nextPrefix, inlines: after },
+  );
+  renumberOrderedAfter(blocks, startRes.blockIndex + 2, nextPrefix);
   return { doc: { blocks }, selection: collapsedSelection(from + 1), changeKind: "insert" };
 }
 
@@ -853,10 +1173,19 @@ export function convertBulletItemToTask(
   const res = resolveFlatOffset(state.doc, from);
   if (res.block.kind !== "line" || res.block.prefix?.kind !== "bullet") return null;
   const p = res.block.prefix;
-  const nextInlines = stripPrefixLength > 0 ? sliceInlines(res.block.inlines, stripPrefixLength, res.end - res.start) : res.block.inlines;
+  const nextInlines =
+    stripPrefixLength > 0
+      ? sliceInlines(res.block.inlines, stripPrefixLength, res.end - res.start)
+      : res.block.inlines;
   const task: ComposerBlock = {
     kind: "line",
-    prefix: { kind: "task", indent: p.indent, checked, markerSpace: p.space || " ", contentSpace: " " },
+    prefix: {
+      kind: "task",
+      indent: p.indent,
+      checked,
+      markerSpace: p.space || " ",
+      contentSpace: " ",
+    },
     inlines: nextInlines,
   };
   return {
@@ -872,8 +1201,14 @@ function styledEdge(state: ComposerEditorState) {
   if (res.block.kind !== "line") return null;
   const beforeItem = inlineBeforeOffset(res.block.inlines, res.offsetInBlock);
   const afterItem = inlineAfterOffset(res.block.inlines, res.offsetInBlock);
-  const before = beforeItem && !(beforeItem.kind === "text" && beforeItem.isMarkdownSource) ? beforeItem.marks ?? [] : [];
-  const after = afterItem && !(afterItem.kind === "text" && afterItem.isMarkdownSource) ? afterItem.marks ?? [] : [];
+  const before =
+    beforeItem && !(beforeItem.kind === "text" && beforeItem.isMarkdownSource)
+      ? (beforeItem.marks ?? [])
+      : [];
+  const after =
+    afterItem && !(afterItem.kind === "text" && afterItem.isMarkdownSource)
+      ? (afterItem.marks ?? [])
+      : [];
   if (sameMarkSet(before, after)) return null;
   return { before, after, current: state.selection.storedMarks ?? before };
 }
@@ -883,9 +1218,13 @@ export function caretTakesMarksBefore(state: ComposerEditorState): boolean {
   return edge !== null && sameMarkSet(edge.current, edge.before);
 }
 
-export function stepCaretAcrossStyledEdge(state: ComposerEditorState, direction: -1 | 1): ComposerEditResult | null {
+export function stepCaretAcrossStyledEdge(
+  state: ComposerEditorState,
+  direction: -1 | 1,
+): ComposerEditResult | null {
   const edge = styledEdge(state);
-  if (!edge || (!sameMarkSet(edge.current, edge.before) && !sameMarkSet(edge.current, edge.after))) return null;
+  if (!edge || (!sameMarkSet(edge.current, edge.before) && !sameMarkSet(edge.current, edge.after)))
+    return null;
   const target = direction === -1 ? edge.before : edge.after;
   if (sameMarkSet(edge.current, target)) return null;
   return { doc: state.doc, selection: { ...state.selection, storedMarks: [...target] } };

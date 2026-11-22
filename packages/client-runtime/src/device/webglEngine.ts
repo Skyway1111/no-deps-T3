@@ -1,4 +1,4 @@
-// Zero-dependency WebGL2 scene engine for the device viewers: the three.js subset they use, one PBR program and a GLB reader.
+// Zero-dependency WebGL2/WebGL1 scene engine for the device viewers: the three.js subset they use, one PBR program and a GLB reader.
 
 type Listener = () => void;
 const TAU = Math.PI * 2;
@@ -128,6 +128,9 @@ export class Vector3 {
       (e[1]! * x + e[5]! * y + e[9]! * z + e[13]!) * w,
       (e[2]! * x + e[6]! * y + e[10]! * z + e[14]!) * w,
     );
+  }
+  project(camera: PerspectiveCamera) {
+    return this.applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
   }
   transformDirection(m: Matrix4) {
     const { x, y, z } = this;
@@ -315,6 +318,11 @@ export class Euler {
   set z(v) {
     this._z = v;
     this._onChange();
+  }
+  set(x: number, y: number, z: number, order = this.order) {
+    [this._x, this._y, this._z, this.order] = [x, y, z, order];
+    this._onChange();
+    return this;
   }
   setFromQuaternion(q: Quaternion) {
     const e = new Matrix4().makeRotationFromQuaternion(q).elements;
@@ -687,19 +695,25 @@ export class BufferGeometry extends Disposable {
     return this;
   }
   translate(x: number, y: number, z: number) {
-    return this.transformPositions((p) => p.set(p.x + x, p.y + y, p.z + z));
+    return this.transformVectors((p) => p.set(p.x + x, p.y + y, p.z + z));
   }
   scale(x: number, y: number, z: number) {
-    return this.transformPositions((p) => p.set(p.x * x, p.y * y, p.z * z));
+    return this.transformVectors((p) => p.set(p.x * x, p.y * y, p.z * z));
   }
-  private transformPositions(transform: (point: Vector3) => Vector3) {
-    const position = this.getAttribute("position");
+  rotateY(angle: number) {
+    const [c, s] = [Math.cos(angle), Math.sin(angle)];
+    const turn = (p: Vector3) => p.set(p.x * c + p.z * s, p.y, p.z * c - p.x * s);
+    if (this.attributes.normal) this.transformVectors(turn, "normal");
+    return this.transformVectors(turn);
+  }
+  private transformVectors(transform: (point: Vector3) => Vector3, name = "position") {
+    const attribute = this.getAttribute(name);
     const point = new Vector3();
-    for (let i = 0; i < position.count; i++) {
-      transform(point.fromBufferAttribute(position, i));
-      position.setXYZ(i, point.x, point.y, point.z);
+    for (let i = 0; i < attribute.count; i++) {
+      transform(point.fromBufferAttribute(attribute, i));
+      attribute.setXYZ(i, point.x, point.y, point.z);
     }
-    position.needsUpdate = true;
+    attribute.needsUpdate = true;
     if (this.boundingBox) this.computeBoundingBox();
     return this;
   }
@@ -1044,6 +1058,8 @@ export class Texture extends Disposable {
   colorSpace: "srgb" | "linear" = "srgb";
   repeat = true;
   mipmaps = false;
+  /** UV set: 0 reads `uv`, 1 reads `uv1`. */
+  channel = 0;
   image: TexImageSource | null;
   constructor(image: TexImageSource | null = null) {
     super();
@@ -1103,8 +1119,10 @@ export class MeshStandardMaterial extends MeshBasicMaterial {
   normalMap: Texture | null = null;
   normalScale = new Vector2(1, 1);
   emissive = new Color().setRGB(0, 0, 0);
+  emissiveIntensity = 1;
   emissiveMap: Texture | null = null;
   aoMap: Texture | null = null;
+  aoMapIntensity = 1;
   constructor(options: MaterialOptions = {}) {
     super(options);
     this.metalness = options.metalness ?? 0;
@@ -1189,6 +1207,9 @@ export class Object3D {
   updateMatrixWorld(_force = false) {
     this.updateWorldMatrix(false, true);
   }
+  localToWorld(vector: Vector3) {
+    return vector.applyMatrix4(this.matrixWorld);
+  }
   worldToLocal(vector: Vector3) {
     return vector.applyMatrix4(this.matrixWorld.clone().invert());
   }
@@ -1198,8 +1219,10 @@ export class Group extends Object3D {
 }
 export class Scene extends Object3D {
   override readonly type: string = "Scene";
-  /** Strength of the built-in studio room reflected by physical materials; 0 disables it. */
+  /** Strength of the built-in procedural studio lighting lit materials; 0 disables it. */
   environment = 0;
+  /** Opacity of the soft contact shadow behind the scene's meshes; 0 disables it. */
+  shadow = 0;
 }
 export class Mesh extends Object3D {
   override readonly type: string = "Mesh";
@@ -1347,55 +1370,86 @@ function rayHitsBox(ray: Ray, box: Box3) {
   return true;
 }
 
-const VERTEX = `#version 300 es
-layout(location=0) in vec3 position;
-layout(location=1) in vec3 normal;
-layout(location=2) in vec2 uv;
-layout(location=3) in vec4 color;
+// One shader source for WebGL2 and WebGL1: the renderer prepends the dialect macros.
+const VERTEX = `
+ATTRIBUTE vec3 position; ATTRIBUTE vec3 normal; ATTRIBUTE vec2 uv; ATTRIBUTE vec2 uv1; ATTRIBUTE vec4 color;
 uniform mat4 model, viewProjection;
 uniform mat3 normalMatrix;
-out vec3 vWorld; out vec3 vNormal; out vec2 vUv; out vec4 vColor;
+VARYING vec3 vWorld; VARYING vec3 vNormal; VARYING vec2 vUv; VARYING vec2 vUv1; VARYING vec4 vColor;
 void main() {
   vec4 world = model * vec4(position, 1.0);
-  vWorld = world.xyz; vNormal = normalMatrix * normal; vUv = uv; vColor = color;
+  vWorld = world.xyz; vNormal = normalMatrix * normal; vUv = uv; vUv1 = uv1; vColor = color;
   gl_Position = viewProjection * world;
 }`;
+const ATTRIBUTE_LOCATIONS = ["position", "normal", "uv", "uv1", "color"] as const;
+const MAPS = ["baseMap", "metalRoughMap", "normalMap", "emissiveMap", "aoMap"] as const;
 
-const FRAGMENT = `#version 300 es
-precision highp float;
-in vec3 vWorld; in vec3 vNormal; in vec2 vUv; in vec4 vColor;
-out vec4 outColor;
+const FRAGMENT = `
+VARYING vec3 vWorld; VARYING vec3 vNormal; VARYING vec2 vUv; VARYING vec2 vUv1; VARYING vec4 vColor;
 uniform bool unlit, flipBack, vertexColors;
-uniform vec4 baseColor;
+uniform vec4 baseColor, shadow;
+uniform float shadowRadius;
 uniform vec3 emissive, cameraPosition, ambient;
-uniform float metalness, roughness, clearcoat, clearcoatRoughness, alphaTest, environment;
+uniform float metalness, roughness, clearcoat, clearcoatRoughness, alphaTest, environment, aoStrength, exposure;
 uniform vec2 normalScale;
-uniform int maps;
-uniform sampler2D baseMap, metalRoughMap, normalMap, emissiveMap, aoMap;
-uniform int lightCount;
+uniform int maps, uv1Maps, lightCount;
+uniform sampler2D ${MAPS.join(", ")};
 uniform vec3 lightDirection[4], lightColor[4];
 const float PI = 3.141592653589793;
 
-// A studio room: dim floor, bright walls and two softboxes, blurred by roughness.
-vec3 room(vec3 d, float r) {
-  float spread = 0.08 + r * 0.9;
-  vec3 base = mix(vec3(0.18), vec3(0.85), smoothstep(-0.6, 0.8, d.y));
-  float key = pow(max(dot(d, normalize(vec3(-0.5, 0.7, 0.5))), 0.0), 1.0 / (spread * spread * 0.05 + 0.002) * 0.02);
-  float fill = pow(max(dot(d, normalize(vec3(0.6, 0.3, -0.5))), 0.0), 1.0 / (spread * spread * 0.05 + 0.002) * 0.02);
-  return base + vec3(4.0) * key * (1.0 - r * 0.7) + vec3(2.0) * fill * (1.0 - r * 0.7);
+vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+bool has(int mask, float bit) { return mod(floor(float(mask) / bit), 2.0) >= 1.0; }
+vec2 uvFor(float bit) { return has(uv1Maps, bit) ? vUv1 : vUv; }
+vec4 srgbTexel(sampler2D map, float bit) {
+  vec4 texel = TEXTURE(map, uvFor(bit));
+#ifdef SRGB_DECODE
+  texel.rgb = mix(texel.rgb / 12.92, pow((texel.rgb + 0.055) / 1.055, vec3(2.4)), step(0.04045, texel.rgb));
+#endif
+  return texel;
 }
-float ggx(float nh, float a) { float a2 = a * a; float d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (PI * d * d); }
-float smith(float nv, float nl, float a) {
+
+float D_GGX(float nh, float a) { float a2 = a * a; float d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (PI * d * d); }
+float V_SmithGGX(float nv, float nl, float a) {
   float a2 = a * a;
   return 0.5 / max(nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2), 1e-5);
 }
-vec3 schlick(vec3 f0, float vh) { return f0 + (1.0 - f0) * pow(1.0 - vh, 5.0); }
+vec3 F_Schlick(vec3 f0, float vh) { return f0 + (1.0 - f0) * pow(1.0 - vh, 5.0); }
+// Karis' analytic fit of the split-sum DFG integral.
 vec2 envBrdf(float nv, float r) {
-  vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022), c1 = vec4(1.0, 0.0425, 1.04, -0.04);
-  vec4 k = r * c0 + c1;
+  vec4 k = r * vec4(-1.0, -0.0275, -0.572, 0.022) + vec4(1.0, 0.0425, 1.04, -0.04);
   float a = min(k.x * k.x, exp2(-9.28 * nv)) * k.x + k.y;
   return vec2(-1.04, 1.04) * a + k.zw;
 }
+
+vec3 walls(vec3 d, float soft) {
+  vec3 floorToCeiling = mix(vec3(0.015, 0.015, 0.018), vec3(0.2, 0.2, 0.22), smoothstep(-0.25 - soft, 0.35 + soft, d.y));
+  return floorToCeiling + vec3(0.06) * exp(-abs(d.y) * (6.0 - 5.0 * soft));
+}
+// A rectangular softbox facing the origin from direction c, sized in gnomonic half extents.
+vec3 softbox(vec3 r, vec3 n, vec3 c, vec2 size, vec3 radiance, float blur, inout vec3 irradiance) {
+  irradiance += radiance * 4.0 * atan(size.x * size.y / sqrt(1.0 + dot(size, size))) * max(dot(n, c), 0.0);
+  float z = dot(r, c);
+  if (z <= 0.0) return vec3(0.0);
+  vec3 t = normalize(cross(vec3(0.0, 1.0, 0.0), c));
+  vec2 p = abs(vec2(dot(r, t), dot(r, cross(c, t)))) / z;
+  vec2 m = 1.0 - smoothstep(size - blur, size + blur, p);
+  return radiance * m.x * m.y;
+}
+// Procedural studio IBL: prefiltered radiance along r for this roughness, cosine irradiance around n.
+vec3 studio(vec3 r, vec3 n, float rough, out vec3 irradiance) {
+  float a = rough * rough, blur = 0.01 + 1.5 * a;
+  irradiance = walls(n, 1.0) * PI;
+  vec3 radiance = walls(r, a)
+    + softbox(r, n, normalize(vec3(0.0, 1.0, 0.15)), vec2(0.8, 0.45), vec3(7.0), blur, irradiance)
+    + softbox(r, n, normalize(vec3(-1.0, 0.1, 0.27)), vec2(0.09, 1.4), vec3(2.4, 2.9, 3.6), blur, irradiance)
+    + softbox(r, n, normalize(vec3(1.0, 0.05, 0.2)), vec2(0.09, 1.4), vec3(3.6, 3.0, 2.3), blur, irradiance)
+    + softbox(r, n, normalize(vec3(0.0, 0.3, 1.0)), vec2(1.1, 0.22), vec3(0.6), blur, irradiance)
+    + softbox(r, n, normalize(vec3(0.3, 0.4, -1.0)), vec2(0.7, 0.5), vec3(1.6), blur, irradiance);
+  return mix(radiance, irradiance / PI, a);
+}
+
+#ifdef DERIVATIVES
+// Cotangent frame from screen derivatives, so normal maps need no tangent attribute.
 vec3 perturb(vec3 n, vec3 p, vec2 uv, vec3 m) {
   vec3 q0 = dFdx(p), q1 = dFdy(p); vec2 s0 = dFdx(uv), s1 = dFdy(uv);
   vec3 q1p = cross(q1, n), q0p = cross(n, q0);
@@ -1403,78 +1457,132 @@ vec3 perturb(vec3 n, vec3 p, vec2 uv, vec3 m) {
   float scale = inversesqrt(max(max(dot(t, t), dot(b, b)), 1e-12));
   return normalize(mat3(t * scale, b * scale, n) * m);
 }
-vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+#endif
+vec3 display(vec3 c) {
+  // ACES filmic (Hill's RRT+ODT fit, as three.js), then sRGB encode.
+  c = mat3(0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777) * (c * exposure / 0.6);
+  c = (c * (c + 0.0245786) - 0.000090537) / (c * (0.983729 * c + 0.4329510) + 0.238081);
+  return toSrgb(clamp(mat3(1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602) * c, 0.0, 1.0));
+}
 
 void main() {
+  if (shadow.w > 0.0) {
+    // Rounded rectangle of half size shadow.xy, softened by shadow.z over a quad padded by twice that.
+    vec2 p = abs(vUv - 0.5) * 2.0 * (shadow.xy + 2.0 * shadow.z) - shadow.xy + shadowRadius;
+    float d = length(max(p, 0.0)) + min(max(p.x, p.y), 0.0) - shadowRadius;
+    float a = 1.0 - smoothstep(-shadow.z, shadow.z * 1.5, d);
+    FRAG_COLOR = vec4(0.0, 0.0, 0.0, shadow.w * a * a);
+    return;
+  }
   vec4 albedo = baseColor;
-  if ((maps & 1) != 0) albedo *= texture(baseMap, vUv);
+  if (has(maps, 1.0)) albedo *= srgbTexel(baseMap, 1.0);
   if (vertexColors) albedo *= vColor;
   if (albedo.a < alphaTest) discard;
-  if (unlit) { outColor = vec4(toSrgb(albedo.rgb) * albedo.a, albedo.a); return; }
+  if (unlit) { FRAG_COLOR = vec4(toSrgb(albedo.rgb) * albedo.a, albedo.a); return; }
   vec3 n = normalize(vNormal);
   if (flipBack && !gl_FrontFacing) n = -n;
   vec3 geometric = n;
-  if ((maps & 4) != 0) n = perturb(n, vWorld, vUv, (texture(normalMap, vUv).xyz * 2.0 - 1.0) * vec3(normalScale, 1.0));
   float metal = metalness, rough = roughness;
-  if ((maps & 2) != 0) { vec4 mr = texture(metalRoughMap, vUv); rough *= mr.g; metal *= mr.b; }
-  rough = clamp(rough, 0.045, 1.0);
+  if (has(maps, 2.0)) { vec4 mr = TEXTURE(metalRoughMap, uvFor(2.0)); rough *= mr.g; metal *= mr.b; }
+#ifdef DERIVATIVES
+  if (has(maps, 4.0)) n = perturb(n, vWorld, uvFor(4.0), (TEXTURE(normalMap, uvFor(4.0)).xyz * 2.0 - 1.0) * vec3(normalScale, 1.0));
+  // Geometric specular antialiasing: widen the lobe where the normal changes within a pixel.
+  vec3 dxy = max(abs(dFdx(geometric)), abs(dFdy(geometric)));
+  rough += max(max(dxy.x, dxy.y), dxy.z);
+#endif
+  rough = clamp(rough, 0.0525, 1.0);
   float a = rough * rough;
   vec3 v = normalize(cameraPosition - vWorld);
   float nv = clamp(abs(dot(n, v)), 1e-4, 1.0);
-  vec3 diffuse = albedo.rgb * (1.0 - metal);
+  vec3 cdiff = albedo.rgb * (1.0 - metal);
   vec3 f0 = mix(vec3(0.04), albedo.rgb, metal);
-  vec3 light = diffuse * ambient / PI;
-  float coatNv = clamp(dot(geometric, v), 1e-4, 1.0);
-  float coatA = max(clearcoatRoughness, 0.045); coatA *= coatA;
-  vec3 coat = vec3(0.0);
+  float coatNv = clamp(abs(dot(geometric, v)), 1e-4, 1.0);
+  float coatA = max(clearcoatRoughness, 0.0525); coatA *= coatA;
+  vec3 diffuse = vec3(0.0), specular = vec3(0.0), coat = vec3(0.0);
   for (int i = 0; i < 4; i++) {
     if (i >= lightCount) break;
-    vec3 l = lightDirection[i];
-    vec3 h = normalize(l + v);
-    float nl = clamp(dot(n, l), 0.0, 1.0);
-    vec3 irradiance = lightColor[i] * nl;
-    float vh = clamp(dot(v, h), 0.0, 1.0);
-    light += irradiance * (diffuse / PI + schlick(f0, vh) * smith(nv, nl, a) * ggx(clamp(dot(n, h), 0.0, 1.0), a));
+    vec3 l = lightDirection[i], h = normalize(l + v);
+    float nl = clamp(dot(n, l), 0.0, 1.0), vh = clamp(dot(v, h), 0.0, 1.0);
+    vec3 f = F_Schlick(f0, vh);
+    diffuse += lightColor[i] * nl * (1.0 - f) * cdiff / PI;
+    specular += lightColor[i] * nl * f * V_SmithGGX(nv, nl, a) * D_GGX(clamp(dot(n, h), 0.0, 1.0), a);
     if (clearcoat > 0.0) {
       float cl = clamp(dot(geometric, l), 0.0, 1.0);
-      coat += lightColor[i] * cl * schlick(vec3(0.04), vh) * smith(coatNv, cl, coatA) * ggx(clamp(dot(geometric, h), 0.0, 1.0), coatA);
+      coat += lightColor[i] * cl * F_Schlick(vec3(0.04), vh) * V_SmithGGX(coatNv, cl, coatA) * D_GGX(clamp(dot(geometric, h), 0.0, 1.0), coatA);
     }
   }
+  // Occlusion applies to indirect light only, per glTF.
+  float ao = has(maps, 16.0) ? 1.0 + aoStrength * (TEXTURE(aoMap, uvFor(16.0)).r - 1.0) : 1.0;
+  vec3 indirect = ambient * cdiff / PI;
   if (environment > 0.0) {
+    vec3 irradiance;
+    vec3 radiance = studio(reflect(-v, n), n, rough, irradiance) * environment;
+    irradiance *= environment / PI;
+    // Fdez-Aguera multiple scattering keeps rough metals from losing energy.
     vec2 ab = envBrdf(nv, rough);
-    light += environment * (room(n, 1.0) * diffuse + room(reflect(-v, n), rough) * (f0 * ab.x + ab.y));
+    vec3 single = f0 * ab.x + ab.y;
+    float ems = 1.0 - ab.x - ab.y;
+    vec3 favg = f0 + (1.0 - f0) / 21.0;
+    vec3 multi = ems * single * favg / (1.0 - ems * favg);
+    vec3 total = single + multi;
+    specular += (radiance * single + multi * irradiance) * ao;
+    indirect += cdiff * (1.0 - max(max(total.r, total.g), total.b)) * irradiance;
     if (clearcoat > 0.0) {
       vec2 cab = envBrdf(coatNv, clearcoatRoughness);
-      coat += environment * room(reflect(-v, geometric), clearcoatRoughness) * (0.04 * cab.x + cab.y);
+      coat += environment * studio(reflect(-v, geometric), geometric, clearcoatRoughness, irradiance) * (0.04 * cab.x + cab.y);
     }
   }
-  if ((maps & 16) != 0) light *= texture(aoMap, vUv).r;
-  float coatFresnel = clearcoat * schlick(vec3(0.04), coatNv).x;
-  light = light * (1.0 - coatFresnel) + clearcoat * coat;
+  float keep = 1.0 - clearcoat * F_Schlick(vec3(0.04), coatNv).x;
   vec3 glow = emissive;
-  if ((maps & 8) != 0) glow *= texture(emissiveMap, vUv).rgb;
-  outColor = vec4(toSrgb(light + glow) * albedo.a, albedo.a);
+  if (has(maps, 8.0)) glow *= srgbTexel(emissiveMap, 8.0).rgb;
+  vec3 body = (diffuse + indirect * ao + glow) * keep;
+  vec3 sheen = specular * keep + clearcoat * coat;
+  // Premultiplied out: a transparent surface covers alpha of the background, and its reflections add over the rest.
+  FRAG_COLOR = vec4(display(body + sheen) * albedo.a + display(sheen) * (1.0 - albedo.a), albedo.a);
 }`;
 
-type GpuGeometry = { vao: WebGLVertexArrayObject; buffers: Map<string, { attribute: BufferAttribute; buffer: WebGLBuffer; version: number }>; index: { attribute: BufferAttribute; buffer: WebGLBuffer; version: number } | null; count: number };
+type GpuBuffer = { attribute: BufferAttribute; buffer: WebGLBuffer; version: number };
+type GpuGeometry = { vao: WebGLVertexArrayObject; buffers: Map<string, GpuBuffer>; index: GpuBuffer | null; count: number };
 type GpuTexture = { texture: WebGLTexture; version: number };
+type GL = WebGL2RenderingContext | WebGLRenderingContext;
 
 export class WebGLRenderer {
-  readonly gl: WebGL2RenderingContext;
+  readonly gl: GL;
+  private readonly webgl2: boolean;
+  /** Exposure ahead of ACES filmic tone mapping. Unlit materials, such as live displays, stay exact. */
+  toneMappingExposure = 1;
   private readonly program: WebGLProgram;
+  private readonly vertexArrays: { create(): WebGLVertexArrayObject; bind(vao: WebGLVertexArrayObject | null): void; delete(vao: WebGLVertexArrayObject): void };
   private readonly uniforms = new Map<string, WebGLUniformLocation | null>();
   private readonly geometries = new Map<BufferGeometry, GpuGeometry>();
   private readonly textures = new Map<Texture, GpuTexture>();
+  private readonly shadow = new Mesh(new PlaneGeometry(), Object.assign(new MeshBasicMaterial({ depthWrite: false }), { side: DoubleSide }));
   private disposed = false;
   constructor(options: { canvas: HTMLCanvasElement; alpha?: boolean; antialias?: boolean; powerPreference?: WebGLPowerPreference }) {
-    const gl = options.canvas.getContext("webgl2", {
+    const attributes: WebGLContextAttributes = {
       alpha: options.alpha ?? false,
       antialias: options.antialias ?? false,
       premultipliedAlpha: true,
       powerPreference: options.powerPreference ?? "default",
-    });
-    if (!gl) throw new Error("WebGL2 is unavailable");
+    };
+    const gl2 = options.canvas.getContext("webgl2", attributes);
+    const gl = gl2 ?? options.canvas.getContext("webgl", attributes);
+    if (!gl) throw new Error("WebGL is unavailable");
     this.gl = gl;
+    this.webgl2 = !!gl2;
+    let header: [string, string];
+    if (gl2) {
+      this.vertexArrays = { create: () => gl2.createVertexArray()!, bind: (vao) => gl2.bindVertexArray(vao), delete: (vao) => gl2.deleteVertexArray(vao) };
+      const common = "#version 300 es\nprecision highp float;\n#define TEXTURE texture\n#define DERIVATIVES\n";
+      header = [`${common}#define ATTRIBUTE in\n#define VARYING out\n`, `${common}#define VARYING in\n#define FRAG_COLOR fragColor\nout vec4 fragColor;\n`];
+    } else {
+      const vao = gl.getExtension("OES_vertex_array_object");
+      if (!vao || !gl.getExtension("OES_element_index_uint")) throw new Error("WebGL is unavailable");
+      this.vertexArrays = { create: () => vao.createVertexArrayOES()!, bind: (array) => vao.bindVertexArrayOES(array), delete: (array) => vao.deleteVertexArrayOES(array) };
+      const derivatives = gl.getExtension("OES_standard_derivatives") ? "#extension GL_OES_standard_derivatives : enable\n#define DERIVATIVES\n" : "";
+      const common = "precision highp float;\n#define TEXTURE texture2D\n";
+      header = [`${common}#define ATTRIBUTE attribute\n#define VARYING varying\n`, `${derivatives}${common}#define VARYING varying\n#define FRAG_COLOR gl_FragColor\n#define SRGB_DECODE\n`];
+    }
     const compile = (type: number, source: string) => {
       const shader = gl.createShader(type)!;
       gl.shaderSource(shader, source);
@@ -1484,13 +1592,14 @@ export class WebGLRenderer {
       return shader;
     };
     this.program = gl.createProgram()!;
-    gl.attachShader(this.program, compile(gl.VERTEX_SHADER, VERTEX));
-    gl.attachShader(this.program, compile(gl.FRAGMENT_SHADER, FRAGMENT));
+    gl.attachShader(this.program, compile(gl.VERTEX_SHADER, header[0] + VERTEX));
+    gl.attachShader(this.program, compile(gl.FRAGMENT_SHADER, header[1] + FRAGMENT));
+    ATTRIBUTE_LOCATIONS.forEach((name, location) => gl.bindAttribLocation(this.program, location, name));
     gl.linkProgram(this.program);
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS) && !gl.isContextLost())
       throw new Error(gl.getProgramInfoLog(this.program) ?? "Shader link failed");
     gl.useProgram(this.program);
-    ["baseMap", "metalRoughMap", "normalMap", "emissiveMap", "aoMap"].forEach((name, unit) => gl.uniform1i(this.uniform(name), unit));
+    MAPS.forEach((name, unit) => gl.uniform1i(this.uniform(name), unit));
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
   }
@@ -1532,8 +1641,9 @@ export class WebGLRenderer {
     gl.useProgram(this.program);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const viewProjection = new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    const eye = new Vector3().setFromMatrixPosition(camera.matrixWorld);
     gl.uniformMatrix4fv(this.uniform("viewProjection"), false, viewProjection.elements);
-    gl.uniform3f(this.uniform("cameraPosition"), ...(new Vector3().setFromMatrixPosition(camera.matrixWorld).toArray() as [number, number, number]));
+    gl.uniform3f(this.uniform("cameraPosition"), eye.x, eye.y, eye.z);
     gl.uniform3fv(this.uniform("ambient"), ambient);
     gl.uniform1i(this.uniform("lightCount"), directions.length / 3);
     if (directions.length) {
@@ -1541,17 +1651,71 @@ export class WebGLRenderer {
       gl.uniform3fv(this.uniform("lightColor"), colors);
     }
     gl.uniform1f(this.uniform("environment"), scene.environment);
-    const eye = new Vector3().setFromMatrixPosition(camera.matrixWorld);
+    gl.uniform1f(this.uniform("exposure"), this.toneMappingExposure);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    if (scene.shadow > 0) this.drawShadow(meshes, camera, scene.shadow);
     const depth = (mesh: Mesh) => new Vector3().setFromMatrixPosition(mesh.matrixWorld).distanceTo(eye);
     const opaque = meshes.filter((mesh) => !mesh.material.transparent);
     const blended = meshes.filter((mesh) => mesh.material.transparent).sort((a, b) => depth(b) - depth(a));
     gl.disable(gl.BLEND);
     for (const mesh of opaque) this.draw(mesh);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     for (const mesh of blended) this.draw(mesh);
     gl.colorMask(true, true, true, true);
     gl.depthMask(true);
+  }
+  /** A soft contact shadow on a card just behind the device, fitted to its projected outline; tilt spreads and fades it. */
+  private drawShadow(meshes: Mesh[], camera: PerspectiveCamera, opacity: number) {
+    const bounds = new Box3();
+    const corners: Vector3[] = [];
+    const toView = new Matrix4();
+    for (const mesh of meshes) {
+      if (!mesh.material.colorWrite) continue;
+      mesh.geometry.boundingBox ?? mesh.geometry.computeBoundingBox();
+      const { min, max } = mesh.geometry.boundingBox!;
+      if (min.x > max.x) continue;
+      toView.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+      for (let i = 0; i < 8; i++) {
+        const corner = new Vector3(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z).applyMatrix4(toView);
+        bounds.expandByPoint(corner);
+        corners.push(corner);
+      }
+    }
+    if (bounds.isEmpty() || bounds.max.z >= 0) return;
+    const z = bounds.min.z - (bounds.max.z - bounds.min.z) * 0.1 - 0.05 * bounds.getSize(new Vector3()).length();
+    // Minimum-area rectangle around the outline as projected onto the card: rotating calipers over its hull.
+    const hull = convexHull(corners.map((p) => new Vector2(p.x, p.y).multiplyScalar(z / p.z)));
+    let fit = { area: Infinity, c: 1, s: 0, extent: [0, 0, 0, 0] };
+    hull.forEach((a, i) => {
+      const b = hull[(i + 1) % hull.length]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (!length) return;
+      const [c, s] = [(b.x - a.x) / length, (b.y - a.y) / length];
+      const us = hull.map((p) => p.x * c + p.y * s);
+      const vs = hull.map((p) => p.y * c - p.x * s);
+      const extent = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+      const area = (extent[1]! - extent[0]!) * (extent[3]! - extent[2]!);
+      if (area < fit.area) fit = { area, c, s, extent };
+    });
+    const { c, s, extent } = fit;
+    const [width, height] = [extent[1]! - extent[0]!, extent[3]! - extent[2]!];
+    const span = Math.max(width, height);
+    if (!span) return;
+    const lift = Math.min(1, ((bounds.max.z - bounds.min.z) * z) / (bounds.getCenter(new Vector3()).z * span));
+    const shrink = 0.47 - 0.12 * lift;
+    const [halfX, halfY, blur] = [width * shrink, height * shrink, span * (0.045 + 0.1 * lift)];
+    const u = (extent[0]! + extent[1]!) / 2;
+    const v = (extent[2]! + extent[3]!) / 2;
+    const drop = span * (0.02 + 0.05 * lift);
+    const [quadX, quadY] = [2 * (halfX + 2 * blur), 2 * (halfY + 2 * blur)];
+    this.shadow.matrixWorld = new Matrix4()
+      .set(c * quadX, -s * quadY, 0, u * c - v * s, s * quadX, c * quadY, 0, u * s + v * c - drop, 0, 0, 1, z, 0, 0, 0, 1)
+      .premultiply(camera.matrixWorld);
+    this.gl.uniform1f(this.uniform("shadowRadius"), Math.min(halfX, halfY) * Math.min(1, 0.12 + 2 * lift));
+    this.gl.uniform4f(this.uniform("shadow"), halfX, halfY, blur, opacity / (1 + lift));
+    this.draw(this.shadow);
+    this.gl.uniform4f(this.uniform("shadow"), 0, 0, 0, 0);
   }
   private draw(mesh: Mesh) {
     const gl = this.gl;
@@ -1569,11 +1733,13 @@ export class WebGLRenderer {
     gl.uniform4f(this.uniform("baseColor"), material.color.r, material.color.g, material.color.b, material.opacity);
     gl.uniform1f(this.uniform("alphaTest"), material.alphaTest);
     let maps = 0;
+    let uv1Maps = 0;
     const bind = (texture: Texture | null, unit: number) => {
       if (!texture?.image) return;
       gl.activeTexture(gl.TEXTURE0 + unit);
       gl.bindTexture(gl.TEXTURE_2D, this.texture(texture));
       maps |= 1 << unit;
+      if (texture.channel === 1) uv1Maps |= 1 << unit;
     };
     bind(material.map, 0);
     if (material instanceof MeshStandardMaterial) {
@@ -1585,39 +1751,42 @@ export class WebGLRenderer {
       gl.uniform1f(this.uniform("roughness"), material.roughness);
       gl.uniform1f(this.uniform("clearcoat"), material.clearcoat);
       gl.uniform1f(this.uniform("clearcoatRoughness"), material.clearcoatRoughness);
+      gl.uniform1f(this.uniform("aoStrength"), material.aoMapIntensity);
       gl.uniform2f(this.uniform("normalScale"), material.normalScale.x, material.normalScale.y);
-      gl.uniform3f(this.uniform("emissive"), material.emissive.r, material.emissive.g, material.emissive.b);
+      const glow = material.emissiveIntensity;
+      gl.uniform3f(this.uniform("emissive"), material.emissive.r * glow, material.emissive.g * glow, material.emissive.b * glow);
     }
     gl.uniform1i(this.uniform("maps"), maps);
+    gl.uniform1i(this.uniform("uv1Maps"), uv1Maps);
     gl.colorMask(material.colorWrite, material.colorWrite, material.colorWrite, material.colorWrite);
     gl.depthMask(material.depthWrite);
-    gl.bindVertexArray(gpu.vao);
+    this.vertexArrays.bind(gpu.vao);
     if (gpu.index) gl.drawElements(gl.TRIANGLES, gpu.count, gpu.index.attribute.array instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
     else gl.drawArrays(gl.TRIANGLES, 0, gpu.count);
-    gl.bindVertexArray(null);
+    this.vertexArrays.bind(null);
   }
   private geometry(geometry: BufferGeometry) {
     const gl = this.gl;
     let gpu = this.geometries.get(geometry);
     if (!gpu) {
-      const created: GpuGeometry = { vao: gl.createVertexArray()!, buffers: new Map(), index: null, count: 0 };
+      const created: GpuGeometry = { vao: this.vertexArrays.create(), buffers: new Map(), index: null, count: 0 };
       gpu = created;
       this.geometries.set(geometry, created);
       geometry.disposeListeners.add(() => {
-        gl.deleteVertexArray(created.vao);
+        this.vertexArrays.delete(created.vao);
         for (const { buffer } of created.buffers.values()) gl.deleteBuffer(buffer);
         if (created.index) gl.deleteBuffer(created.index.buffer);
         this.geometries.delete(geometry);
       });
     }
-    gl.bindVertexArray(gpu.vao);
-    const upload = (target: number, entry: { attribute: BufferAttribute; buffer: WebGLBuffer; version: number }) => {
+    this.vertexArrays.bind(gpu.vao);
+    const upload = (target: number, entry: GpuBuffer) => {
       gl.bindBuffer(target, entry.buffer);
       if (entry.version === entry.attribute.version) return;
       gl.bufferData(target, entry.attribute.array, gl.DYNAMIC_DRAW);
       entry.version = entry.attribute.version;
     };
-    for (const [name, location] of [["position", 0], ["normal", 1], ["uv", 2], ["color", 3]] as const) {
+    ATTRIBUTE_LOCATIONS.forEach((name, location) => {
       const attribute = geometry.attributes[name];
       let entry = gpu.buffers.get(name);
       if (entry && entry.attribute !== attribute) {
@@ -1625,16 +1794,13 @@ export class WebGLRenderer {
         gpu.buffers.delete(name);
         entry = undefined;
       }
-      if (!attribute) {
-        gl.disableVertexAttribArray(location);
-        continue;
-      }
+      if (!attribute) return gl.disableVertexAttribArray(location);
       if (!entry) gpu.buffers.set(name, (entry = { attribute, buffer: gl.createBuffer()!, version: -1 }));
       upload(gl.ARRAY_BUFFER, entry);
       gl.enableVertexAttribArray(location);
       gl.vertexAttribPointer(location, attribute.itemSize, glType(gl, attribute.array), attribute.normalized, 0, 0);
-    }
-    gl.vertexAttrib4f(3, 1, 1, 1, 1);
+    });
+    gl.vertexAttrib4f(ATTRIBUTE_LOCATIONS.indexOf("color"), 1, 1, 1, 1);
     if (geometry.index) {
       if (gpu.index?.attribute !== geometry.index) {
         if (gpu.index) gl.deleteBuffer(gpu.index.buffer);
@@ -1643,7 +1809,7 @@ export class WebGLRenderer {
       upload(gl.ELEMENT_ARRAY_BUFFER, gpu.index);
     }
     gpu.count = geometry.index?.count ?? geometry.attributes.position?.count ?? 0;
-    gl.bindVertexArray(null);
+    this.vertexArrays.bind(null);
     return gpu;
   }
   private texture(texture: Texture) {
@@ -1663,14 +1829,19 @@ export class WebGLRenderer {
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, texture.flipY);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-      const srgb = texture.colorSpace === "srgb";
-      gl.texImage2D(gl.TEXTURE_2D, 0, srgb ? gl.SRGB8_ALPHA8 : gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
-      const wrap = texture.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+      const { webgl2 } = this;
+      // WebGL1 decodes sRGB in the shader, and cannot repeat or mipmap non-power-of-two images.
+      const { width, height } = texture.image as { width: number; height: number };
+      const full = webgl2 || ((width & (width - 1)) === 0 && (height & (height - 1)) === 0);
+      const format = webgl2 && texture.colorSpace === "srgb" ? (gl as WebGL2RenderingContext).SRGB8_ALPHA8 : gl.RGBA;
+      gl.texImage2D(gl.TEXTURE_2D, 0, format, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+      const wrap = texture.repeat && full ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+      const mipmaps = texture.mipmaps && full;
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      if (texture.mipmaps) gl.generateMipmap(gl.TEXTURE_2D);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, texture.mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+      if (mipmaps) gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
       gpu.version = texture.version;
     }
     return gpu.texture;
@@ -1686,7 +1857,23 @@ export class WebGLRenderer {
   }
 }
 
-function glType(gl: WebGL2RenderingContext, array: AttributeArray) {
+/** Andrew's monotone chain, counter-clockwise. */
+function convexHull(points: Vector2[]) {
+  const sorted = points.sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Vector2, a: Vector2, b: Vector2) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const chain = (ordered: Vector2[]) => {
+    const out: Vector2[] = [];
+    for (const p of ordered) {
+      while (out.length >= 2 && cross(out.at(-2)!, out.at(-1)!, p) <= 0) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...chain(sorted), ...chain(sorted.slice().reverse())];
+}
+
+function glType(gl: GL, array: AttributeArray) {
   if (array instanceof Float32Array) return gl.FLOAT;
   if (array instanceof Uint8Array) return gl.UNSIGNED_BYTE;
   if (array instanceof Uint16Array) return gl.UNSIGNED_SHORT;
@@ -1715,6 +1902,7 @@ export function disposeObject(root: Object3D) {
   for (const image of images) image.close();
 }
 
+type TextureInfo = { index: number; texCoord?: number };
 type Gltf = {
   scene?: number;
   scenes?: { nodes?: number[] }[];
@@ -1731,11 +1919,14 @@ type Gltf = {
     alphaMode?: "OPAQUE" | "MASK" | "BLEND";
     alphaCutoff?: number;
     emissiveFactor?: number[];
-    normalTexture?: { index: number; scale?: number };
-    occlusionTexture?: { index: number };
-    emissiveTexture?: { index: number };
-    pbrMetallicRoughness?: { baseColorFactor?: number[]; metallicFactor?: number; roughnessFactor?: number; baseColorTexture?: { index: number }; metallicRoughnessTexture?: { index: number } };
-    extensions?: { KHR_materials_clearcoat?: { clearcoatFactor?: number; clearcoatRoughnessFactor?: number } };
+    normalTexture?: TextureInfo & { scale?: number };
+    occlusionTexture?: TextureInfo & { strength?: number };
+    emissiveTexture?: TextureInfo;
+    pbrMetallicRoughness?: { baseColorFactor?: number[]; metallicFactor?: number; roughnessFactor?: number; baseColorTexture?: TextureInfo; metallicRoughnessTexture?: TextureInfo };
+    extensions?: {
+      KHR_materials_clearcoat?: { clearcoatFactor?: number; clearcoatRoughnessFactor?: number };
+      KHR_materials_emissive_strength?: { emissiveStrength?: number };
+    };
   }[];
 };
 
@@ -1790,9 +1981,10 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     ),
   );
   const textureCache = new Map<string, Texture>();
-  const texture = (index: number | undefined, srgb: boolean) => {
-    if (index === undefined) return null;
-    const key = `${index}:${srgb}`;
+  const texture = (info: TextureInfo | undefined, srgb: boolean) => {
+    if (!info) return null;
+    const { index, texCoord = 0 } = info;
+    const key = `${index}:${srgb}:${texCoord}`;
     const cached = textureCache.get(key);
     if (cached) return cached;
     const definition = gltf.textures![index]!;
@@ -1805,6 +1997,7 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     result.colorSpace = srgb ? "srgb" : "linear";
     result.repeat = (sampler?.wrapS ?? 10497) === 10497;
     result.mipmaps = (sampler?.minFilter ?? 9987) >= 9984;
+    result.channel = texCoord;
     result.version = 1;
     textureCache.set(key, result);
     return result;
@@ -1819,16 +2012,18 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     material.opacity = a!;
     material.metalness = pbr.metallicFactor ?? 1;
     material.roughness = pbr.roughnessFactor ?? 1;
-    material.map = texture(pbr.baseColorTexture?.index, true);
-    material.metalnessMap = texture(pbr.metallicRoughnessTexture?.index, false);
-    material.normalMap = texture(definition.normalTexture?.index, false);
+    material.map = texture(pbr.baseColorTexture, true);
+    material.metalnessMap = texture(pbr.metallicRoughnessTexture, false);
+    material.normalMap = texture(definition.normalTexture, false);
     const scale = definition.normalTexture?.scale ?? 1;
     // Derivative tangents with glTF's top-left UV origin flip the bitangent.
     material.normalScale.set(scale, -scale);
-    material.emissiveMap = texture(definition.emissiveTexture?.index, true);
-    material.aoMap = texture(definition.occlusionTexture?.index, false);
+    material.emissiveMap = texture(definition.emissiveTexture, true);
+    material.aoMap = texture(definition.occlusionTexture, false);
+    material.aoMapIntensity = definition.occlusionTexture?.strength ?? 1;
     const [er, eg, eb] = definition.emissiveFactor ?? [0, 0, 0];
     material.emissive.setRGB(er!, eg!, eb!);
+    material.emissiveIntensity = definition.extensions?.KHR_materials_emissive_strength?.emissiveStrength ?? 1;
     material.side = definition.doubleSided ? DoubleSide : FrontSide;
     material.transparent = definition.alphaMode === "BLEND";
     material.alphaTest = definition.alphaMode === "MASK" ? (definition.alphaCutoff ?? 0.5) : 0;

@@ -4,18 +4,21 @@ import * as NodePath from "node:path";
 const NAME = process.platform === "win32" ? "t3-sys.exe" : "t3-sys";
 let resolved: string | undefined;
 
-/** Candidate locations: override, packaged app resources, beside the executable, then a cargo build. */
+/** Candidate locations: override, packaged app resources, beside the executable, then a cargo build in an ancestor (source or bundled dist). */
 export function t3SysCandidates(): string[] {
   const resources = (process as { resourcesPath?: string }).resourcesPath;
   const executableDir = NodePath.dirname(process.execPath);
-  const crate = NodePath.resolve(import.meta.dirname, "../../../../native/t3-sys/target");
+  const ancestors = Array.from({ length: 7 }, (_, up) =>
+    NodePath.resolve(import.meta.dirname, "../".repeat(up)),
+  );
   return [
     process.env.T3CODE_SYS_PATH,
     resources && NodePath.join(resources, "t3-sys", NAME),
     NodePath.join(import.meta.dirname, "t3-sys", NAME),
     NodePath.join(executableDir, "t3-sys", NAME),
-    NodePath.join(crate, "release", NAME),
-    NodePath.join(crate, "debug", NAME),
+    ...["release", "debug"].flatMap((profile) =>
+      ancestors.map((dir) => NodePath.join(dir, "native/t3-sys/target", profile, NAME)),
+    ),
   ].filter((candidate): candidate is string => Boolean(candidate));
 }
 

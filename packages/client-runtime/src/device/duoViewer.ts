@@ -75,6 +75,7 @@ export function createDuoViewer(options: {
   });
   const scene = new Scene();
   scene.environment = 1;
+  scene.shadow = 0.6;
   const camera = new PerspectiveCamera(36, 1, 0.1, 150);
   const key = new DirectionalLight(0xffffff, 4);
   key.position.set(-6, 10, 14);
