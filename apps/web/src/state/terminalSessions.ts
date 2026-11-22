@@ -77,11 +77,14 @@ function knownSession(
   return session;
 }
 
+const compareTerminalIds = new Intl.Collator(undefined, { numeric: true }).compare;
+
 function terminalMetadataIndex(metadata: ReadonlyArray<TerminalSummary>): TerminalMetadataIndex {
   let index = metadataIndexes.get(metadata);
   if (!index) {
-    const compare = new Intl.Collator(undefined, { numeric: true }).compare;
-    const all = metadata.toSorted((left, right) => compare(left.terminalId, right.terminalId));
+    const all = metadata.toSorted((left, right) =>
+      compareTerminalIds(left.terminalId, right.terminalId),
+    );
     const byThreadId = new Map<string, TerminalSummary[]>();
     for (const summary of all) {
       const group = byThreadId.get(summary.threadId);
@@ -281,21 +284,31 @@ export function useThreadRunningTerminalIds(input: {
   return selectRunningSubprocessTerminalIds(sessions ?? []);
 }
 
-// A string so status updates that keep every label notify no one.
+const NO_TERMINAL_LABELS: ReadonlyMap<string, string> = new Map();
+
+function sameLabels(left: ReadonlyMap<string, string>, right: ReadonlyMap<string, string>) {
+  if (left.size !== right.size) return false;
+  for (const [threadId, label] of left) if (right.get(threadId) !== label) return false;
+  return true;
+}
+
+// Equality by content so status updates that keep every label notify no one.
 const terminalLabelsFamily = Atom.family((environmentId: EnvironmentId) =>
-  Atom.make((get) => {
+  Atom.make((get): ReadonlyMap<string, string> => {
     const metadata = get(terminalEnvironment.metadata({ environmentId, input: null }));
-    if (metadata._tag !== "Success") return "[]";
-    return JSON.stringify(
-      Array.from(terminalMetadataIndex(metadata.value).byThreadId, ([threadId, summaries]) => [
-        threadId,
-        summaries[0]!.label,
-      ]),
-    );
-  }).pipe(Atom.withLabel(`web-terminal-labels:${environmentId}`)),
+    if (metadata._tag !== "Success") return NO_TERMINAL_LABELS;
+    const labels = new Map<string, string>();
+    for (const [threadId, summaries] of terminalMetadataIndex(metadata.value).byThreadId) {
+      labels.set(threadId, summaries[0]!.label);
+    }
+    return labels;
+  }).pipe(Atom.withEquality(sameLabels), Atom.withLabel(`web-terminal-labels:${environmentId}`)),
 );
 const terminalLabelsListAtom = environmentAtomList("web-terminal-labels", terminalLabelsFamily);
-const terminalLabelsByResults = new WeakMap<ReadonlyArray<string>, ReadonlyMap<string, string>>();
+const terminalLabelsByResults = new WeakMap<
+  ReadonlyArray<ReadonlyMap<string, string>>,
+  ReadonlyMap<string, string>
+>();
 
 /** First terminal label of each thread that has one, keyed `${environmentId}:${threadId}`. */
 export function useTerminalLabelsByThreadKey(
@@ -310,8 +323,8 @@ export function useTerminalLabelsByThreadKey(
   let labels = terminalLabelsByResults.get(results);
   if (!labels) {
     const next = new Map<string, string>();
-    results.forEach((encoded, index) => {
-      for (const [threadId, label] of JSON.parse(encoded) as Array<[string, string]>) {
+    results.forEach((byThreadId, index) => {
+      for (const [threadId, label] of byThreadId) {
         next.set(`${readableIds[index]}:${threadId}`, label);
       }
     });

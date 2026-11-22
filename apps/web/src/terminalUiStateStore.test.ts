@@ -231,6 +231,7 @@ describe("terminalUiStateStore actions", () => {
     const store = useTerminalUiStateStore.getState();
     store.setTerminalOpen(THREAD_REF, true);
     store.reconcileTerminalIds(THREAD_REF, [DEFAULT_THREAD_TERMINAL_ID, "old"], "manager-1");
+    useTerminalUiStateStore.persist.flush();
     const { name, storage } = useTerminalUiStateStore.persist.getOptions();
     if (!name || !storage) throw new Error("Terminal layout storage is unavailable");
     const saved = await storage.getItem(name);

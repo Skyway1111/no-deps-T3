@@ -140,11 +140,18 @@ export function isCompleteTurnItemRow(row: ThreadStructureVisibleTurnItem): row 
   return row.item.type !== "assistant_message" && row.item.type !== "reasoning";
 }
 
+const structureThreads = new WeakMap<AppThread, ThreadStructureThread>();
+
 // The open thread is marked visited several times while a reply streams. Visit
 // state is read from the shell, or from lastVisitedAtAtom while the thread is
 // not in the shell index yet, so a mark is not structure.
 function toThreadStructureThread(thread: AppThread): ThreadStructureThread {
-  const { updatedAt: _updatedAt, lastVisitedAt: _lastVisitedAt, ...structure } = thread;
+  let structure = structureThreads.get(thread);
+  if (structure === undefined) {
+    const { updatedAt: _updatedAt, lastVisitedAt: _lastVisitedAt, ...rest } = thread;
+    structure = rest;
+    structureThreads.set(thread, structure);
+  }
   return structure;
 }
 
@@ -340,18 +347,12 @@ export function createEnvironmentThreadDetailAtoms<E>(
   });
 
   // Read from the structure so streamed text does not rescan runs and turn items.
-  const usageLimitNoticeRowsAtomFamily = Atom.family((key: string) => {
-    let previous: EnvironmentThreadStructure | null = null;
-    let value: UsageLimitNoticeRows | null = null;
-    return Atom.make((get) => {
+  const usageLimitNoticeRowsAtomFamily = Atom.family((key: string) =>
+    Atom.make((get): UsageLimitNoticeRows | null => {
       const thread = get(quietThreadAtomFamily(key));
-      if (thread !== previous) {
-        previous = thread;
-        value = thread === null ? null : deriveUsageLimitNoticeRows(thread.projection);
-      }
-      return value;
-    }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-usage-limit-notice:${key}`));
-  });
+      return thread === null ? null : deriveUsageLimitNoticeRows(thread.projection);
+    }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-usage-limit-notice:${key}`)),
+  );
 
   // Presentation only: the projection keeps every row for other readers.
   const visibleTurnItemsAtomFamily = Atom.family((key: string) => {
@@ -388,24 +389,21 @@ export function createEnvironmentThreadDetailAtoms<E>(
 
   // Holds while only streamed assistant text moves, so the timeline re-renders on structure;
   // each streaming message reads its text through assistantMessageTextAtom.
-  const timelineVisibleTurnItemsAtomFamily = Atom.family((key: string) => {
-    let previous = EMPTY_VISIBLE_TURN_ITEMS;
-    return Atom.make((get) => {
-      const next = get(visibleTurnItemsAtomFamily(key));
-      if (!sameApartFromStreamedAssistantText(previous, next)) previous = next;
-      return previous;
-    }).pipe(
+  const timelineVisibleTurnItemsAtomFamily = Atom.family((key: string) =>
+    Atom.make((get) => get(visibleTurnItemsAtomFamily(key))).pipe(
+      Atom.withEquality(sameApartFromStreamedAssistantText),
       Atom.setIdleTTL(0),
       Atom.withLabel(`environment-thread-timeline-visible-turn-items:${key}`),
-    );
-  });
+    ),
+  );
 
   const assistantMessageTextAtomFamily = Atom.family((key: string) => {
     const separator = key.lastIndexOf("\u0000");
     const thread = key.slice(0, separator);
     const itemId = key.slice(separator + 1);
     return Atom.make((get) => {
-      const item = get(visibleTurnItemsAtomFamily(thread)).find(
+      // Streaming items are the newest rows.
+      const item = get(visibleTurnItemsAtomFamily(thread)).findLast(
         (visibleItem) => visibleItem.item.id === itemId,
       )?.item;
       return item?.type === "assistant_message" ? item.text : null;
@@ -414,12 +412,12 @@ export function createEnvironmentThreadDetailAtoms<E>(
 
   const queueWorkflowAtomFamily = Atom.family((key: string) => {
     let previous: Pick<
-      OrchestrationV2ThreadProjection,
+      ThreadStructure,
       "thread" | "runs" | "messages" | "providerThreads" | "providerSessions" | "providerTurns"
     > | null = null;
     let value: ThreadQueueWorkflowState | null = null;
     return Atom.make((get) => {
-      const projection = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
+      const projection = get(quietThreadAtomFamily(key))?.projection ?? null;
       if (projection === null) {
         previous = null;
         value = null;
@@ -441,37 +439,27 @@ export function createEnvironmentThreadDetailAtoms<E>(
       return value;
     }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-queue:${key}`));
   });
-  const runStopAtomFamily = Atom.family((key: string) => {
-    let previous: Pick<OrchestrationV2ThreadProjection, "runs" | "turnItems"> | null = null;
-    let stop: RunStopPresentation | null = null;
-    return Atom.make((get) => {
-      const projection = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
-      if (projection === null) {
-        previous = null;
-        stop = null;
-      } else if (
-        projection.runs !== previous?.runs ||
-        projection.turnItems !== previous?.turnItems
-      ) {
-        const { runs, turnItems } = projection;
-        previous = { runs, turnItems };
-        const next = presentRunStop(previous);
-        if (
-          next?.state !== stop?.state ||
-          next?.runId !== stop?.runId ||
-          next?.requestedAt !== stop?.requestedAt ||
-          next?.background !== stop?.background
-        )
-          stop = next;
-      }
-      return stop;
-    }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-run-stop:${key}`));
-  });
+  const runStopAtomFamily = Atom.family((key: string) =>
+    Atom.make((get): RunStopPresentation | null => {
+      const thread = get(quietThreadAtomFamily(key));
+      return thread === null ? null : presentRunStop(thread.projection);
+    }).pipe(
+      Atom.withEquality(
+        (left: RunStopPresentation | null, right: RunStopPresentation | null) =>
+          left?.state === right?.state &&
+          left?.runId === right?.runId &&
+          left?.requestedAt === right?.requestedAt &&
+          left?.background === right?.background,
+      ),
+      Atom.setIdleTTL(0),
+      Atom.withLabel(`environment-thread-run-stop:${key}`),
+    ),
+  );
   const queuedCountAtomFamily = Atom.family((key: string) => {
-    let previous: Pick<OrchestrationV2ThreadProjection, "runs" | "messages"> | null = null;
+    let previous: Pick<ThreadStructure, "runs" | "messages"> | null = null;
     let count = 0;
     return Atom.make((get) => {
-      const projection = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
+      const projection = get(quietThreadAtomFamily(key))?.projection ?? null;
       if (projection === null) {
         previous = null;
         count = 0;
@@ -485,10 +473,10 @@ export function createEnvironmentThreadDetailAtoms<E>(
   });
 
   const turnSubagentsAtomFamily = Atom.family((key: string) => {
-    let previous: Pick<OrchestrationV2ThreadProjection, "runs" | "subagents"> | null = null;
+    let previous: Pick<ThreadStructure, "runs" | "subagents"> | null = null;
     let value: ThreadTurnSubagents | null = null;
     return Atom.make((get) => {
-      const projection = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
+      const projection = get(quietThreadAtomFamily(key))?.projection ?? null;
       if (projection === null) {
         previous = null;
         value = null;
@@ -505,13 +493,11 @@ export function createEnvironmentThreadDetailAtoms<E>(
   });
 
   const checkpointSummariesAtomFamily = Atom.family((key: string) => {
-    let previous: Pick<
-      OrchestrationV2ThreadProjection,
-      "checkpoints" | "checkpointScopes" | "messages"
-    > | null = null;
+    let previous: Pick<ThreadStructure, "checkpoints" | "checkpointScopes" | "messages"> | null =
+      null;
     let value = EMPTY_CHECKPOINT_SUMMARIES;
     return Atom.make((get) => {
-      const projection = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
+      const projection = get(quietThreadAtomFamily(key))?.projection ?? null;
       if (projection === null) {
         previous = null;
         value = EMPTY_CHECKPOINT_SUMMARIES;
@@ -555,16 +541,22 @@ export function createEnvironmentThreadDetailAtoms<E>(
     ).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-worktree:${key}`)),
   );
   const pendingRequestsAtomFamily = Atom.family((key: string) => {
-    let previous: Pick<OrchestrationV2ThreadProjection, "runtimeRequests" | "turnItems"> | null =
-      null;
+    let source: ThreadStructure["runtimeRequests"] | null = null;
+    let previous: Pick<ThreadStructure, "runtimeRequests" | "turnItems"> | null = null;
     let value: PendingThreadRequests | null = null;
     return Atom.make((get) => {
-      const projection = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
+      const projection = get(quietThreadAtomFamily(key))?.projection ?? null;
       if (projection === null) {
+        source = null;
         previous = null;
         value = null;
         return value;
       }
+      // Request items only matter while a request is pending.
+      if (projection.runtimeRequests === source && previous?.runtimeRequests.length === 0) {
+        return value;
+      }
+      source = projection.runtimeRequests;
       const runtimeRequests = projection.runtimeRequests.filter(
         (request) => request.status === "pending",
       );

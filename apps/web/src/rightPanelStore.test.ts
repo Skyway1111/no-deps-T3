@@ -31,6 +31,7 @@ beforeEach(() => {
 });
 
 async function reloadRightPanelStore() {
+  useRightPanelStore.persist.flush();
   const { storage, name } = useRightPanelStore.persist.getOptions();
   const persisted = await storage!.getItem(name!);
   expect(persisted).not.toBeNull();
@@ -1192,6 +1193,7 @@ describe("rightPanelStore", () => {
     );
     store.setPullRequestDetailTab(refA, pullRequestSurfaceId(pr), "code");
 
+    useRightPanelStore.persist.flush();
     const { storage, name } = useRightPanelStore.persist.getOptions();
     const saved = await storage!.getItem(name!);
     expect(saved).not.toBeNull();

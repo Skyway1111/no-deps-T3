@@ -190,6 +190,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
     {
       name: "t3code:diff-panel-state:v1",
       version: 2,
+      debounceMs: 200,
       storage: createJSONStorage(() =>
         resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
       ),
@@ -213,6 +214,8 @@ interface DiffPanelSessionStoreState {
   setIgnoreWhitespace: (ignoreWhitespace: boolean) => void;
 }
 
+const MAX_COLLAPSED_SCOPES = 100;
+
 // Session-only so folds and the whitespace toggle survive right-panel switches without
 // changing reload defaults.
 export const useDiffPanelSessionStore = create<DiffPanelSessionStoreState>()((set) => ({
@@ -222,9 +225,10 @@ export const useDiffPanelSessionStore = create<DiffPanelSessionStoreState>()((se
       const current = state.collapsedFileKeysByScopeKey[scopeKey] ?? defaults;
       const next = update(current);
       if (next === current) return state;
-      return {
-        collapsedFileKeysByScopeKey: { ...state.collapsedFileKeysByScopeKey, [scopeKey]: next },
-      };
+      // Most recently folded scopes last, so the oldest drop once the session holds too many.
+      const { [scopeKey]: _previous, ...rest } = state.collapsedFileKeysByScopeKey;
+      const kept = Object.entries(rest).slice(-(MAX_COLLAPSED_SCOPES - 1));
+      return { collapsedFileKeysByScopeKey: { ...Object.fromEntries(kept), [scopeKey]: next } };
     }),
   ignoreWhitespace: null,
   setIgnoreWhitespace: (ignoreWhitespace) => set({ ignoreWhitespace }),

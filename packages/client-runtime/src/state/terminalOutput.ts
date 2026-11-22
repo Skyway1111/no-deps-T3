@@ -76,8 +76,33 @@ interface Utf8Chunk {
   readonly byteLength: number;
 }
 
+/** UTF-8 length without encoding; lone surrogates count as the 3-byte U+FFFD TextEncoder writes. */
+function utf8ByteLength(data: string): number {
+  let bytes = data.length;
+  for (let index = 0; index < data.length; index += 1) {
+    const code = data.charCodeAt(index);
+    if (code < 0x80) continue;
+    if (code < 0x800) {
+      bytes += 1;
+      continue;
+    }
+    bytes += 2;
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = data.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) index += 1;
+    }
+  }
+  return bytes;
+}
+
 function splitStringByUtf8Bytes(data: string, maxBytes: number): ReadonlyArray<Utf8Chunk> {
   if (data.length === 0) return [];
+
+  // Most output events are small; counting them skips the encoder's allocation.
+  if (data.length <= maxBytes) {
+    const byteLength = utf8ByteLength(data);
+    if (byteLength <= maxBytes) return [{ data, byteLength }];
+  }
 
   const encoded = textEncoder.encode(data);
   if (encoded.byteLength <= maxBytes) {
@@ -194,13 +219,28 @@ function appendOutput(
       textStartOffset: current.textStartOffset,
     };
   }
-  const appended = splitOutputChunks(
-    data,
-    current.nextOffset,
-    Math.min(DEFAULT_TERMINAL_CHUNK_BYTES, Math.max(1, maxBufferBytes)),
-  );
+  const chunkBytes = Math.min(DEFAULT_TERMINAL_CHUNK_BYTES, Math.max(1, maxBufferBytes));
+  const appended = splitOutputChunks(data, current.nextOffset, chunkBytes);
 
-  const chunks = [...current.chunks, ...appended.chunks];
+  const chunks = current.chunks.slice();
+  const tail = chunks.at(-1);
+  const [head, ...rest] = appended.chunks;
+  // Folding small writes into the tail keeps the chunk list, and each copy of it, short.
+  if (
+    tail !== undefined &&
+    head !== undefined &&
+    tail.startOffset + tail.data.length === head.startOffset &&
+    tail.byteLength + head.byteLength <= chunkBytes
+  ) {
+    chunks[chunks.length - 1] = {
+      startOffset: tail.startOffset,
+      data: `${tail.data}${head.data}`,
+      byteLength: tail.byteLength + head.byteLength,
+    };
+    chunks.push(...rest);
+  } else {
+    chunks.push(...appended.chunks);
+  }
   let retainedBytes = current.retainedBytes + appended.byteLength;
   let sequenceState = current.sequenceState;
   let firstRetainedIndex = 0;
@@ -228,7 +268,8 @@ function appendOutput(
     firstRetainedIndex += 1;
   }
 
-  let retainedChunks = firstRetainedIndex === 0 ? chunks : chunks.slice(firstRetainedIndex);
+  if (firstRetainedIndex > 0) chunks.splice(0, firstRetainedIndex);
+  let retainedChunks: ReadonlyArray<TerminalOutputChunk> = chunks;
   if (retainedChunks.length > MAX_TERMINAL_OUTPUT_CHUNKS) {
     retainedChunks = compactRetainedChunks(retainedChunks);
     const excessChunks = retainedChunks.length - MAX_TERMINAL_OUTPUT_CHUNKS;

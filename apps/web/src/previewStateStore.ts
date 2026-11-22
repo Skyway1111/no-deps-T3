@@ -61,10 +61,12 @@ const emptyPreviewStateAtom = Atom.make<ThreadPreviewState>(EMPTY_THREAD_PREVIEW
 
 export const previewStateAtom = Atom.family((threadKey: string) =>
   Atom.make<ThreadPreviewState>(EMPTY_THREAD_PREVIEW_STATE).pipe(
-    Atom.keepAlive,
     Atom.withLabel(`preview:thread:${threadKey}`),
   ),
 );
+
+// Mounts each thread's state while it holds anything, so a cleared thread leaves nothing behind.
+const heldPreviewStates = new Map<string, () => void>();
 
 // Only Electron needs this cross-thread index; separate it to avoid unrelated preview subscriptions.
 interface ActivePreviewThreadIndex {
@@ -112,17 +114,33 @@ function updateThreadPreviewState(
   update: (current: ThreadPreviewState) => ThreadPreviewState,
 ): void {
   const threadKey = scopedThreadKey(ref);
+  const atom = previewStateAtom(threadKey);
+  if (!heldPreviewStates.has(threadKey)) {
+    if (update(EMPTY_THREAD_PREVIEW_STATE) === EMPTY_THREAD_PREVIEW_STATE) return;
+    heldPreviewStates.set(threadKey, appAtomRegistry.mount(atom));
+  }
   // Indexed before the write so a new thread's subscribers see this change.
   appAtomRegistry.update(previewThreadRefsAtom, (refs) =>
     refs.has(threadKey) ? refs : new Map(refs).set(threadKey, ref),
   );
-  const atom = previewStateAtom(threadKey);
   let nextState = appAtomRegistry.get(atom);
   const changed = appAtomRegistry.modify(atom, (current) => {
     nextState = update(current);
     return [nextState !== current, nextState];
   });
   if (changed) syncActivePreviewThread(threadKey, nextState);
+  if (nextState === EMPTY_THREAD_PREVIEW_STATE) releasePreviewState(threadKey);
+}
+
+function releasePreviewState(threadKey: string): void {
+  appAtomRegistry.update(previewThreadRefsAtom, (refs) => {
+    if (!refs.has(threadKey)) return refs;
+    const next = new Map(refs);
+    next.delete(threadKey);
+    return next;
+  });
+  heldPreviewStates.get(threadKey)?.();
+  heldPreviewStates.delete(threadKey);
 }
 
 const dedupeRecentUrls = (existing: string[], url: string): string[] => {
@@ -538,6 +556,8 @@ export function resetPreviewStateForTests(): void {
     appAtomRegistry.set(previewStateAtom(threadKey), EMPTY_THREAD_PREVIEW_STATE);
   }
   appAtomRegistry.set(previewThreadRefsAtom, new Map());
+  for (const unmount of heldPreviewStates.values()) unmount();
+  heldPreviewStates.clear();
   appAtomRegistry.set(activePreviewThreadKeysAtom, { keys: new Set<string>() });
 }
 

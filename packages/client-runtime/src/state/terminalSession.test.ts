@@ -234,12 +234,13 @@ describe("terminal session reducers", () => {
       type: "snapshot",
       snapshot: { ...BASE_SNAPSHOT, history: "" },
     });
-    for (let index = 0; index < 512; index += 1) {
+    // Full-size lines so history spans many chunks rather than folding into one.
+    for (let index = 0; index < 256; index += 1) {
       state = applyTerminalAttachStreamEvent(state, {
         type: "output",
         threadId: TARGET.threadId,
         terminalId: TARGET.terminalId,
-        data: "history\r\n",
+        data: `${"history".padEnd(1022, ".")}\r\n`,
       });
     }
     const cursor = readTerminalOutputUpdate(state.output, INITIAL_TERMINAL_OUTPUT_CURSOR).cursor;
@@ -250,8 +251,9 @@ describe("terminal session reducers", () => {
       data: "latest\r\n",
     });
     let historicalChunkReads = 0;
-    const chunks = next.output.chunks.map((chunk, index) =>
-      index < state.output.chunks.length
+    expect(state.output.chunks.length).toBeGreaterThan(8);
+    const chunks = next.output.chunks.map((chunk) =>
+      state.output.chunks.includes(chunk)
         ? {
             ...chunk,
             get startOffset() {

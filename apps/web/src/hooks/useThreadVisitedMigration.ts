@@ -32,7 +32,21 @@ export function startThreadVisitedMigration(registry: AtomRegistry.AtomRegistry)
       );
     }
   };
-  return registry.subscribe(environmentThreadShells.threadShellsAtom, migrate, {
-    immediate: true,
-  });
+  // The shell list rebuilds on every streaming tick; with no local visits there is nothing to hand over.
+  let stopShells: (() => void) | null = null;
+  const sync = (local: Readonly<Record<string, string>>) => {
+    if (stopShells !== null) return;
+    for (const _key in local) {
+      stopShells = registry.subscribe(environmentThreadShells.threadShellsAtom, migrate, {
+        immediate: true,
+      });
+      return;
+    }
+  };
+  sync(useUiStateStore.getState().threadLastVisitedAtById);
+  const stopLocal = useUiStateStore.subscribe((state) => sync(state.threadLastVisitedAtById));
+  return () => {
+    stopLocal();
+    stopShells?.();
+  };
 }

@@ -63,6 +63,7 @@ import {
 } from "./threadState.ts";
 
 const THREAD_SUBSCRIPTION_RETRY_DELAY = "250 millis";
+const IDLE_THREAD_SNAPSHOT_LIMIT = 10;
 
 function statusWithoutLiveData(
   data: Option.Option<OrchestrationV2ThreadProjection>,
@@ -1248,13 +1249,17 @@ export function createEnvironmentThreadStateAtoms<R, E>(
     E
   >,
 ) {
+  // Unmounted threads' caches, oldest first. Past the limit the oldest drops its
+  // projection early, so a long session of thread switching cannot pin them all.
+  const idleResumeCaches = new Set<ThreadResumeCache>();
   // Cache definitions must outlive collectible live-atom definitions. The
   // registry retains these nodes without retaining environment or RPC scopes.
   const resumeFamily = Atom.family((key: string) =>
-    Atom.make((): ThreadResumeCache => ({
-      snapshot: undefined,
-      owner: undefined,
-    })).pipe(
+    Atom.make((get): ThreadResumeCache => {
+      const resume: ThreadResumeCache = { snapshot: undefined, owner: undefined };
+      get.addFinalizer(() => idleResumeCaches.delete(resume));
+      return resume;
+    }).pipe(
       Atom.setIdleTTL(THREAD_SNAPSHOT_IDLE_TTL_MS),
       Atom.withLabel(`environment-thread-resume:${key}`),
     ),
@@ -1267,6 +1272,17 @@ export function createEnvironmentThreadStateAtoms<R, E>(
         (get) => {
           get.mount(resumeAtom);
           const resume = get.once(resumeAtom);
+          idleResumeCaches.delete(resume);
+          get.addFinalizer(() => {
+            idleResumeCaches.add(resume);
+            for (const oldest of idleResumeCaches) {
+              if (idleResumeCaches.size <= IDLE_THREAD_SNAPSHOT_LIMIT) break;
+              idleResumeCaches.delete(oldest);
+              // Clearing the owner also drops late writes from the scope that filled it.
+              oldest.snapshot = undefined;
+              oldest.owner = undefined;
+            }
+          });
           const live = threadStateChanges(environmentId, threadId, resume);
           return resume.snapshot === undefined
             ? live

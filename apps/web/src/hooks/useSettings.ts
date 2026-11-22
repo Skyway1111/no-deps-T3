@@ -356,16 +356,29 @@ function useSyncExternalStoreWithSelector<S, T>(
   );
 }
 
+// Every settings hook merges the same pair, so they share one result and its identity.
+const mergedSettingsCache = new WeakMap<ServerSettings, WeakMap<ClientSettings, UnifiedSettings>>();
+
 export function mergeEnvironmentSettings(
   serverSettings: ServerSettings,
   clientSettings: ClientSettings,
 ): UnifiedSettings {
-  // Older untyped adapters can return retired client keys; server values must win.
-  return {
-    ...clientSettings,
-    ...serverSettings,
-    ...resolveModelPreferences(serverSettings, clientSettings),
-  };
+  let byClient = mergedSettingsCache.get(serverSettings);
+  if (byClient === undefined) {
+    byClient = new WeakMap();
+    mergedSettingsCache.set(serverSettings, byClient);
+  }
+  let merged = byClient.get(clientSettings);
+  if (merged === undefined) {
+    // Older untyped adapters can return retired client keys; server values must win.
+    merged = {
+      ...clientSettings,
+      ...serverSettings,
+      ...resolveModelPreferences(serverSettings, clientSettings),
+    };
+    byClient.set(clientSettings, merged);
+  }
+  return merged;
 }
 
 const selectLegacyModelPreferences = (settings: ClientSettings) => ({

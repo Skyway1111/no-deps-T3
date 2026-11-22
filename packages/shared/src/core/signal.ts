@@ -7,6 +7,8 @@ type EqualityFn<T> = (a: T, b: T) => boolean;
 
 interface DependencyNode {
   readonly subs: Set<SubscriberNode>;
+  /** Called when the last subscriber detaches, so an unobserved computed can release its sources. */
+  release?(): void;
 }
 
 interface SubscriberNode {
@@ -51,6 +53,15 @@ function trackDependency(node: DependencyNode): void {
 
 function unlinkSubscriber(sub: SubscriberNode): void {
   for (const dep of sub.deps) dep.subs.delete(sub);
+  sub.deps.clear();
+}
+
+// Unlike recompute's unlink, this cascades so unobserved computed chains stop holding their sources.
+function detachSubscriber(sub: SubscriberNode): void {
+  for (const dep of sub.deps) {
+    dep.subs.delete(sub);
+    if (dep.subs.size === 0) dep.release?.();
+  }
   sub.deps.clear();
 }
 
@@ -126,7 +137,12 @@ export function computed<T>(fn: () => T, equals: EqualityFn<T> = Object.is): Com
   let computing = false;
   const subs = new Set<SubscriberNode>();
   const listeners = new Set<() => void>();
-  const depNode: DependencyNode = { subs };
+  const release = (): void => {
+    if (subs.size > 0 || listeners.size > 0) return;
+    detachSubscriber(subNode);
+    dirty = true;
+  };
+  const depNode: DependencyNode = { subs, release };
 
   const recompute = (): T => {
     if (computing) throw new Error("Cycle detected in computed signal");
@@ -181,10 +197,11 @@ export function computed<T>(fn: () => T, equals: EqualityFn<T> = Object.is): Com
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+        release();
       };
     },
     dispose(): void {
-      unlinkSubscriber(subNode);
+      detachSubscriber(subNode);
       subs.clear();
       listeners.clear();
       dirty = true;
@@ -212,10 +229,18 @@ export function effect(fn: () => void | (() => void)): () => void {
     }
   };
 
+  // A source reached through a computed notifies twice per change; run once.
+  let dirty = false;
   const subNode: SubscriberNode = {
     deps: new Set(),
-    markDirty(): void {},
-    notify: run,
+    markDirty(): void {
+      dirty = true;
+    },
+    notify(): void {
+      if (!dirty) return;
+      dirty = false;
+      run();
+    },
   };
 
   run();
@@ -227,7 +252,7 @@ export function effect(fn: () => void | (() => void)): () => void {
       cleanup();
       cleanup = undefined;
     }
-    unlinkSubscriber(subNode);
+    detachSubscriber(subNode);
     pendingSubscribers.delete(subNode);
   };
 }
@@ -284,11 +309,7 @@ export interface StoreApi<T> {
   readonly subscribe: (listener: (state: T, prevState: T) => void) => () => void;
 }
 
-export type StateCreator<T> = (
-  set: SetStateInternal<T>,
-  get: () => T,
-  api: StoreApi<T>,
-) => T;
+export type StateCreator<T> = (set: SetStateInternal<T>, get: () => T, api: StoreApi<T>) => T;
 
 export interface StateStorage {
   getItem: (name: string) => string | null | Promise<string | null>;
@@ -312,10 +333,14 @@ export interface PersistOptions<S, PersistedState = S> {
   storage?: PersistStorage<PersistedState> | undefined;
   partialize?: ((state: S) => PersistedState) | undefined;
   version?: number | undefined;
-  migrate?: ((persistedState: unknown, version: number) => PersistedState | Promise<PersistedState>) | undefined;
+  migrate?:
+    | ((persistedState: unknown, version: number) => PersistedState | Promise<PersistedState>)
+    | undefined;
   merge?: ((persistedState: unknown, currentState: S) => S) | undefined;
   onRehydrateStorage?: ((state: S) => ((state?: S, error?: unknown) => void) | void) | undefined;
   skipHydration?: boolean | undefined;
+  /** Coalesces writes within this window; pending writes flush on pagehide and when hidden. */
+  debounceMs?: number | undefined;
 }
 
 export interface PersistApi<S, PersistedState = S> {
@@ -326,6 +351,8 @@ export interface PersistApi<S, PersistedState = S> {
   onHydrate: (fn: (state: S) => void) => () => void;
   onFinishHydration: (fn: (state: S) => void) => () => void;
   getOptions: () => Partial<PersistOptions<S, PersistedState>>;
+  /** Writes a pending debounced state now. */
+  flush: () => void;
 }
 
 export type PersistedStoreApi<S, PersistedState = S> = StoreApi<S> & {
@@ -409,27 +436,84 @@ export function persist<S, PersistedState = S>(
     const hydrateListeners = new Set<(state: S) => void>();
     const finishHydrationListeners = new Set<(state: S) => void>();
 
+    // Last written slice, so sets that leave the persisted slice unchanged skip storage.
+    let lastPersisted: { readonly state: PersistedState } | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let flushListenersAttached = false;
+
+    const cancelPending = (): void => {
+      if (timer === null) return;
+      clearTimeout(timer);
+      timer = null;
+    };
+
     const persistState = (): void => {
+      cancelPending();
       const storage = options.storage;
       if (!storage) return;
-      const state = options.partialize ? options.partialize(get()) : (get() as unknown as PersistedState);
+      const state = options.partialize
+        ? options.partialize(get())
+        : (get() as unknown as PersistedState);
+      if (lastPersisted !== null && shallow(lastPersisted.state, state)) return;
       void storage.setItem(options.name, {
         state,
         ...(options.version !== undefined ? { version: options.version } : {}),
       });
+      lastPersisted = { state };
     };
 
-    const persistedSet: SetStateInternal<S> = ((partial: unknown, replace?: boolean) => {
-      (set as (p: unknown, r?: boolean) => void)(partial, replace);
-      persistState();
-    }) as SetStateInternal<S>;
+    const flush = (): void => {
+      if (timer !== null) persistState();
+    };
+
+    const attachFlushListeners = (): void => {
+      if (flushListenersAttached || typeof window === "undefined") return;
+      flushListenersAttached = true;
+      window.addEventListener("pagehide", flush);
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") flush();
+        });
+      }
+    };
+
+    const schedulePersist = (): void => {
+      const delay = options.debounceMs;
+      if (!delay || delay <= 0) {
+        persistState();
+        return;
+      }
+      if (timer !== null) return;
+      attachFlushListeners();
+      // @effect-diagnostics-next-line globalTimers:off -- synchronous store outside any Effect runtime.
+      timer = setTimeout(persistState, delay);
+    };
+
+    const setAndPersist = (
+      target: (partial: unknown, replace?: boolean) => void,
+      partial: unknown,
+      replace?: boolean,
+    ): void => {
+      const prev = get();
+      target(partial, replace);
+      if (!Object.is(get(), prev)) schedulePersist();
+    };
+
+    const persistedSet: SetStateInternal<S> = ((partial: unknown, replace?: boolean) =>
+      setAndPersist(
+        set as (p: unknown, r?: boolean) => void,
+        partial,
+        replace,
+      )) as SetStateInternal<S>;
 
     const baseSetState = api.setState;
     Object.defineProperty(api, "setState", {
-      value: ((partial: unknown, replace?: boolean) => {
-        (baseSetState as (p: unknown, r?: boolean) => void)(partial, replace);
-        persistState();
-      }) as SetStateInternal<S>,
+      value: ((partial: unknown, replace?: boolean) =>
+        setAndPersist(
+          baseSetState as (p: unknown, r?: boolean) => void,
+          partial,
+          replace,
+        )) as SetStateInternal<S>,
       configurable: true,
       writable: true,
     });
@@ -437,6 +521,9 @@ export function persist<S, PersistedState = S>(
     const rehydrate = (): Promise<void> | void => {
       const storage = options.storage;
       if (!storage) return;
+      // Storage becomes the source of truth; a pending write would overwrite what we read.
+      cancelPending();
+      lastPersisted = null;
       hydrated = false;
       const current = get();
       for (const listener of hydrateListeners) listener(current);
@@ -449,9 +536,7 @@ export function persist<S, PersistedState = S>(
         for (const listener of finishHydrationListeners) listener(latest);
       };
 
-      const applyStored = (
-        stored: StorageValue<PersistedState> | null,
-      ): Promise<void> | void => {
+      const applyStored = (stored: StorageValue<PersistedState> | null): Promise<void> | void => {
         if (!stored) {
           finish(get());
           return;
@@ -502,8 +587,11 @@ export function persist<S, PersistedState = S>(
     const persistApi: PersistApi<S, PersistedState> = {
       setOptions(next) {
         options = { ...options, ...next };
+        lastPersisted = null;
       },
       clearStorage() {
+        cancelPending();
+        lastPersisted = null;
         return options.storage?.removeItem(options.name) as void | Promise<void>;
       },
       rehydrate,
@@ -521,6 +609,7 @@ export function persist<S, PersistedState = S>(
         };
       },
       getOptions: () => options,
+      flush,
     };
 
     (api as { persist?: PersistApi<S, PersistedState> }).persist = persistApi;
@@ -545,9 +634,8 @@ function createStoreImpl<T>(creator: StateCreator<T>): StoreApi<T> {
     partial: T | Partial<T> | ((s: T) => T | Partial<T>),
     replace?: boolean,
   ) => {
-    const nextPartial = typeof partial === "function"
-      ? (partial as (s: T) => T | Partial<T>)(state)
-      : partial;
+    const nextPartial =
+      typeof partial === "function" ? (partial as (s: T) => T | Partial<T>)(state) : partial;
     if (initialized && Object.is(nextPartial, state)) return;
     const prevState = state;
     state =
@@ -636,10 +724,20 @@ export function bindReactStoreHooks(react: ReactHooksBinding): BoundReactStoreHo
     api: StoreApi<T>,
     selector: (state: T) => U = identity as unknown as (state: T) => U,
   ): U {
+    // React reads the snapshot several times per render and on every store change; selectors are
+    // pure, so an entry keyed on (state, selector) stays correct even if written by an aborted render.
+    const cache = react.useRef<{ state: T; selector: (state: T) => U; selected: U } | null>(null);
+    const select = (state: T): U => {
+      const last = cache.current;
+      if (last !== null && last.state === state && last.selector === selector) return last.selected;
+      const selected = selector(state);
+      cache.current = { state, selector, selected };
+      return selected;
+    };
     return react.useSyncExternalStore(
       api.subscribe,
-      () => selector(api.getState()),
-      () => selector(api.getInitialState()),
+      () => select(api.getState()),
+      () => select(api.getInitialState()),
     );
   }
 
@@ -655,7 +753,10 @@ export function bindReactStoreHooks(react: ReactHooksBinding): BoundReactStoreHo
 
   function useShallow<S, U>(selector: (state: S) => U): (state: S) => U {
     const prev = react.useRef<U | undefined>(undefined);
-    return (state: S): U => {
+    // A stable wrapper for a stable selector lets useStore's (state, selector) cache hit.
+    const wrapped = react.useRef<{ selector: (state: S) => U; fn: (state: S) => U } | null>(null);
+    if (wrapped.current?.selector === selector) return wrapped.current.fn;
+    const fn = (state: S): U => {
       const next = selector(state);
       if (prev.current !== undefined && shallow(prev.current, next)) {
         return prev.current;
@@ -663,6 +764,8 @@ export function bindReactStoreHooks(react: ReactHooksBinding): BoundReactStoreHo
       prev.current = next;
       return next;
     };
+    wrapped.current = { selector, fn };
+    return fn;
   }
 
   function useSignal<T>(sig: ReadonlySignal<T>): T {

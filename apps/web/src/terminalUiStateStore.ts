@@ -830,6 +830,7 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
     {
       name: TERMINAL_UI_STATE_STORAGE_KEY,
       version: 4,
+      debounceMs: 200,
       storage: createJSONStorage(createTerminalUiStateStorage),
       migrate: migratePersistedTerminalUiStateStoreState,
       partialize: (state) => ({

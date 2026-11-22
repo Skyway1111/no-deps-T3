@@ -92,7 +92,13 @@ import {
   threadContextReference,
   environmentContextReference,
 } from "./lib/composerContextRecords";
-import { create, persist, type PersistStorage, type StorageValue, useShallow } from "@t3tools/shared/core/react";
+import {
+  create,
+  persist,
+  type PersistStorage,
+  type StorageValue,
+  useShallow,
+} from "@t3tools/shared/core/react";
 import { draftModelSelectionApplies } from "./lib/chatThreadActions";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
 import { getDefaultServerModel } from "./providerModels";
@@ -244,8 +250,9 @@ const composerPersistStorage: PersistStorage<ComposerPersistState> = {
 };
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("beforeunload", () => {
-    composerDebouncedStorage.flush();
+  window.addEventListener("pagehide", () => composerDebouncedStorage.flush());
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") composerDebouncedStorage.flush();
   });
 }
 
@@ -1672,6 +1679,27 @@ function getComposerDraftState(
     return null;
   }
   return state.draftsByThreadKey[threadKey] ?? null;
+}
+
+// Session-only redirects for old draft URLs; the oldest go first.
+const MAX_PROMOTED_DRAFT_REDIRECTS = 100;
+
+function withPromotedDraftRedirect(
+  redirects: Record<string, ScopedThreadRef>,
+  draftKey: string,
+  target: ScopedThreadRef,
+): Record<string, ScopedThreadRef> {
+  const { [draftKey]: _replaced, ...rest } = redirects;
+  const keys = Object.keys(rest);
+  const kept =
+    keys.length < MAX_PROMOTED_DRAFT_REDIRECTS
+      ? rest
+      : Object.fromEntries(
+          keys
+            .slice(keys.length - MAX_PROMOTED_DRAFT_REDIRECTS + 1)
+            .map((key) => [key, rest[key]!]),
+        );
+  return { ...kept, [draftKey]: target };
 }
 
 /** Where a draft lives now: its thread once promoted, or null once it was discarded. */
@@ -3226,10 +3254,11 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             return {
               ...removeDraftThreadReferences(state, threadKey, existing.promotedTo),
-              promotedDraftRedirects: {
-                ...state.promotedDraftRedirects,
-                [threadKey]: existing.promotedTo,
-              },
+              promotedDraftRedirects: withPromotedDraftRedirect(
+                state.promotedDraftRedirects,
+                threadKey,
+                existing.promotedTo,
+              ),
             };
           });
         },
@@ -4578,6 +4607,21 @@ composerDraftLoadedState = partializeComposerDraftStoreState(composerDraftStore.
 
 export const useComposerDraftStore = composerDraftStore;
 
+const sameDraftModelPick = (left: ComposerThreadDraftState, right: ComposerThreadDraftState) =>
+  left.activeProvider === right.activeProvider &&
+  left.modelSelectionByProvider === right.modelSelectionByProvider;
+
+function sameDraftModelPicks(left: ComposerDraftStoreState, right: ComposerDraftStoreState) {
+  if (left.draftThreadsByThreadKey !== right.draftThreadsByThreadKey) return false;
+  if (left.draftsByThreadKey === right.draftsByThreadKey) return true;
+  const keys = Object.keys(left.draftsByThreadKey);
+  if (keys.length !== Object.keys(right.draftsByThreadKey).length) return false;
+  return keys.every((key) => {
+    const other = right.draftsByThreadKey[key];
+    return other !== undefined && sameDraftModelPick(left.draftsByThreadKey[key]!, other);
+  });
+}
+
 export function subscribeComposerDraftModelReconciliation(input: {
   readonly registry: AtomRegistry.AtomRegistry;
   readonly threadRefsAtom: Atom.Atom<ReadonlyArray<ScopedThreadRef>>;
@@ -4588,13 +4632,15 @@ export function subscribeComposerDraftModelReconciliation(input: {
   readonly pendingThreadIdsAtom: (environmentId: EnvironmentId) => Atom.Atom<ReadonlySet<ThreadId>>;
 }): () => void {
   const draftsAtom = Atom.make(composerDraftStore.getState());
-  const unsubscribeDrafts = composerDraftStore.subscribe((state) =>
-    input.registry.set(draftsAtom, state),
-  );
+  // Prompt edits replace a draft on every keystroke without touching its model pick.
+  const unsubscribeDrafts = composerDraftStore.subscribe((state, previous) => {
+    if (!sameDraftModelPicks(state, previous)) input.registry.set(draftsAtom, state);
+  });
   const threadKeysAtom = Atom.map(
     input.threadRefsAtom,
     (refs) => new Set(refs.map(scopedThreadKey)),
   );
+  // Drafts may be older than the store, but their model picks are current.
   const matchesAtom = Atom.make((get) => {
     const state = get(draftsAtom);
     const threadKeys = get(threadKeysAtom);
@@ -4631,8 +4677,9 @@ export function subscribeComposerDraftModelReconciliation(input: {
       composerDraftStore.setState((state) => {
         const drafts = { ...state.draftsByThreadKey };
         for (const [key, matchedDraft] of matches) {
-          if (drafts[key] !== matchedDraft) continue;
-          const { modelSelectionExplicit: _explicit, ...retained } = matchedDraft;
+          const current = drafts[key];
+          if (current === undefined || !sameDraftModelPick(current, matchedDraft)) continue;
+          const { modelSelectionExplicit: _explicit, ...retained } = current;
           const draft = { ...retained, activeProvider: null, modelSelectionByProvider: {} };
           if (shouldRemoveDraft(draft)) delete drafts[key];
           else drafts[key] = draft;

@@ -54,15 +54,14 @@ function replaceProjectionArrayItem<T>(
   return next;
 }
 
+// Ids are unique and updates land on the newest entities, so search from the end.
 function upsertEntity<T extends { readonly id: unknown }>(
   items: ReadonlyArray<T>,
   item: T,
 ): ReadonlyArray<T> {
-  const index = items.findIndex((candidate) => candidate.id === item.id);
-  if (index === -1) return [...items, item];
-  const next = [...items];
-  next[index] = item;
-  return next;
+  let index = items.length - 1;
+  while (index >= 0 && items[index]!.id !== item.id) index -= 1;
+  return index === -1 ? [...items, item] : replaceProjectionArrayItem(items, index, item);
 }
 
 // A deduped item repeats a record the stream just sent, so search newest first.

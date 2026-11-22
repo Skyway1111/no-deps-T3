@@ -31,18 +31,18 @@ function parseSupportKey(key: string): {
   };
 }
 
+// Follows the structure, so streamed text does not rescan the thread for every mounted row.
+// `item` is the item as of the last structure change.
 const itemSupportAtomFamily = Atom.family((key: string) => {
   const target = parseSupportKey(key);
   const ref = scopeThreadRef(target.environmentId, target.threadId);
-  let previous = EMPTY_V2_ITEM_SUPPORT;
   return Atom.make((get): V2ItemSupport => {
-    const scoped = get(environmentThreadDetails.threadAtom(ref));
-    if (scoped === null) return EMPTY_V2_ITEM_SUPPORT;
-    const next = resolveV2ItemSupport(scoped.projection, target.itemId);
-    if (v2ItemSupportEqual(previous, next)) return previous;
-    previous = next;
-    return next;
-  }).pipe(Atom.withLabel(`web-v2-item-support:${key}`));
+    if (get(environmentThreadDetails.quietThreadAtom(ref)) === null) return EMPTY_V2_ITEM_SUPPORT;
+    const scoped = get.once(environmentThreadDetails.threadAtom(ref));
+    return scoped === null
+      ? EMPTY_V2_ITEM_SUPPORT
+      : resolveV2ItemSupport(scoped.projection, target.itemId);
+  }).pipe(Atom.withEquality(v2ItemSupportEqual), Atom.withLabel(`web-v2-item-support:${key}`));
 });
 
 export function useV2ItemSupport(input: {

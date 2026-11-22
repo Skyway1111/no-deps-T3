@@ -79,6 +79,8 @@ export function createTerminalEnvironmentAtoms<R, E>(
   const atoms = {
     observe: createEnvironmentSubscriptionAtomFamily(runtime, {
       label: "environment-data:terminal:observe",
+      // A lingering observer keeps streaming and buffering output nobody views; a reopen replays it.
+      idleTtlMs: 0,
       subscribe: (input: EnvironmentRpcInput<typeof WS_METHODS.terminalObserve>) =>
         Stream.suspend(() =>
           subscribe(WS_METHODS.terminalObserve, input).pipe(

@@ -11,11 +11,18 @@ import { startThreadVisitedMigration } from "./useThreadVisitedMigration";
 
 const state = vi.hoisted(() => ({
   localVisits: {} as Record<string, string>,
+  listeners: new Set<(next: { threadLastVisitedAtById: Record<string, string> }) => void>(),
 }));
 
 vi.mock("@t3tools/client-runtime/state/runtime", () => ({ runAtomCommand: vi.fn() }));
 vi.mock("../uiStateStore", () => ({
-  useUiStateStore: { getState: () => ({ threadLastVisitedAtById: state.localVisits }) },
+  useUiStateStore: {
+    getState: () => ({ threadLastVisitedAtById: state.localVisits }),
+    subscribe: (listener: (next: { threadLastVisitedAtById: Record<string, string> }) => void) => {
+      state.listeners.add(listener);
+      return () => state.listeners.delete(listener);
+    },
+  },
 }));
 vi.mock("../state/threads", async () => {
   const { Atom } = await import("effect/reactivity");
@@ -29,13 +36,17 @@ vi.mock("../state/threads", async () => {
 
 const localVisit = "2026-10-27T10:00:00.000Z";
 
-function setup(threads: ReadonlyArray<EnvironmentThreadShell>, local = localVisit) {
-  state.localVisits = Object.fromEntries(
+const localVisitsFor = (threads: ReadonlyArray<EnvironmentThreadShell>, local: string) =>
+  Object.fromEntries(
     threads.map((thread) => [
       scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
       local,
     ]),
   );
+
+function setup(threads: ReadonlyArray<EnvironmentThreadShell>, local: string | null = localVisit) {
+  state.localVisits = local === null ? {} : localVisitsFor(threads, local);
+  state.listeners.clear();
   vi.mocked(runAtomCommand).mockReset().mockResolvedValue(AsyncResult.success(undefined));
   const tasks: Array<() => void> = [];
   const registry = AtomRegistry.make({
@@ -93,6 +104,17 @@ describe("startThreadVisitedMigration", () => {
     expect(runAtomCommand).not.toHaveBeenCalled();
 
     migration.setThreads([{ ...thread, lastVisitedAt: null }]);
+    expect(runAtomCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads shells only once a local visit exists", () => {
+    const thread = makeThreadFixture({ lastVisitedAt: null });
+    using _migration = setup([thread], null);
+    expect(runAtomCommand).not.toHaveBeenCalled();
+
+    state.localVisits = localVisitsFor([thread], localVisit);
+    for (const listener of state.listeners)
+      listener({ threadLastVisitedAtById: state.localVisits });
     expect(runAtomCommand).toHaveBeenCalledTimes(1);
   });
 

@@ -681,7 +681,12 @@ function recordPreviewTitles(
 /** Records settled page titles for every thread with previews, for the life of the page. */
 export function startPreviewTitleRecording(): () => void {
   const followed = new Map<string, () => void>();
-  const followNewThreads = (refs: ReadonlyMap<string, ScopedThreadRef>) => {
+  const followThreads = (refs: ReadonlyMap<string, ScopedThreadRef>) => {
+    for (const [threadKey, stop] of followed) {
+      if (refs.has(threadKey)) continue;
+      stop();
+      followed.delete(threadKey);
+    }
     for (const [threadKey, threadRef] of refs) {
       if (followed.has(threadKey)) continue;
       const atom = previewStateAtom(threadKey);
@@ -697,7 +702,7 @@ export function startPreviewTitleRecording(): () => void {
       );
     }
   };
-  const stopIndex = appAtomRegistry.subscribe(previewThreadRefsAtom, followNewThreads, {
+  const stopIndex = appAtomRegistry.subscribe(previewThreadRefsAtom, followThreads, {
     immediate: true,
   });
   return () => {

@@ -461,7 +461,8 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
 useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("beforeunload", () => {
-    debouncedPersistState.flush();
+  window.addEventListener("pagehide", () => debouncedPersistState.flush());
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") debouncedPersistState.flush();
   });
 }
