@@ -1,4 +1,4 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import type { PullRequestDiffSide } from "@t3tools/contracts";
 
 /** Only rendered hunks can anchor comments; list others off-diff. */

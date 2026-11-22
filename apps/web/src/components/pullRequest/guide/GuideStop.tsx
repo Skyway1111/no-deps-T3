@@ -1,4 +1,4 @@
-import type { FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffContentsLoader, FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import type {
   PullRequestReviewGuideAttention,
   PullRequestReviewGuideStop,

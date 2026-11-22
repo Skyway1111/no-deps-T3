@@ -1,4 +1,4 @@
-import { DiffHunksRenderer, hydratePartialDiff, type FileDiffMetadata } from "@pierre/diffs";
+import { hydratePartialDiff, type FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import { excerptRows, fileDiffRows, rowsToPatch } from "@t3tools/client-runtime/review-guide-tour";
 import { EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
@@ -12,6 +12,25 @@ function parse(patch: string): FileDiffMetadata {
   const renderable = getRenderablePatch(patch, "guide-excerpt-test");
   if (renderable?.kind !== "files") throw new Error("Expected a parsed patch.");
   return renderable.files[0]!;
+}
+
+// Expanding every unchanged region must pair identical old and new lines.
+function expectExpandable(diff: FileDiffMetadata) {
+  let oldAt = 0;
+  let newAt = 0;
+  const unchanged = (oldEnd: number, newEnd: number) =>
+    expect(diff.deletionLines.slice(oldAt, oldEnd)).toEqual(
+      diff.additionLines.slice(newAt, newEnd),
+    );
+  for (const hunk of diff.hunks) {
+    for (const content of hunk.hunkContent) {
+      if (content.type !== "change") continue;
+      unchanged(content.deletionLineIndex, content.additionLineIndex);
+      oldAt = content.deletionLineIndex + content.deletions;
+      newAt = content.additionLineIndex + content.additions;
+    }
+  }
+  unchanged(diff.deletionLines.length, diff.additionLines.length);
 }
 
 it("expands an excerpt whose file has another hunk that changes its length", async () => {
@@ -65,9 +84,8 @@ it("expands an excerpt whose file has another hunk that changes its length", asy
   const files = await excerptLoader(excerpt, file, rows, loadDiffFiles)!(excerptDiff);
   const hydrated = hydratePartialDiff("clone", excerptDiff, files);
 
-  await expect(
-    new DiffHunksRenderer({ expandUnchanged: true }).asyncRender(hydrated),
-  ).resolves.toBeDefined();
+  expect(hydrated.deletionLines.length).toBeGreaterThan(rows.length);
+  expectExpandable(hydrated);
 });
 
 it("leaves a deleted file's excerpt without context expansion", () => {

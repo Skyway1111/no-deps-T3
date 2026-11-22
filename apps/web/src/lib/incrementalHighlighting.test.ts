@@ -1,17 +1,18 @@
+import { getSharedHighlighter } from "@t3tools/shared/highlight";
 import { elToHtml } from "@t3tools/shared/markdown";
-
-const toHtml = (node: Parameters<typeof elToHtml>[0]) => elToHtml(node).replaceAll("&gt;", ">");
-const normalizeEntities = (html: string) =>
-  html
-    .replaceAll("&#x3C;", "&lt;")
-    .replaceAll("&#x3E;", "&gt;")
-    .replaceAll("&#x26;", "&amp;")
-    .replaceAll("&#x27;", "&#39;")
-    .replaceAll("&#x22;", "&quot;");
-import { disposeHighlighter, getSharedHighlighter } from "@pierre/diffs";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import { createIncrementalHighlightedDocument } from "./incrementalHighlighting";
+
+// The `<code>` body of a document, with equivalent entity spellings unified.
+const codeHtml = (html: string) =>
+  html
+    .slice(html.indexOf("<code>"))
+    .replace(/&(gt|#x3E);/g, ">")
+    .replace(/&(quot|#x22);/g, '"')
+    .replace(/&(#39|#x27);/g, "'")
+    .replaceAll("&#x3C;", "&lt;")
+    .replaceAll("&#x26;", "&amp;");
 
 const samples = {
   typescript: "/* multi\nline comment */\nconst x = `template\n${1 + 2}`;\nconst re = /abc/;\n",
@@ -27,95 +28,76 @@ const samples = {
   sql: "SELECT 'multi\nline'\nFROM table_name;\n",
 } as const;
 
-const highlighterOptions = {
-  langs: Object.keys(samples) as Array<keyof typeof samples>,
-  themes: ["pierre-dark", "pierre-light"],
-};
+const highlighter = await getSharedHighlighter({ themes: ["pierre-dark", "pierre-light"] });
 
-describe.each(["shiki-wasm", "highlights"] as const)(
-  "incremental code highlighting (%s)",
-  (engine) => {
-    beforeAll(() => disposeHighlighter());
-    afterAll(() => disposeHighlighter());
-    it.each(Object.entries(samples))(
-      "matches full HTML at every streaming prefix in %s",
-      async (language, code) => {
-        const highlighter = await getSharedHighlighter({
-          ...highlighterOptions,
-          preferredHighlighter: engine,
-        });
-        for (const theme of ["pierre-dark", "pierre-light"] as const) {
-          const highlight = createIncrementalHighlightedDocument(highlighter, language, theme);
-          for (let end = 0; end <= code.length; end++) {
-            const text = code.slice(0, end);
-            expect(toHtml(highlight(text)), `${theme}, prefix ${end}`).toBe(
-              normalizeEntities(highlighter.codeToHtml(text, { lang: language, theme })),
-            );
-          }
-          highlight.dispose();
+function expectWholeSourceHtml(
+  highlight: ReturnType<typeof createIncrementalHighlightedDocument>,
+  text: string,
+  language: string,
+  theme: string,
+  message?: string,
+) {
+  expect(codeHtml(elToHtml(highlight(text))), message).toBe(
+    codeHtml(highlighter.codeToHtml(text, { lang: language, theme })),
+  );
+}
+
+describe("incremental code highlighting", () => {
+  it.each(Object.entries(samples))(
+    "matches full HTML at every streaming prefix in %s",
+    (language, code) => {
+      for (const theme of ["pierre-dark", "pierre-light"] as const) {
+        const highlight = createIncrementalHighlightedDocument(highlighter, language, theme);
+        for (let end = 0; end <= code.length; end++) {
+          expectWholeSourceHtml(
+            highlight,
+            code.slice(0, end),
+            language,
+            theme,
+            `${theme}, prefix ${end}`,
+          );
         }
-      },
+        highlight.dispose();
+      }
+    },
+  );
+
+  it("resets after edits and truncation, including edits to a completed line", () => {
+    const highlight = createIncrementalHighlightedDocument(
+      highlighter,
+      "typescript",
+      "pierre-dark",
     );
+    for (const text of [
+      "/* open\ncomment\n",
+      "/* open\ncomment\n*/\nconst x = 1;",
+      "const edited = 2;\nconst x = 1;",
+      "const edited = 2;\nconst x = 10;",
+      "const edited = 2;\n",
+      "",
+      "\n\n\nconst fresh = true;\n",
+    ]) {
+      expectWholeSourceHtml(highlight, text, "typescript", "pierre-dark");
+    }
+    highlight.dispose();
+  });
 
-    it("resets after edits and truncation, including edits to a completed line", async () => {
-      const highlighter = await getSharedHighlighter({
-        ...highlighterOptions,
-        preferredHighlighter: engine,
-      });
-      const highlight = createIncrementalHighlightedDocument(
-        highlighter,
-        "typescript",
-        "pierre-dark",
-      );
-      const inputs = [
-        "/* open\ncomment\n",
-        "/* open\ncomment\n*/\nconst x = 1;",
-        "const edited = 2;\nconst x = 1;",
-        "const edited = 2;\nconst x = 10;",
-        "const edited = 2;\n",
-        "",
-        "\n\n\nconst fresh = true;\n",
-      ];
-      for (const text of inputs) {
-        expect(toHtml(highlight(text))).toBe(
-          normalizeEntities(
-            highlighter.codeToHtml(text, { lang: "typescript", theme: "pierre-dark" }),
-          ),
-        );
-      }
-      highlight.dispose();
-    });
+  // MarkdownCodeBlock creates the document outside its plain-text fallback.
+  it("highlights a language without a lexer as plain text", () => {
+    const highlight = createIncrementalHighlightedDocument(highlighter, "cobol", "pierre-dark");
+    expectWholeSourceHtml(highlight, "MOVE 1 TO X.\n", "cobol", "pierre-dark");
+    highlight.dispose();
+  });
 
-    // MarkdownCodeBlock creates the document outside its plain-text fallback.
-    it("creates a document for a language the highlighter has not loaded", async () => {
-      const highlighter = await getSharedHighlighter({
-        ...highlighterOptions,
-        preferredHighlighter: engine,
-      });
-      expect(() =>
-        createIncrementalHighlightedDocument(highlighter, "cobol", "pierre-dark").dispose(),
-      ).not.toThrow();
-    });
-
-    it("preserves partial CRLF and CR line endings", async () => {
-      const highlighter = await getSharedHighlighter({
-        ...highlighterOptions,
-        preferredHighlighter: engine,
-      });
-      const highlight = createIncrementalHighlightedDocument(
-        highlighter,
-        "typescript",
-        "pierre-dark",
-      );
-      const code = "/* multi\r\nline */\r\nconst x = 1;\r\n";
-      for (let end = 0; end <= code.length; end++) {
-        const text = code.slice(0, end);
-        expect(toHtml(highlight(text))).toBe(
-          normalizeEntities(
-            highlighter.codeToHtml(text, { lang: "typescript", theme: "pierre-dark" }),
-          ),
-        );
-      }
-    });
-  },
-);
+  it("preserves partial CRLF and CR line endings", () => {
+    const highlight = createIncrementalHighlightedDocument(
+      highlighter,
+      "typescript",
+      "pierre-dark",
+    );
+    const code = "/* multi\r\nline */\r\nconst x = 1;\r\n";
+    for (let end = 0; end <= code.length; end++) {
+      expectWholeSourceHtml(highlight, code.slice(0, end), "typescript", "pierre-dark");
+    }
+  });
+});

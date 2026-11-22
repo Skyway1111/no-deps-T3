@@ -1,4 +1,4 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@t3tools/shared/diff/patch";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getFileViewedRange, isLineInFileDiff } from "./pullRequestDiff.logic";

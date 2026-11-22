@@ -1,4 +1,4 @@
-import { hydratePartialDiff } from "@pierre/diffs";
+import { hydratePartialDiff } from "@t3tools/shared/diff/patch";
 import { describe, expect, it } from "vite-plus/test";
 import { resolveDiffReviewPosition } from "../reviewCommentContext";
 import {

@@ -1,4 +1,4 @@
-import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
+import type { LineAnnotation, SelectedLineRange } from "@t3tools/shared/diff/patch";
 import { msg } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "~/i18n/messages";
 

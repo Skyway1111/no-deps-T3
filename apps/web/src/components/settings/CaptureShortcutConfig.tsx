@@ -5,17 +5,15 @@ import {
   type DesktopSnapShotState,
 } from "@t3tools/contracts";
 import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
-import { FileDiff } from "@pierre/diffs/react";
 import { T, useGT, Var } from "@t3tools/shared/i18n/react";
-import { parseDiffFromFile } from "@pierre/diffs";
+import { parseDiffFromFile } from "@t3tools/shared/diff/patch";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
-import { resolveDiffThemeName } from "../../lib/diffRendering";
-import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import { useRenderedAppearance } from "../../hooks/useTheme";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { StaticUnifiedDiff } from "../diffs/StaticUnifiedDiff";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { shortcutToKeybindingInput } from "./KeybindingsSettings.logic";
@@ -181,15 +179,7 @@ export function CaptureShortcutConfig({
               className="max-h-80 overflow-auto rounded-lg border text-xs"
               aria-label={gt("Shortcut changes")}
             >
-              <FileDiff
-                fileDiff={diff}
-                options={{
-                  diffStyle: "unified",
-                  theme: resolveDiffThemeName(resolvedTheme),
-                  overflow: "wrap",
-                  preferredHighlighter: PREFERRED_HIGHLIGHTER,
-                }}
-              />
+              <StaticUnifiedDiff fileDiff={diff} theme={resolvedTheme} wrap />
             </div>
           ) : null}
           {changed ? (
