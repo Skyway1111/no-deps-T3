@@ -1,8 +1,8 @@
-import { FileTree } from "@pierre/trees";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
+import { FileTreeModel } from "~/ui-core/fileTreeModel";
 import { DiffFileTree, type DiffFileTreeEntry } from "./DiffFileTree";
 
 const FOLDERS = 300;
@@ -13,7 +13,7 @@ it("expands every folder without asking the tree about all folders for each one"
     { path: `package-${index}/a.ts`, status: "modified" as const },
     { path: `package-${index}/lib/b.ts`, status: "modified" as const },
   ]).flat();
-  using getItem = vi.spyOn(FileTree.prototype, "getItem");
+  using getItem = vi.spyOn(FileTreeModel.prototype, "getItem");
   await using _screen = await render(
     <div className="flex h-[600px] flex-col">
       <DiffFileTree entries={entries} onSelectFile={() => {}} ariaLabel="Changed files" />

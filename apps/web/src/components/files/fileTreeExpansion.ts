@@ -1,85 +1,16 @@
 import * as Schema from "effect/Schema";
 
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
-
-export interface FileTreeExpansionModel {
-  getItem(path: string): unknown;
-}
-
-type DirectoryHandle = {
-  isDirectory(): boolean;
-  isExpanded(): boolean;
-  expand(): void;
-  collapse(): void;
-};
-
-function asDirectoryHandle(item: unknown): DirectoryHandle | null {
-  if (
-    typeof item !== "object" ||
-    item === null ||
-    !("isDirectory" in item) ||
-    typeof item.isDirectory !== "function" ||
-    !item.isDirectory() ||
-    !("isExpanded" in item) ||
-    typeof item.isExpanded !== "function" ||
-    !("expand" in item) ||
-    typeof item.expand !== "function" ||
-    !("collapse" in item) ||
-    typeof item.collapse !== "function"
-  ) {
-    return null;
-  }
-  return item as DirectoryHandle;
-}
-
-/**
- * Calls `listener` once per task, however many events the model emitted in it. Expanding every
- * folder emits one event per folder, and a listener that rescans the folders is quadratic otherwise.
- */
-export function subscribeOncePerTask(
-  model: { subscribe(listener: () => void): () => void },
-  listener: () => void,
-): () => void {
-  let queued = false;
-  let subscribed = true;
-  const unsubscribe = model.subscribe(() => {
-    if (queued) return;
-    queued = true;
-    queueMicrotask(() => {
-      queued = false;
-      if (subscribed) listener();
-    });
-  });
-  return () => {
-    subscribed = false;
-    unsubscribe();
-  };
-}
+import type { FileTreeModel } from "~/ui-core/fileTreeModel";
 
 export function areAllDirectoriesExpanded(
-  model: FileTreeExpansionModel,
+  model: FileTreeModel,
   directoryPaths: readonly string[],
 ): boolean {
   return (
     directoryPaths.length > 0 &&
-    directoryPaths.every((path) => {
-      const item = asDirectoryHandle(model.getItem(path));
-      return item !== null && item.isExpanded();
-    })
+    directoryPaths.every((path) => model.getItem(path)?.isExpanded() === true)
   );
-}
-
-export function setAllDirectoriesExpanded(
-  model: FileTreeExpansionModel,
-  directoryPaths: readonly string[],
-  expanded: boolean,
-): void {
-  for (const path of directoryPaths) {
-    const item = asDirectoryHandle(model.getItem(path));
-    if (item === null || item.isExpanded() === expanded) continue;
-    if (expanded) item.expand();
-    else item.collapse();
-  }
 }
 
 /** Calls made while `run` is running rerun it once it returns, instead of nesting. */

@@ -746,6 +746,10 @@
     "./sys/keyring": {
       "types": "./src/sys/keyring.ts",
       "import": "./src/sys/keyring.ts"
+    },
+    "./file-icons": {
+      "types": "./src/fileIcons/index.ts",
+      "import": "./src/fileIcons/index.ts"
     }
   },
   "scripts": {

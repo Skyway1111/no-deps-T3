@@ -1,0 +1,265 @@
+/* Row layout and status colors follow @pierre/trees' compact density (Apache-2.0, Pierre Computer Company). */
+@layer components {
+  [data-file-tree] {
+    --trees-fg: var(--contrast-foreground);
+    --trees-fg-muted: var(--contrast-muted-foreground);
+    --trees-hover-bg: color-mix(in srgb, currentColor 7%, transparent);
+    --trees-selected-bg: color-mix(in srgb, currentColor 12%, transparent);
+    --trees-focus-ring-color: #009fff;
+    --trees-indent-guide-bg: color-mix(in lab, var(--trees-fg-muted) 25%, transparent);
+    --trees-scrollbar-thumb: color-mix(in lab, var(--trees-fg) 25%, transparent);
+    --trees-git-added-color: var(
+      --trees-git-added-color-override,
+      var(--trees-status-added-override, light-dark(#16a994, #00cab1))
+    );
+    --trees-git-deleted-color: var(
+      --trees-git-deleted-color-override,
+      var(--trees-status-deleted-override, light-dark(#ff2e3f, #ff6762))
+    );
+    --trees-git-modified-color: var(
+      --trees-git-modified-color-override,
+      var(--trees-status-modified-override, light-dark(#1ca1c7, #08c0ef))
+    );
+    --trees-git-renamed-color: var(
+      --trees-git-renamed-color-override,
+      var(--trees-status-renamed-override, light-dark(#d5a910, #ffd452))
+    );
+    --trees-git-untracked-color: var(
+      --trees-git-untracked-color-override,
+      var(--trees-status-untracked-override, light-dark(#16a994, #00cab1))
+    );
+    --trees-git-ignored-color: var(--contrast-muted-foreground);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    color: var(--trees-fg);
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+  }
+
+  [data-file-tree-virtualized-scroll] {
+    --trees-scrollbar-thumb-current: transparent;
+    flex: 1 1 0;
+    min-height: 0;
+    position: relative;
+    overflow-y: auto;
+    padding-inline: 14.4px 8.4px;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--trees-scrollbar-thumb-current) transparent;
+
+    &:hover {
+      --trees-scrollbar-thumb-current: var(--trees-scrollbar-thumb);
+    }
+  }
+
+  [data-file-tree] [role="tree"] {
+    position: relative;
+    overflow-anchor: none;
+    outline: none;
+  }
+
+  [data-file-tree] [data-type="item"] {
+    display: flex;
+    align-items: center;
+    gap: 4.8px;
+    position: relative;
+    box-sizing: border-box;
+    width: calc(100% - 3.2px);
+    height: 24px;
+    margin: 0 1.6px;
+    padding: 0 6.4px;
+    border: none;
+    border-radius: var(--radius-md);
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 24px;
+    text-align: start;
+    cursor: pointer;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+
+    &:hover {
+      background-color: var(--trees-hover-bg);
+    }
+
+    &:focus-visible {
+      z-index: 2;
+
+      &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        outline: 1px solid var(--trees-focus-ring-color);
+        outline-offset: -1px;
+        pointer-events: none;
+      }
+    }
+
+    &[data-item-selected] {
+      z-index: 3;
+      background-color: var(--trees-selected-bg);
+
+      & > [data-item-section="icon"] {
+        color: var(--trees-fg);
+      }
+    }
+  }
+
+  [data-file-tree] [data-item-selected]:has(+ [data-item-selected]) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  [data-file-tree] [data-item-selected] + [data-item-selected] {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  [data-file-tree] [data-item-section="spacing"] {
+    display: flex;
+    align-self: stretch;
+    padding-left: 7.5px;
+  }
+
+  [data-file-tree] [data-item-section="spacing-item"] {
+    border-left: 1px solid var(--trees-indent-guide-bg);
+    margin-right: 5.4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+
+    & + & {
+      margin-left: 12.3px;
+    }
+  }
+
+  [data-file-tree]:hover [data-item-section="spacing-item"] {
+    opacity: 0.75;
+  }
+
+  [data-file-tree] [data-item-section="icon"] {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    color: var(--trees-fg-muted);
+    fill: currentColor;
+
+    & > [data-icon-token] {
+      color: var(--trees-icon-color);
+    }
+  }
+
+  [data-file-tree] [data-icon-name="file-tree-icon-chevron"] {
+    transform: translateY(0.8px);
+  }
+
+  [data-file-tree] [aria-expanded="false"] [data-icon-name="file-tree-icon-chevron"] {
+    transform: rotate(-90deg) translate(-0.4px, 0.4px);
+  }
+
+  [data-file-tree] [data-item-section="content"] {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: pre;
+  }
+
+  [data-file-tree] [data-truncate-content="visible"] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-file-tree] [data-item-section="decoration"] {
+    display: flex;
+    flex: 1 1 0;
+    justify-content: flex-end;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--trees-fg-muted);
+
+    & > span {
+      display: inline-flex;
+      align-items: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  [data-file-tree] [data-item-section="git"] {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+  }
+
+  [data-file-tree] [data-item-contains-git-change] > [data-item-section="git"] {
+    color: var(--trees-git-modified-color);
+    opacity: 0.5;
+    fill: currentColor;
+  }
+
+  [data-file-tree] [data-item-git-status] {
+    /* Icons with their own token color keep it. */
+    &
+      > :where([data-item-section="icon"])
+      > :where(:not([data-icon-name="file-tree-icon-chevron"])),
+    & > [data-item-section="content"],
+    & > [data-item-section="git"] {
+      color: var(--trees-item-git-status-color);
+    }
+
+    & > [data-item-section="git"] {
+      font-weight: 600;
+    }
+  }
+
+  [data-file-tree] [data-item-git-status="added"] {
+    --trees-item-git-status-color: var(--trees-git-added-color);
+  }
+  [data-file-tree] [data-item-git-status="deleted"] {
+    --trees-item-git-status-color: var(--trees-git-deleted-color);
+  }
+  [data-file-tree] [data-item-git-status="modified"] {
+    --trees-item-git-status-color: var(--trees-git-modified-color);
+  }
+  [data-file-tree] [data-item-git-status="renamed"] {
+    --trees-item-git-status-color: var(--trees-git-renamed-color);
+  }
+  [data-file-tree] [data-item-git-status="untracked"] {
+    --trees-item-git-status-color: var(--trees-git-untracked-color);
+  }
+  [data-file-tree] [data-item-git-status="ignored"] {
+    --trees-item-git-status-color: var(--trees-git-ignored-color);
+
+    & > [data-item-section="icon"] {
+      opacity: 0.5;
+    }
+  }
+
+  [data-file-tree] [data-icon-name="t3-tree-icon-loading"] {
+    opacity: 0.6;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-file-tree] [data-icon-name="t3-tree-icon-loading"] {
+      animation: t3-tree-spin 1s linear infinite;
+    }
+  }
+
+  @keyframes t3-tree-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
