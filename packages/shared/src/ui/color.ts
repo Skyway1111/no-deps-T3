@@ -1,45 +1,106 @@
 // CSS color parsing (culori 4 `parse` semantics) and sRGB / OKLab / OKLCH / HSL / hex / WCAG math.
 
 /** Gamma-encoded sRGB channels in 0..1 (unclamped: wide-gamut inputs fall outside). */
-export interface Rgb { r: number; g: number; b: number; alpha?: number | undefined }
-export interface Oklab { l: number; a: number; b: number; alpha?: number | undefined }
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+  alpha?: number | undefined;
+}
+export interface Oklab {
+  l: number;
+  a: number;
+  b: number;
+  alpha?: number | undefined;
+}
 /** `h` is absent for achromatic colors. */
-export interface Oklch { l: number; c: number; h?: number | undefined; alpha?: number | undefined }
-export interface Hsl { h?: number | undefined; s: number; l: number; alpha?: number | undefined }
+export interface Oklch {
+  l: number;
+  c: number;
+  h?: number | undefined;
+  alpha?: number | undefined;
+}
+export interface Hsl {
+  h?: number | undefined;
+  s: number;
+  l: number;
+  alpha?: number | undefined;
+}
 
-type Mode = "rgb" | "lrgb" | "hsl" | "hwb" | "lab" | "lch" | "oklab" | "oklch" | "p3" | "a98" | "prophoto" | "rec2020" | "xyz50" | "xyz65";
+type Mode =
+  | "rgb"
+  | "lrgb"
+  | "hsl"
+  | "hwb"
+  | "lab"
+  | "lch"
+  | "oklab"
+  | "oklch"
+  | "p3"
+  | "a98"
+  | "prophoto"
+  | "rec2020"
+  | "xyz50"
+  | "xyz65";
 
 const normalizeHue = (h: number) => ((h %= 360) < 0 ? h + 360 : h);
 
-export const srgbToLinear = (c: number) => {
+const srgbToLinear = (c: number) => {
   const abs = Math.abs(c);
   return abs <= 0.04045 ? c / 12.92 : (Math.sign(c) || 1) * ((abs + 0.055) / 1.055) ** 2.4;
 };
-export const linearToSrgb = (c: number) => {
+const linearToSrgb = (c: number) => {
   const abs = Math.abs(c);
   return abs > 0.0031308 ? (Math.sign(c) || 1) * (1.055 * abs ** (1 / 2.4) - 0.055) : c * 12.92;
 };
 
 // Conversions write their result to these scratch registers instead of allocating.
-let R = 0, G = 0, B = 0; // sRGB (or linear, where noted)
-let OL = 0, OA = 0, OB = 0; // OKLab
+let R = 0,
+  G = 0,
+  B = 0; // sRGB (or linear, where noted)
+let OL = 0,
+  OA = 0,
+  OB = 0; // OKLab
 
 type M3 = readonly [number, number, number, number, number, number, number, number, number];
-const XYZ65_TO_LRGB: M3 = [3.2409699419045226, -1.5373831775700939, -0.4986107602930034, -0.9692436362808796, 1.8759675015077204, 0.0415550574071756, 0.0556300796969936, -0.2039769588889765, 1.0569715142428784];
-const XYZ50_TO_LRGB: M3 = [3.1341359569958707, -1.6173863321612538, -0.4906619460083532, -0.978795502912089, 1.916254567259524, 0.03344273116131949, 0.07195537988411677, -0.2289768264158322, 1.405386058324125];
-const P3_TO_XYZ65: M3 = [0.486570948648216, 0.265667693169093, 0.1982172852343625, 0.2289745640697487, 0.6917385218365062, 0.079286914093745, 0, 0.0451133818589026, 1.043944368900976];
-const A98_TO_XYZ65: M3 = [0.5766690429101305, 0.1855582379065463, 0.1882286462349947, 0.297344975250536, 0.6273635662554661, 0.0752914584939979, 0.0270313613864123, 0.0706888525358272, 0.9913375368376386];
-const PROPHOTO_TO_XYZ50: M3 = [0.7977666449006423, 0.1351812974005331, 0.0313477341283922, 0.2880748288194013, 0.7118352342418731, 0.0000899369387256, 0, 0, 0.8251046025104602];
-const REC2020_TO_XYZ65: M3 = [0.6369580483012911, 0.1446169035862083, 0.1688809751641721, 0.262700212011267, 0.6779980715188708, 0.059301716469862, 0, 0.0280726930490874, 1.0609850577107909];
-const D50X = 0.3457 / 0.3585, D50Z = (1 - 0.3457 - 0.3585) / 0.3585;
+const XYZ65_TO_LRGB: M3 = [
+  3.2409699419045226, -1.5373831775700939, -0.4986107602930034, -0.9692436362808796,
+  1.8759675015077204, 0.0415550574071756, 0.0556300796969936, -0.2039769588889765,
+  1.0569715142428784,
+];
+const XYZ50_TO_LRGB: M3 = [
+  3.1341359569958707, -1.6173863321612538, -0.4906619460083532, -0.978795502912089,
+  1.916254567259524, 0.03344273116131949, 0.07195537988411677, -0.2289768264158322,
+  1.405386058324125,
+];
+const P3_TO_XYZ65: M3 = [
+  0.486570948648216, 0.265667693169093, 0.1982172852343625, 0.2289745640697487, 0.6917385218365062,
+  0.079286914093745, 0, 0.0451133818589026, 1.043944368900976,
+];
+const A98_TO_XYZ65: M3 = [
+  0.5766690429101305, 0.1855582379065463, 0.1882286462349947, 0.297344975250536, 0.6273635662554661,
+  0.0752914584939979, 0.0270313613864123, 0.0706888525358272, 0.9913375368376386,
+];
+const PROPHOTO_TO_XYZ50: M3 = [
+  0.7977666449006423, 0.1351812974005331, 0.0313477341283922, 0.2880748288194013,
+  0.7118352342418731, 0.0000899369387256, 0, 0, 0.8251046025104602,
+];
+const REC2020_TO_XYZ65: M3 = [
+  0.6369580483012911, 0.1446169035862083, 0.1688809751641721, 0.262700212011267, 0.6779980715188708,
+  0.059301716469862, 0, 0.0280726930490874, 1.0609850577107909,
+];
+const D50X = 0.3457 / 0.3585,
+  D50Z = (1 - 0.3457 - 0.3585) / 0.3585;
 
-const row = (m: M3, i: number, x: number, y: number, z: number) => m[i]! * x + m[i + 1]! * y + m[i + 2]! * z;
+const row = (m: M3, i: number, x: number, y: number, z: number) =>
+  m[i]! * x + m[i + 1]! * y + m[i + 2]! * z;
 const fromXyz = (m: M3, x: number, y: number, z: number) => {
   R = linearToSrgb(row(m, 0, x, y, z));
   G = linearToSrgb(row(m, 3, x, y, z));
   B = linearToSrgb(row(m, 6, x, y, z));
 };
-const viaXyz = (to: M3, from: M3, x: number, y: number, z: number) => fromXyz(to, row(from, 0, x, y, z), row(from, 3, x, y, z), row(from, 6, x, y, z));
+const viaXyz = (to: M3, from: M3, x: number, y: number, z: number) =>
+  fromXyz(to, row(from, 0, x, y, z), row(from, 3, x, y, z), row(from, 6, x, y, z));
 const labF = (v: number) => (v ** 3 > 216 / 24389 ? v ** 3 : (116 * v - 16) / (24389 / 27));
 const fromLab = (l: number, a: number, b: number) => {
   const fy = (l + 16) / 116;
@@ -47,15 +108,42 @@ const fromLab = (l: number, a: number, b: number) => {
 };
 const fromHsv = (h: number, s: number, v: number) => {
   h = normalizeHue(h);
-  const f = Math.abs(((h / 60) % 2) - 1), y = v * (1 - s * f), z = v * (1 - s);
+  const f = Math.abs(((h / 60) % 2) - 1),
+    y = v * (1 - s * f),
+    z = v * (1 - s);
   switch (Math.floor(h / 60)) {
-    case 0: R = v; G = y; B = z; break;
-    case 1: R = y; G = v; B = z; break;
-    case 2: R = z; G = v; B = y; break;
-    case 3: R = z; G = y; B = v; break;
-    case 4: R = y; G = z; B = v; break;
-    case 5: R = v; G = z; B = y; break;
-    default: R = G = B = z;
+    case 0:
+      R = v;
+      G = y;
+      B = z;
+      break;
+    case 1:
+      R = y;
+      G = v;
+      B = z;
+      break;
+    case 2:
+      R = z;
+      G = v;
+      B = y;
+      break;
+    case 3:
+      R = z;
+      G = y;
+      B = v;
+      break;
+    case 4:
+      R = y;
+      G = z;
+      B = v;
+      break;
+    case 5:
+      R = v;
+      G = z;
+      B = y;
+      break;
+    default:
+      R = G = B = z;
   }
 };
 const fromHsl = (h: number, s: number, l: number) => {
@@ -64,13 +152,38 @@ const fromHsl = (h: number, s: number, l: number) => {
   const m2 = m1 - (m1 - l) * 2 * Math.abs(((h / 60) % 2) - 1);
   const lo = 2 * l - m1;
   switch (Math.floor(h / 60)) {
-    case 0: R = m1; G = m2; B = lo; break;
-    case 1: R = m2; G = m1; B = lo; break;
-    case 2: R = lo; G = m1; B = m2; break;
-    case 3: R = lo; G = m2; B = m1; break;
-    case 4: R = m2; G = lo; B = m1; break;
-    case 5: R = m1; G = lo; B = m2; break;
-    default: R = G = B = lo;
+    case 0:
+      R = m1;
+      G = m2;
+      B = lo;
+      break;
+    case 1:
+      R = m2;
+      G = m1;
+      B = lo;
+      break;
+    case 2:
+      R = lo;
+      G = m1;
+      B = m2;
+      break;
+    case 3:
+      R = lo;
+      G = m2;
+      B = m1;
+      break;
+    case 4:
+      R = m2;
+      G = lo;
+      B = m1;
+      break;
+    case 5:
+      R = m1;
+      G = lo;
+      B = m2;
+      break;
+    default:
+      R = G = B = lo;
   }
 };
 /** Gamma-encoded sRGB → OKLab registers; grays get exactly zero a/b, as in culori. */
@@ -126,67 +239,9 @@ const lchOut = (l: number, a: number, b: number, alpha: number | undefined): Okl
   return o;
 };
 
-export function hslToRgb({ h = 0, s, l, alpha }: Hsl): Rgb {
-  fromHsl(h, s, l);
-  return rgbOut(alpha);
-}
-
-export function rgbToHsl({ r, g, b, alpha }: Rgb): Hsl {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  const hsl: Hsl = { s: d === 0 ? 0 : d / (1 - Math.abs(max + min - 1)), l: (max + min) / 2 };
-  if (d !== 0) hsl.h = (max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
-  if (alpha !== undefined) hsl.alpha = alpha;
-  return hsl;
-}
-
-export function rgbToOklab({ r, g, b, alpha }: Rgb): Oklab {
-  toLab(r, g, b);
-  return labOut(OL, OA, OB, alpha);
-}
-
 export function oklabToRgb({ l, a, b, alpha }: Oklab): Rgb {
   fromOklab(l, a, b);
   return rgbOut(alpha);
-}
-
-export const oklabToOklch = ({ l, a, b, alpha }: Oklab): Oklch => lchOut(l, a, b, alpha);
-
-export function oklchToOklab({ l, c, h = 0, alpha }: Oklch): Oklab {
-  polar(c, h);
-  return labOut(l, OA, OB, alpha);
-}
-
-export function rgbToOklch({ r, g, b, alpha }: Rgb): Oklch {
-  toLab(r, g, b);
-  return lchOut(OL, OA, OB, alpha);
-}
-
-export function oklchToRgb({ l, c, h = 0, alpha }: Oklch): Rgb {
-  polar(c, h);
-  fromOklab(l, OA, OB);
-  return rgbOut(alpha);
-}
-
-const inSrgb = (l: number, c: number, h: number) => {
-  polar(c, h);
-  labToLinear(l, OA, OB);
-  return R >= -1e-4 && R <= 1 + 1e-4 && G >= -1e-4 && G <= 1 + 1e-4 && B >= -1e-4 && B <= 1 + 1e-4;
-};
-
-/** Strict sRGB gamut mapping: lowers chroma at constant lightness and hue until linear channels fit. */
-export function clampChroma(color: Oklch, resolution = 1e-6): Oklch {
-  const { l, h = 0 } = color;
-  if (inSrgb(l, color.c, h)) return color;
-  let lo = 0;
-  let hi = color.c;
-  while (hi - lo > resolution) {
-    const mid = (lo + hi) / 2;
-    if (inSrgb(l, mid, h)) lo = mid;
-    else hi = mid;
-  }
-  return { ...color, c: lo };
 }
 
 const hex2 = (v: number) => {
@@ -194,18 +249,10 @@ const hex2 = (v: number) => {
   return (n < 16 ? "0" : "") + n.toString(16);
 };
 /** `#rrggbb`, or `#rrggbbaa` when alpha is below 1; channels are clamped to sRGB. */
-export const rgbToHex = ({ r, g, b, alpha = 1 }: Rgb): string => "#" + hex2(r) + hex2(g) + hex2(b) + (alpha < 1 ? hex2(alpha) : "");
+export const rgbToHex = ({ r, g, b, alpha = 1 }: Rgb): string =>
+  "#" + hex2(r) + hex2(g) + hex2(b) + (alpha < 1 ? hex2(alpha) : "");
 
-/** WCAG relative luminance (clamping is the caller's choice: CSS paints clamped channels). */
-export const relativeLuminance = ({ r, g, b }: Rgb) => 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
-
-export function contrastRatio(a: Rgb, b: Rgb): number {
-  const x = relativeLuminance(a);
-  const y = relativeLuminance(b);
-  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-}
-
-// ---- Parsing: a single-pass, allocation-free port of culori's tokenizer, modern/legacy syntaxes, hex, names and color().
+// Single-pass, allocation-free port of culori's tokenizer, modern/legacy syntaxes, hex, names and color().
 // `parse` returns the source mode and leaves the channels in these registers (undefined = `none`).
 
 let X: number | undefined, Y: number | undefined, Z: number | undefined, A: number | undefined;
@@ -229,16 +276,41 @@ const NAMED_PACKED =
   "BFD8tomatoFF6347turquoise40E0D0violetEE82EEwheatF5DEB3whiteFFFFFFwhitesmokeF5F5F5yellowFFFF00yellowgreen9ACD32";
 let namedColors: Map<string, number> | undefined;
 const named = (name: string) =>
-  (namedColors ??= new Map(Array.from(NAMED_PACKED.matchAll(/([a-z]+)([0-9A-F]{6})/g), (m) => [m[1]!, parseInt(m[2]!, 16)]))).get(name.toLowerCase());
+  (namedColors ??= new Map(
+    Array.from(NAMED_PACKED.matchAll(/([a-z]+)([0-9A-F]{6})/g), (m) => [
+      m[1]!,
+      parseInt(m[2]!, 16),
+    ]),
+  )).get(name.toLowerCase());
 
-const PROFILES = new Map<string, Mode>([["a98-rgb", "a98"], ["display-p3", "p3"], ["prophoto-rgb", "prophoto"], ["rec2020", "rec2020"], ["srgb", "rgb"], ["srgb-linear", "lrgb"], ["xyz", "xyz65"], ["xyz-d65", "xyz65"], ["xyz-d50", "xyz50"]]);
+const PROFILES = new Map<string, Mode>([
+  ["a98-rgb", "a98"],
+  ["display-p3", "p3"],
+  ["prophoto-rgb", "prophoto"],
+  ["rec2020", "rec2020"],
+  ["srgb", "rgb"],
+  ["srgb-linear", "lrgb"],
+  ["xyz", "xyz65"],
+  ["xyz-d65", "xyz65"],
+  ["xyz-d50", "xyz50"],
+]);
 
 const digit = (c: number) => c >= 48 && c <= 57;
 const identStart = (c: number) => c > 127 || c === 95 || ((c | 32) >= 97 && (c | 32) <= 122);
 const identChar = (c: number) => identStart(c) || digit(c) || c === 45;
 /** JS `\s` / `String#trim` whitespace. */
 const space = (c: number) =>
-  c === 32 || (c >= 9 && c <= 13) || (c >= 0x2000 ? c <= 0x200a || c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff : c === 0xa0 || c === 0x1680);
+  c === 32 ||
+  (c >= 9 && c <= 13) ||
+  (c >= 0x2000
+    ? c <= 0x200a ||
+      c === 0x2028 ||
+      c === 0x2029 ||
+      c === 0x202f ||
+      c === 0x205f ||
+      c === 0x3000 ||
+      c === 0xfeff
+    : c === 0xa0 || c === 0x1680);
 /** culori tokenizer whitespace. */
 const tokSpace = (c: number) => c === 32 || c === 10 || c === 9;
 const skip = (s: string, i: number) => {
@@ -254,12 +326,17 @@ function scanNum(s: string, i: number): number {
   const neg = c === 45;
   if (neg || c === 43) c = s.charCodeAt(++i);
   const start = i;
-  let m = 0, n = 0, frac = 0, e = 0;
+  let m = 0,
+    n = 0,
+    frac = 0,
+    e = 0;
   for (; digit(c); c = s.charCodeAt(++i), n++) m = m * 10 + c - 48;
-  if (c === 46 && digit(s.charCodeAt(i + 1))) for (c = s.charCodeAt(++i); digit(c); c = s.charCodeAt(++i), n++, frac++) m = m * 10 + c - 48;
+  if (c === 46 && digit(s.charCodeAt(i + 1)))
+    for (c = s.charCodeAt(++i); digit(c); c = s.charCodeAt(++i), n++, frac++) m = m * 10 + c - 48;
   if (!n) return (end = -1);
   if (c === 101 || c === 69) {
-    let j = i + 1, d = s.charCodeAt(j);
+    let j = i + 1,
+      d = s.charCodeAt(j);
     const eneg = d === 45;
     if (eneg || d === 43) d = s.charCodeAt(++j);
     if (digit(d)) {
@@ -270,24 +347,46 @@ function scanNum(s: string, i: number): number {
   end = i;
   // Exact (Clinger fast path) when mantissa and power of ten are both exact doubles.
   const p = e - frac;
-  const v = n <= 15 && p >= -22 && p <= 22 ? (p < 0 ? m / POW10[-p]! : m * POW10[p]!) : +s.slice(start, i);
+  const v =
+    n <= 15 && p >= -22 && p <= 22 ? (p < 0 ? m / POW10[-p]! : m * POW10[p]!) : +s.slice(start, i);
   return neg ? -v : v;
 }
 /** Hue unit multiplier for the identifier `s[i, j)`, or 0. */
 const hueUnit = (s: string, i: number, j: number) =>
-  j - i === 3 ? (s.startsWith("deg", i) ? 1 : s.startsWith("rad", i) ? 180 / Math.PI : 0) : j - i === 4 ? (s.startsWith("turn", i) ? 360 : s.startsWith("grad", i) ? 9 / 10 : 0) : 0;
+  j - i === 3
+    ? s.startsWith("deg", i)
+      ? 1
+      : s.startsWith("rad", i)
+        ? 180 / Math.PI
+        : 0
+    : j - i === 4
+      ? s.startsWith("turn", i)
+        ? 360
+        : s.startsWith("grad", i)
+          ? 9 / 10
+          : 0
+      : 0;
 
-const NONE = 0, NUM = 1, PCT = 2, HUE = 3;
+const NONE = 0,
+  NUM = 1,
+  PCT = 2,
+  HUE = 3;
 const kinds = [0, 0, 0, 0];
 const vals = [0.5, 0.5, 0.5, 0.5];
-let tokKind = 0, tokVal = 0;
+let tokKind = 0,
+  tokVal = 0;
 
 /** culori `num` token at `i` (precondition: is_num): sets tokKind/tokVal and returns the end, or -1 on a bad unit. */
 function numToken(s: string, i: number): number {
   const v = scanNum(s, i);
   i = end;
   const c = s.charCodeAt(i);
-  if (identStart(c) || (c === 45 && i + 1 < s.length && (s.charCodeAt(i + 1) === 45 || identStart(s.charCodeAt(i + 1))))) {
+  if (
+    identStart(c) ||
+    (c === 45 &&
+      i + 1 < s.length &&
+      (s.charCodeAt(i + 1) === 45 || identStart(s.charCodeAt(i + 1))))
+  ) {
     let j = i + 1;
     while (identChar(s.charCodeAt(j))) j++;
     const unit = hueUnit(s, i, j);
@@ -312,7 +411,8 @@ const isNum = (s: string, i: number) => {
   }
   return c === 46 ? digit(s.charCodeAt(i + 1)) : digit(c);
 };
-const alphaOf = (k: number, v: number) => (k === NONE ? undefined : Math.min(1, Math.max(0, k === NUM ? v : v / 100)));
+const alphaOf = (k: number, v: number) =>
+  k === NONE ? undefined : Math.min(1, Math.max(0, k === NUM ? v : v / 100));
 
 /** Modern `fn(c1 c2 c3 [/ alpha])` and `color(profile …)`: tokenizes and validates coords in one pass. */
 function modern(s: string): Mode | undefined {
@@ -353,7 +453,11 @@ function modern(s: string): Mode | undefined {
       } else return;
     } else if (c === 43 || c === 45 || c === 46 || digit(c)) {
       if (!isNum(s, i) || (i = numToken(s, i)) < 0) return;
-    } else if (s.startsWith("none", i) && !identChar(s.charCodeAt(i + 4)) && s.charCodeAt(i + 4) !== 40) {
+    } else if (
+      s.startsWith("none", i) &&
+      !identChar(s.charCodeAt(i + 4)) &&
+      s.charCodeAt(i + 4) !== 40
+    ) {
       i += 4;
       tokKind = NONE;
     } else return;
@@ -365,7 +469,8 @@ function modern(s: string): Mode | undefined {
   const [k0, k1, k2] = kinds as [number, number, number];
   const [v0, v1, v2] = vals as [number, number, number];
   A = count === 4 ? alphaOf(kinds[3]!, vals[3]!) : undefined;
-  const ch = (k: number, v: number, scale: number) => (k === NONE ? undefined : k === NUM ? v : (v * scale) / 100);
+  const ch = (k: number, v: number, scale: number) =>
+    k === NONE ? undefined : k === NUM ? v : (v * scale) / 100;
   const hue = (k: number, v: number) => (k === NONE ? undefined : v);
   if (profile) {
     X = ch(k0, v0, 1);
@@ -460,10 +565,13 @@ function legacy(s: string): Mode | undefined {
   return s.charCodeAt(i) === 41 && i + 1 === s.length ? (hsl ? "hsl" : "rgb") : undefined;
 }
 
-const nib = (c: number) => (c <= 57 ? (c >= 48 ? c - 48 : -1) : (c |= 32) >= 97 && c <= 102 ? c - 87 : -1);
+const nib = (c: number) =>
+  c <= 57 ? (c >= 48 ? c - 48 : -1) : (c |= 32) >= 97 && c <= 102 ? c - 87 : -1;
 /** culori `parseNumber`: packed 3/4/6/8-digit hex → rgb registers. */
 function fromNumber(n: number, len: number): Mode {
-  const short = len < 5, a = len === 4 || len === 8, at = (k: number) => (short ? ((n >> (4 * k)) & 15) * 17 : (n >>> (8 * k)) & 255);
+  const short = len < 5,
+    a = len === 4 || len === 8,
+    at = (k: number) => (short ? ((n >> (4 * k)) & 15) * 17 : (n >>> (8 * k)) & 255);
   const o = a ? 1 : 0;
   X = at(o + 2) / 255;
   Y = at(o + 1) / 255;
@@ -497,32 +605,73 @@ function parse(s: string): Mode | undefined {
 
 /** Parsed registers → sRGB registers. */
 function toSrgb(mode: Mode) {
-  const x = X ?? 0, y = Y ?? 0, z = Z ?? 0;
+  const x = X ?? 0,
+    y = Y ?? 0,
+    z = Z ?? 0;
   switch (mode) {
-    case "rgb": R = x; G = y; B = z; return;
-    case "hsl": return fromHsl(x, y, z);
+    case "rgb":
+      R = x;
+      G = y;
+      B = z;
+      return;
+    case "hsl":
+      return fromHsl(x, y, z);
     case "hwb": {
       const [w, b] = y + z > 1 ? [y / (y + z), z / (y + z)] : [y, z];
       return fromHsv(x, b === 1 ? 1 : 1 - w / (1 - b), 1 - b);
     }
-    case "lrgb": R = linearToSrgb(x); G = linearToSrgb(y); B = linearToSrgb(z); return;
-    case "lab": return fromLab(x, y, z);
-    case "lch": return fromLab(x, y ? y * Math.cos((z / 180) * Math.PI) : 0, y ? y * Math.sin((z / 180) * Math.PI) : 0);
-    case "oklab": return fromOklab(x, y, z);
-    case "oklch": polar(y, z); return fromOklab(x, OA, OB);
-    case "p3": return viaXyz(XYZ65_TO_LRGB, P3_TO_XYZ65, srgbToLinear(x), srgbToLinear(y), srgbToLinear(z));
-    case "a98": return viaXyz(XYZ65_TO_LRGB, A98_TO_XYZ65, a98Linear(x), a98Linear(y), a98Linear(z));
-    case "rec2020": return viaXyz(XYZ65_TO_LRGB, REC2020_TO_XYZ65, rec2020Linear(x), rec2020Linear(y), rec2020Linear(z));
-    case "prophoto": return viaXyz(XYZ50_TO_LRGB, PROPHOTO_TO_XYZ50, prophotoLinear(x), prophotoLinear(y), prophotoLinear(z));
-    case "xyz50": return fromXyz(XYZ50_TO_LRGB, x, y, z);
-    case "xyz65": return fromXyz(XYZ65_TO_LRGB, x, y, z);
+    case "lrgb":
+      R = linearToSrgb(x);
+      G = linearToSrgb(y);
+      B = linearToSrgb(z);
+      return;
+    case "lab":
+      return fromLab(x, y, z);
+    case "lch":
+      return fromLab(
+        x,
+        y ? y * Math.cos((z / 180) * Math.PI) : 0,
+        y ? y * Math.sin((z / 180) * Math.PI) : 0,
+      );
+    case "oklab":
+      return fromOklab(x, y, z);
+    case "oklch":
+      polar(y, z);
+      return fromOklab(x, OA, OB);
+    case "p3":
+      return viaXyz(XYZ65_TO_LRGB, P3_TO_XYZ65, srgbToLinear(x), srgbToLinear(y), srgbToLinear(z));
+    case "a98":
+      return viaXyz(XYZ65_TO_LRGB, A98_TO_XYZ65, a98Linear(x), a98Linear(y), a98Linear(z));
+    case "rec2020":
+      return viaXyz(
+        XYZ65_TO_LRGB,
+        REC2020_TO_XYZ65,
+        rec2020Linear(x),
+        rec2020Linear(y),
+        rec2020Linear(z),
+      );
+    case "prophoto":
+      return viaXyz(
+        XYZ50_TO_LRGB,
+        PROPHOTO_TO_XYZ50,
+        prophotoLinear(x),
+        prophotoLinear(y),
+        prophotoLinear(z),
+      );
+    case "xyz50":
+      return fromXyz(XYZ50_TO_LRGB, x, y, z);
+    case "xyz65":
+      return fromXyz(XYZ65_TO_LRGB, x, y, z);
   }
 }
 const a98Linear = (v: number) => Math.abs(v) ** (563 / 256) * Math.sign(v);
-const prophotoLinear = (v: number) => (Math.abs(v) >= 16 / 512 ? Math.sign(v) * Math.abs(v) ** 1.8 : v / 16);
+const prophotoLinear = (v: number) =>
+  Math.abs(v) >= 16 / 512 ? Math.sign(v) * Math.abs(v) ** 1.8 : v / 16;
 const rec2020Linear = (v: number) => {
   const alpha = 1.09929682680944;
-  return Math.abs(v) < 0.018053968510807 * 4.5 ? v / 4.5 : (Math.sign(v) || 1) * ((Math.abs(v) + alpha - 1) / alpha) ** (1 / 0.45);
+  return Math.abs(v) < 0.018053968510807 * 4.5
+    ? v / 4.5
+    : (Math.sign(v) || 1) * ((Math.abs(v) + alpha - 1) / alpha) ** (1 / 0.45);
 };
 
 /** Parses any CSS color culori's CSS build accepts. `alpha` is absent when unspecified or `none`. */
@@ -537,7 +686,7 @@ export function toOklab(css: string): Oklab | undefined {
   const mode = parse(css);
   if (!mode) return;
   if (mode === "oklab") return labOut(X ?? 0, Y ?? 0, Z ?? 0, A);
-  if (mode === "oklch") return polar(Y ?? 0, Z ?? 0), labOut(X ?? 0, OA, OB, A);
+  if (mode === "oklch") return (polar(Y ?? 0, Z ?? 0), labOut(X ?? 0, OA, OB, A));
   toSrgb(mode);
   toLab(R, G, B);
   return labOut(OL, OA, OB, A);

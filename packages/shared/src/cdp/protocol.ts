@@ -2,7 +2,7 @@
 // Zero Node or DOM runtime imports so both server and desktop relay share one contract.
 
 export const CDP_ERROR_CODE = -32000;
-export const MAX_CDP_PAYLOAD_SIZE = 64 * 1024 * 1024;
+const MAX_CDP_PAYLOAD_SIZE = 64 * 1024 * 1024;
 
 export interface CdpCommand {
   readonly id: number;

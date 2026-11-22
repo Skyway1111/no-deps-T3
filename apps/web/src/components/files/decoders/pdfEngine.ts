@@ -1,6 +1,6 @@
 // Zero-dependency PDF reader: objects, xref tables and streams, page tree, fonts, text extraction and a canvas painter.
 
-export class Name {
+class Name {
   private static readonly cache = new Map<string, Name>();
   readonly value: string;
   private constructor(value: string) {
@@ -16,7 +16,7 @@ export class Name {
     return name;
   }
 }
-export class Ref {
+class Ref {
   readonly num: number;
   readonly gen: number;
   constructor(num: number, gen: number) {
@@ -363,7 +363,7 @@ const num = (value: PdfValue | undefined, fallback = 0) =>
 const nameOf = (value: PdfValue | undefined) => (value instanceof Name ? value.value : undefined);
 
 /** PDF text strings: UTF-16 with a byte order mark, UTF-8 with one, else PDFDocEncoding (close to Latin-1). */
-export function pdfText(value: PdfValue | undefined) {
+function pdfText(value: PdfValue | undefined) {
   if (!isBytes(value)) return "";
   if (value[0] === 0xfe && value[1] === 0xff)
     return new TextDecoder("utf-16be").decode(value.subarray(2));

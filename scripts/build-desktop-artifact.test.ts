@@ -645,34 +645,27 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         serverDependencies: {
           "@cursor/sdk": "1.0.22",
           "@anthropic-ai/claude-agent-sdk": "^0.3.170",
-          "@ff-labs/fff-node": "0.9.4",
           "@opencode-ai/sdk": "^1.3.15",
           "@pierre/diffs": "1.3.0",
-          "node-pty": "1.1.0",
         },
         desktopDependencies: { "@clerk/electron-passkeys": "0.0.3" },
         arch: "arm64",
-        fffNodeVersion: "0.9.4",
       }),
       {
         "@cursor/sdk": "1.0.22",
         "@clerk/electron-passkeys": "0.0.3",
-        "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
       },
     );
 
     assert.deepStrictEqual(
       resolveMergedStageDependencies({
         platform: "linux",
-        serverDependencies: { "@ff-labs/fff-node": "0.9.4", "node-pty": "1.1.0", effect: "4.0.0" },
+        serverDependencies: { effect: "4.0.0" },
         desktopDependencies: { "@crowecawcaw/xa11y": "0.13.0" },
         arch: "x64",
-        fffNodeVersion: "0.9.4",
       }),
       {
         "@crowecawcaw/xa11y": "0.13.0",
-        "@ff-labs/fff-bin-linux-x64-gnu": "0.9.4",
-        "@ff-labs/fff-bin-linux-x64-musl": "0.9.4",
       },
     );
   });

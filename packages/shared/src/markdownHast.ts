@@ -3,14 +3,6 @@ import {
   elToHtml,
   elToReact,
   elToReactProps,
-  HREF_PROTOCOLS,
-  htmlAttributeName,
-  normalizeLocalEditorLinksOnTree,
-  preserveImageSourceMetaOnTree,
-  renderMathSvg,
-  SAFE_HTML_TAGS,
-  sanitizeElTree,
-  SRC_PROTOCOLS,
   URL_ATTRIBUTES,
   VOID_HTML_TAGS,
   wrapMathSvg,
@@ -27,8 +19,6 @@ export {
   elToHtml,
   elToReact,
   elToReactProps,
-  htmlAttributeName,
-  renderMathSvg,
   URL_ATTRIBUTES,
   VOID_HTML_TAGS,
   wrapMathSvg,
@@ -40,31 +30,6 @@ export {
   type ElText,
   type ReactRuntimeLike,
 };
-
-export function rehypePreserveImageSourceMeta() {
-  return (tree: ElRoot) => {
-    preserveImageSourceMetaOnTree(tree);
-  };
-}
-
-export function rehypeNormalizeLocalEditorLinks() {
-  return (tree: ElRoot) => {
-    normalizeLocalEditorLinksOnTree(tree);
-  };
-}
-
-export const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
-  tagNames: [...SAFE_HTML_TAGS],
-  protocols: {
-    href: [...HREF_PROTOCOLS],
-    src: [...SRC_PROTOCOLS],
-    dataDarkSrc: [...SRC_PROTOCOLS],
-    dataLightSrc: [...SRC_PROTOCOLS],
-  },
-} as const;
-
-/** Sanitizes an Element/HAST tree using T3 Code's strict allowlist sanitizer. */
-export const sanitizeChatHast = (tree: ElRoot): ElRoot => sanitizeElTree(tree);
 
 export type ChatMarkdownImageProperties = {
   readonly src?: unknown;

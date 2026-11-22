@@ -23,11 +23,17 @@ export type HeifImage = {
   readonly exif: Uint8Array | undefined;
 };
 
-const fourcc = (view: DataView, at: number) => String.fromCharCode(view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2), view.getUint8(at + 3));
+const fourcc = (view: DataView, at: number) =>
+  String.fromCharCode(
+    view.getUint8(at),
+    view.getUint8(at + 1),
+    view.getUint8(at + 2),
+    view.getUint8(at + 3),
+  );
 
 function children(view: DataView, start: number, end: number, budget: { boxes: number }): Box[] {
   const out: Box[] = [];
-  for (let offset = start; offset + 8 <= end; ) {
+  for (let offset = start; offset + 8 <= end;) {
     if (++budget.boxes > 4096) throw new DecodeError("image-metadata-too-large");
     let size = view.getUint32(offset);
     let header = 8;
@@ -56,14 +62,23 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
   const find = (type: string) => boxes.find((b) => b.type === type);
   let reader = 0;
   const u = (bits: number) => {
-    const value = bits === 0 ? 0 : bits === 8 ? view.getUint8(reader) : bits === 16 ? view.getUint16(reader) : bits === 32 ? view.getUint32(reader) : Number(view.getBigUint64(reader));
+    const value =
+      bits === 0
+        ? 0
+        : bits === 8
+          ? view.getUint8(reader)
+          : bits === 16
+            ? view.getUint16(reader)
+            : bits === 32
+              ? view.getUint32(reader)
+              : Number(view.getBigUint64(reader));
     reader += bits / 8;
     return value;
   };
   const pitm = find("pitm");
   if (!pitm) throw new DecodeError("heif-metadata-invalid");
   reader = pitm.start;
-  const primaryId = u(8) === 0 ? (reader += 3, u(16)) : (reader += 3, u(32));
+  const primaryId = u(8) === 0 ? ((reader += 3), u(16)) : ((reader += 3), u(32));
   // Items.
   const types = new Map<number, string>();
   const iinf = find("iinf");
@@ -90,7 +105,12 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
     const version = u(8);
     reader += 3;
     const sizes = u(16);
-    const [offsetSize, lengthSize, baseSize, indexSize] = [(sizes >> 12) & 15, (sizes >> 8) & 15, (sizes >> 4) & 15, version ? sizes & 15 : 0].map((n) => n * 8) as [number, number, number, number];
+    const [offsetSize, lengthSize, baseSize, indexSize] = [
+      (sizes >> 12) & 15,
+      (sizes >> 8) & 15,
+      (sizes >> 4) & 15,
+      version ? sizes & 15 : 0,
+    ].map((n) => n * 8) as [number, number, number, number];
     const count = version < 2 ? u(16) : u(32);
     for (let i = 0; i < count; i++) {
       const id = version < 2 ? u(16) : u(32);
@@ -103,7 +123,8 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
         u(indexSize);
         const offset = u(offsetSize);
         const length = u(lengthSize);
-        const source = method === 1 ? (idat ? bytes.subarray(idat.start, idat.end) : new Uint8Array()) : bytes;
+        const source =
+          method === 1 ? (idat ? bytes.subarray(idat.start, idat.end) : new Uint8Array()) : bytes;
         const start = base + offset;
         const end = length ? start + length : source.length;
         if (method > 1 || end > source.length) throw new DecodeError("heif-metadata-invalid");
@@ -114,8 +135,12 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
   }
   // Properties and their associations.
   const iprp = find("iprp");
-  const ipco = iprp ? children(view, iprp.start, iprp.end, budget).find((b) => b.type === "ipco") : undefined;
-  const ipma = iprp ? children(view, iprp.start, iprp.end, budget).filter((b) => b.type === "ipma") : [];
+  const ipco = iprp
+    ? children(view, iprp.start, iprp.end, budget).find((b) => b.type === "ipco")
+    : undefined;
+  const ipma = iprp
+    ? children(view, iprp.start, iprp.end, budget).filter((b) => b.type === "ipma")
+    : [];
   const properties = ipco ? children(view, ipco.start, ipco.end, budget) : [];
   const associations = new Map<number, HeifProperty[]>();
   for (const box of ipma) {
@@ -152,9 +177,15 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
       references.set(box.type, map);
     }
   }
-  const item = (id: number): HeifItem => ({ id, type: types.get(id) ?? "", data: data.get(id) ?? new Uint8Array(), properties: associations.get(id) ?? [] });
+  const item = (id: number): HeifItem => ({
+    id,
+    type: types.get(id) ?? "",
+    data: data.get(id) ?? new Uint8Array(),
+    properties: associations.get(id) ?? [],
+  });
   const primary = item(primaryId);
-  const property = (target: HeifItem, type: string) => target.properties.find((p) => p.type === type);
+  const property = (target: HeifItem, type: string) =>
+    target.properties.find((p) => p.type === type);
   const ispe = property(primary, "ispe");
   if (!ispe || ispe.end - ispe.start < 12) throw new DecodeError("heif-no-dimensions");
   const width = view.getUint32(ispe.start + 4);
@@ -174,9 +205,15 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
   const coded = tiles[0]!;
   const hvcC = property(coded, "hvcC");
   const av1C = property(coded, "av1C");
-  const config = hvcC ? bytes.slice(hvcC.start, hvcC.end) : av1C ? bytes.slice(av1C.start, av1C.end) : undefined;
+  const config = hvcC
+    ? bytes.slice(hvcC.start, hvcC.end)
+    : av1C
+      ? bytes.slice(av1C.start, av1C.end)
+      : undefined;
   const thumbId = [...(references.get("thmb") ?? [])].find(([, to]) => to.includes(primaryId))?.[0];
-  const exifId = [...(references.get("cdsc") ?? [])].find(([from, to]) => types.get(from) === "Exif" && to.includes(primaryId))?.[0];
+  const exifId = [...(references.get("cdsc") ?? [])].find(
+    ([from, to]) => types.get(from) === "Exif" && to.includes(primaryId),
+  )?.[0];
   const colr = property(primary, "colr") ?? property(coded, "colr");
   return {
     brand: fourcc(view, ftyp.start),
@@ -188,7 +225,11 @@ export function parseHeif(buffer: ArrayBuffer): HeifImage {
     primary,
     tiles,
     grid,
-    codec: hvcC ? hevcCodec(bytes.subarray(hvcC.start, hvcC.end)) : av1C ? av1Codec(bytes.subarray(av1C.start, av1C.end)) : undefined,
+    codec: hvcC
+      ? hevcCodec(bytes.subarray(hvcC.start, hvcC.end))
+      : av1C
+        ? av1Codec(bytes.subarray(av1C.start, av1C.end))
+        : undefined,
     config,
     thumbnail: thumbId === undefined ? undefined : item(thumbId),
     exif: exifId === undefined ? undefined : data.get(exifId),
@@ -206,7 +247,7 @@ function concat(parts: Uint8Array[]) {
 }
 
 /** ISO/IEC 14496-15 annex E codec parameters from an HEVCDecoderConfigurationRecord. */
-export function hevcCodec(record: Uint8Array) {
+function hevcCodec(record: Uint8Array) {
   const space = ["", "A", "B", "C"][record[1]! >> 6]!;
   const tier = record[1]! & 0x20 ? "H" : "L";
   const profile = record[1]! & 0x1f;
@@ -215,7 +256,13 @@ export function hevcCodec(record: Uint8Array) {
   for (let i = 0; i < 32; i++, flags >>>= 1) reversed = ((reversed << 1) | (flags & 1)) >>> 0;
   const constraints = Array.from(record.subarray(6, 12));
   while (constraints.length && constraints.at(-1) === 0) constraints.pop();
-  return [`hvc1`, `${space}${profile}`, reversed.toString(16).toUpperCase(), `${tier}${record[12]}`, ...constraints.map((b) => b.toString(16).toUpperCase())].join(".");
+  return [
+    `hvc1`,
+    `${space}${profile}`,
+    reversed.toString(16).toUpperCase(),
+    `${tier}${record[12]}`,
+    ...constraints.map((b) => b.toString(16).toUpperCase()),
+  ].join(".");
 }
 
 function av1Codec(record: Uint8Array) {
@@ -238,7 +285,10 @@ function colorIsDisplayP3(view: DataView, box: HeifProperty) {
   if (box.start + 6 > box.end) return false;
   const kind = view.getUint32(box.start);
   if (kind === 0x6e636c78) return view.getUint16(box.start + 4) === 12;
-  return (kind === 0x70726f66 || kind === 0x72494343) && iccProfileIsDisplayP3(view, box.start + 4, box.end);
+  return (
+    (kind === 0x70726f66 || kind === 0x72494343) &&
+    iccProfileIsDisplayP3(view, box.start + 4, box.end)
+  );
 }
 
 export function iccProfileIsDisplayP3(view: DataView, start: number, end: number): boolean {
@@ -247,31 +297,36 @@ export function iccProfileIsDisplayP3(view: DataView, start: number, end: number
   let matched = 0;
   for (let index = 0; index < tagCount; index++) {
     const entry = start + 132 + index * 12;
-    const primary = DISPLAY_P3_ICC_PRIMARIES.find(([signature]) => signature === view.getUint32(entry));
+    const primary = DISPLAY_P3_ICC_PRIMARIES.find(
+      ([signature]) => signature === view.getUint32(entry),
+    );
     if (!primary) continue;
     const tag = start + view.getUint32(entry + 4);
     if (tag < start || tag + 20 > end || view.getUint32(tag) !== 0x58595a20) return false;
     for (let axis = 0; axis < 3; axis++)
-      if (Math.abs(view.getInt32(tag + 8 + axis * 4) / 65536 - primary[axis + 1]!) > 0.005) return false;
+      if (Math.abs(view.getInt32(tag + 8 + axis * 4) / 65536 - primary[axis + 1]!) > 0.005)
+        return false;
     matched++;
   }
   return matched === DISPLAY_P3_ICC_PRIMARIES.length;
 }
 
 /** The largest JPEG embedded in an Exif payload: the camera's preview thumbnail. */
-export function exifThumbnail(exif: Uint8Array) {
+function exifThumbnail(exif: Uint8Array) {
   // The last end-of-image marker closes the first start that precedes it: one pass each way.
   let end = exif.length - 2;
   while (end > 0 && !(exif[end] === 0xff && exif[end + 1] === 0xd9)) end--;
   for (let start = 0; start + 3 < exif.length && start < end; start++)
-    if (exif[start] === 0xff && exif[start + 1] === 0xd8 && exif[start + 2] === 0xff) return exif.subarray(start, end + 2);
+    if (exif[start] === 0xff && exif[start + 1] === 0xd8 && exif[start + 2] === 0xff)
+      return exif.subarray(start, end + 2);
   return undefined;
 }
 
 async function decodeTiles(image: HeifImage) {
   if (!image.codec || !image.config || typeof VideoDecoder === "undefined") return undefined;
   const config = { codec: image.codec, description: image.config, optimizeForLatency: true };
-  if (!(await VideoDecoder.isConfigSupported(config).catch(() => ({ supported: false }))).supported) return undefined;
+  if (!(await VideoDecoder.isConfigSupported(config).catch(() => ({ supported: false }))).supported)
+    return undefined;
   const canvas = new OffscreenCanvas(image.width, image.height);
   const context = canvas.getContext("2d")!;
   const columns = image.grid?.columns ?? 1;
@@ -281,7 +336,11 @@ async function decodeTiles(image: HeifImage) {
   const decoder = new VideoDecoder({
     output: (frame) => {
       const index = frame.timestamp;
-      context.drawImage(frame, (index % columns) * frame.displayWidth, Math.floor(index / columns) * frame.displayHeight);
+      context.drawImage(
+        frame,
+        (index % columns) * frame.displayWidth,
+        Math.floor(index / columns) * frame.displayHeight,
+      );
       frame.close();
       decoded++;
     },
@@ -289,9 +348,12 @@ async function decodeTiles(image: HeifImage) {
   });
   try {
     decoder.configure(config);
-    image.tiles.forEach((tile, index) => decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: index, data: tile.data })));
+    image.tiles.forEach((tile, index) =>
+      decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: index, data: tile.data })),
+    );
     await decoder.flush();
-    if (failure || decoded !== image.tiles.length) throw failure ?? new DecodeError("image-decode-failed");
+    if (failure || decoded !== image.tiles.length)
+      throw failure ?? new DecodeError("image-decode-failed");
     return canvas;
   } catch (cause) {
     canvas.width = canvas.height = 0;
@@ -304,10 +366,14 @@ async function decodeTiles(image: HeifImage) {
 function orientCanvas(source: OffscreenCanvas, image: HeifImage) {
   if (image.rotation === 0 && image.mirror === undefined) return source.transferToImageBitmap();
   const swap = image.rotation === 90 || image.rotation === 270;
-  const canvas = new OffscreenCanvas(swap ? source.height : source.width, swap ? source.width : source.height);
+  const canvas = new OffscreenCanvas(
+    swap ? source.height : source.width,
+    swap ? source.width : source.height,
+  );
   const context = canvas.getContext("2d")!;
   context.translate(canvas.width / 2, canvas.height / 2);
-  if (image.mirror !== undefined) context.scale(image.mirror === 0 ? -1 : 1, image.mirror === 1 ? -1 : 1);
+  if (image.mirror !== undefined)
+    context.scale(image.mirror === 0 ? -1 : 1, image.mirror === 1 ? -1 : 1);
   context.rotate((image.rotation * Math.PI) / 180);
   context.drawImage(source, -source.width / 2, -source.height / 2);
   source.width = source.height = 0;
@@ -318,14 +384,26 @@ function orientCanvas(source: OffscreenCanvas, image: HeifImage) {
  * Decodes the primary image: the browser's own HEIF support first, then WebCodecs over the coded tiles,
  * then the embedded JPEG thumbnail. `native` is false where color profiles were not applied.
  */
-export async function decodeHeif(buffer: ArrayBuffer, image = parseHeif(buffer)): Promise<{ bitmap: ImageBitmap; native: boolean; image: HeifImage }> {
-  const native = await createImageBitmap(new Blob([buffer], { type: "image/heic" })).catch(() => undefined);
+export async function decodeHeif(
+  buffer: ArrayBuffer,
+  image = parseHeif(buffer),
+): Promise<{ bitmap: ImageBitmap; native: boolean; image: HeifImage }> {
+  const native = await createImageBitmap(new Blob([buffer], { type: "image/heic" })).catch(
+    () => undefined,
+  );
   if (native) return { bitmap: native, native: true, image };
   const tiles = await decodeTiles(image).catch(() => undefined);
   if (tiles) return { bitmap: orientCanvas(tiles, image), native: false, image };
-  const jpeg = image.thumbnail?.type === "jpeg" ? image.thumbnail.data : image.exif ? exifThumbnail(image.exif) : undefined;
+  const jpeg =
+    image.thumbnail?.type === "jpeg"
+      ? image.thumbnail.data
+      : image.exif
+        ? exifThumbnail(image.exif)
+        : undefined;
   if (jpeg) {
-    const bitmap = await createImageBitmap(new Blob([jpeg as Uint8Array<ArrayBuffer>], { type: "image/jpeg" })).catch(() => undefined);
+    const bitmap = await createImageBitmap(
+      new Blob([jpeg as Uint8Array<ArrayBuffer>], { type: "image/jpeg" }),
+    ).catch(() => undefined);
     if (bitmap) return { bitmap, native: false, image };
   }
   throw new DecodeError("image-decoding-unavailable");

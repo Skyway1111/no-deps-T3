@@ -4,11 +4,15 @@ import { languageOfInfoString } from "~/composer-code-languages";
 import { getSyntaxHighlighterPromise } from "~/lib/syntaxHighlighting";
 import { highlighterLanguageOf } from "./chat/MarkdownCodeBlock.logic";
 
-export interface CodeBlockHighlightSpan { readonly from: number; readonly to: number; readonly color: string }
+export interface CodeBlockHighlightSpan {
+  readonly from: number;
+  readonly to: number;
+  readonly color: string;
+}
 
-export const MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH = 20_000;
-export const DEFERRED_HIGHLIGHT_CODE_BLOCK_LENGTH = 2_000;
-export const DEFERRED_HIGHLIGHT_DELAY_MS = 300;
+const MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH = 20_000;
+const DEFERRED_HIGHLIGHT_CODE_BLOCK_LENGTH = 2_000;
+const DEFERRED_HIGHLIGHT_DELAY_MS = 300;
 const NO_SPANS: ReadonlyArray<CodeBlockHighlightSpan> = [];
 
 type Highlighter = Awaited<ReturnType<typeof getSyntaxHighlighterPromise>>;
@@ -39,7 +43,8 @@ export function tokenizeBlock(
   return spans;
 }
 
-const signatureOf = (language: string, code: string, theme: DiffThemeName) => `${theme}\u0000${language}\u0000${code}`;
+const signatureOf = (language: string, code: string, theme: DiffThemeName) =>
+  `${theme}\u0000${language}\u0000${code}`;
 
 export interface ComposerCodeBlockHighlighter {
   readonly getSpans: (language: string, code: string) => ReadonlyArray<CodeBlockHighlightSpan>;
@@ -73,7 +78,9 @@ export function createCodeBlockHighlighter(options: {
     for (const key of cache.keys()) if (!live.has(key)) cache.delete(key);
 
     const missing = codeBlocks.filter(
-      (b) => b.code.length <= MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH && !cache.has(signatureOf(b.language, b.code, theme)),
+      (b) =>
+        b.code.length <= MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH &&
+        !cache.has(signatureOf(b.language, b.code, theme)),
     );
     const pending =
       deferLong && !themeChanged
@@ -113,7 +120,9 @@ export function createCodeBlockHighlighter(options: {
 
   return {
     getSpans: (lang, code) =>
-      (code.length <= MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH && cache.get(signatureOf(lang, code, options.resolveTheme()))) || NO_SPANS,
+      (code.length <= MAX_HIGHLIGHTED_CODE_BLOCK_LENGTH &&
+        cache.get(signatureOf(lang, code, options.resolveTheme()))) ||
+      NO_SPANS,
     syncDoc: (doc, deferLong = true) => refresh(doc, deferLong),
     dispose: () => {
       disposed = true;

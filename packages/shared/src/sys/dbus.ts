@@ -104,7 +104,7 @@ export class DBusError extends Error {
 }
 
 /** Splits a signature into its complete types. */
-export function splitSignature(signature: string): string[] {
+function splitSignature(signature: string): string[] {
   const types: string[] = [];
   let i = 0;
   const one = (): void => {
@@ -375,7 +375,7 @@ const FIELDS = [
   [8, "signature", "g"],
 ] as const;
 
-export function encodeMessage(m: Message): Buffer {
+function encodeMessage(m: Message): Buffer {
   const body = new Writer();
   for (const [k, type] of splitSignature(m.signature).entries()) body.value(type, m.body[k]);
   const w = new Writer();
@@ -394,7 +394,7 @@ export function encodeMessage(m: Message): Buffer {
 }
 
 /** The byte length of the first complete message in `buf`, or 0 if it is still incomplete. */
-export function messageLength(buf: Buffer): number {
+function messageLength(buf: Buffer): number {
   if (buf.length < 16) return 0;
   const le = buf[0] === 0x6c;
   const bodyLength = le ? buf.readUInt32LE(4) : buf.readUInt32BE(4);
@@ -403,7 +403,7 @@ export function messageLength(buf: Buffer): number {
   return buf.length >= total ? total : 0;
 }
 
-export function decodeMessage(buf: Buffer): Message {
+function decodeMessage(buf: Buffer): Message {
   const le = buf[0] === 0x6c;
   const r = new Reader(buf, 4, le);
   const bodyLength = Number(r.fixed("u"));

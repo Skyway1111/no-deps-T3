@@ -1408,44 +1408,16 @@ ${associatedDomains}
 `;
 }
 
-export function resolveFffNativeDependencies(
-  platform: typeof BuildPlatform.Type,
-  arch: typeof BuildArch.Type,
-  version: string,
-): Record<string, string> {
-  const architectures = arch === "universal" ? (["arm64", "x64"] as const) : [arch];
-
-  if (platform === "mac") {
-    return Object.fromEntries(
-      architectures.map((architecture) => [`@ff-labs/fff-bin-darwin-${architecture}`, version]),
-    );
-  }
-
-  if (platform === "win") {
-    return Object.fromEntries(
-      architectures.map((architecture) => [`@ff-labs/fff-bin-win32-${architecture}`, version]),
-    );
-  }
-
-  return Object.fromEntries(
-    architectures.flatMap((architecture) =>
-      ["gnu", "musl"].map((libc) => [`@ff-labs/fff-bin-linux-${architecture}-${libc}`, version]),
-    ),
-  );
-}
-
 // macOS and Linux share one app.asar; stage the union of both bundles' external dependencies.
 export function resolveMergedStageDependencies(input: {
   readonly platform: "mac" | "linux";
   readonly serverDependencies: Record<string, string>;
   readonly desktopDependencies: Record<string, string>;
   readonly arch: typeof BuildArch.Type;
-  readonly fffNodeVersion: string;
 }) {
   return {
     ...selectCliRuntimeExternalDependencies(input.serverDependencies),
     ...input.desktopDependencies,
-    ...resolveFffNativeDependencies(input.platform, input.arch, input.fffNodeVersion),
   };
 }
 
@@ -3140,7 +3112,6 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
   readonly arch: typeof BuildArch.Type;
   readonly appVersion: string;
   readonly runtimeExternalDependencies: Record<string, string>;
-  readonly fffNodeVersion: string;
   readonly allowBuilds: Record<string, boolean>;
   readonly patchedDependencies: Record<string, string>;
   readonly overrides: Record<string, string>;
@@ -3156,7 +3127,6 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
 
   const sidecarDependencies = {
     ...input.runtimeExternalDependencies,
-    ...resolveFffNativeDependencies("win", input.arch, input.fffNodeVersion),
   };
   const sidecarPatchedDependencies = createStagePatchedDependencies(
     input.patchedDependencies,
@@ -3943,7 +3913,6 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
           serverDependencies: resolvedServerDependencies,
           desktopDependencies: resolvedDesktopRuntimeDependencies,
           arch: options.arch,
-          fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
         });
   const stagePatchedDependencies = createStagePatchedDependencies(
     workspacePatchedDependencies,
@@ -4029,7 +3998,6 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       arch: options.arch,
       appVersion,
       runtimeExternalDependencies: resolvedServerRuntimeExternalDependencies,
-      fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
       allowBuilds: workspaceAllowBuilds,
       patchedDependencies: workspacePatchedDependencies,
       overrides: resolvedOverrides,

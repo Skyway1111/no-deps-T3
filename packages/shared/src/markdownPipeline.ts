@@ -1,19 +1,11 @@
-import {
-  chatMarkdownImageSource,
-  type ChatMarkdownImageProperties,
-} from "./markdownHast.ts";
+import { chatMarkdownImageSource, type ChatMarkdownImageProperties } from "./markdownHast.ts";
 import {
   decodeHtmlEntities,
-  decodeMarkdownLinkEscapes,
-  elToHtml,
   extractCodexDirectives,
   extractHtmlComments,
   extractReferenceDefinitions,
-  mdToElements,
   parseMarkdown,
-  plainTextOf,
   renderMarkdownToElements,
-  renderMarkdownToHtml,
   type ElContent,
   type ElElement,
   type ElNode,
@@ -29,18 +21,12 @@ import {
 } from "./markdown/index.ts";
 
 export {
-  chatMarkdownImageSource,
   decodeHtmlEntities,
-  decodeMarkdownLinkEscapes,
-  elToHtml,
   extractCodexDirectives,
   extractHtmlComments,
   extractReferenceDefinitions,
-  mdToElements,
   parseMarkdown,
-  plainTextOf,
   renderMarkdownToElements,
-  renderMarkdownToHtml,
   type ChatMarkdownImageProperties,
   type ElContent,
   type ElElement,

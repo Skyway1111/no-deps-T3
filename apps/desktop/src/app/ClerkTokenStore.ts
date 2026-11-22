@@ -84,7 +84,7 @@ function writeTokenRecordAtomically(
  * Atomic, owner-only (`0600`) Clerk token storage backed by `@t3tools/shared/atomicWrite`
  * instead of `electron-store`.
  */
-export function createAtomicClerkTokenStorage(directory: string): ClerkTokenStorage {
+function createAtomicClerkTokenStorage(directory: string): ClerkTokenStorage {
   const tokenPath = NodePath.join(directory, CLERK_TOKEN_FILE_NAME);
   let writeQueue: Promise<void> = Promise.resolve();
 

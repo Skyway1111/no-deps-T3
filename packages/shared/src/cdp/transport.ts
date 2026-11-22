@@ -59,7 +59,7 @@ export class SimpleEmitter<Events extends Record<string, any>> {
   emit(event: string, payload?: unknown): boolean {
     const set = this.listeners.get(event);
     if (!set || set.size === 0) return false;
-    for (const listener of [...set]) {
+    for (const listener of Array.from(set)) {
       try {
         listener(payload);
       } catch {
@@ -133,10 +133,7 @@ interface PendingCommand {
   readonly reject: (error: Error) => void;
 }
 
-export async function resolveCdpWebSocketUrl(
-  endpoint: string,
-  timeoutMs = 15_000,
-): Promise<string> {
+async function resolveCdpWebSocketUrl(endpoint: string, timeoutMs = 15_000): Promise<string> {
   if (/^wss?:\/\//i.test(endpoint)) return endpoint;
   const versionUrl = new URL("/json/version", endpoint).href;
   const response = await fetch(versionUrl, { signal: AbortSignal.timeout(timeoutMs) });

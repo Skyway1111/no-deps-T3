@@ -206,42 +206,37 @@ export const make = Effect.gen(function* () {
       const normalizedCwd = yield* normalizeWorkspaceRoot(cwd).pipe(
         Effect.orElseSucceed(() => cwd),
       );
-      for (const variant of WorkspaceSearchIndex.WORKSPACE_SEARCH_INDEX_VARIANTS) {
-        const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd, variant);
-        if (!(yield* RcMap.has(workspaceSearchIndexes.rcMap, indexKey))) {
-          continue;
-        }
-        const searchedAt = lastSearchedAt.get(indexKey) ?? 0;
-        if ((yield* Clock.currentTimeMillis) - searchedAt >= indexIdleMillis) {
-          lastSearchedAt.delete(indexKey);
-          yield* workspaceSearchIndexes.invalidate(indexKey);
-          continue;
-        }
-        const recoverRefreshFailure = Effect.fn("WorkspaceEntries.recoverRefreshFailure")(
-          function* (
-            cause:
-              | WorkspaceSearchIndex.WorkspaceSearchIndexCreateFailed
-              | WorkspaceSearchIndex.WorkspaceSearchIndexRefreshFailed,
-          ) {
-            yield* Effect.logWarning("Failed to refresh workspace search index", {
-              cwd,
-              variant,
-              cause,
-            });
-            yield* workspaceSearchIndexes.invalidate(indexKey);
-          },
-        );
-        yield* Effect.gen(function* () {
-          const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
-          yield* searchIndex.refresh();
-        }).pipe(
-          Effect.provide(workspaceSearchIndexes.get(indexKey)),
-          Effect.catchTags({
-            WorkspaceSearchIndexCreateFailed: recoverRefreshFailure,
-            WorkspaceSearchIndexRefreshFailed: recoverRefreshFailure,
-          }),
-        );
+      const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd);
+      if (!(yield* RcMap.has(workspaceSearchIndexes.rcMap, indexKey))) {
+        return;
       }
+      const searchedAt = lastSearchedAt.get(indexKey) ?? 0;
+      if ((yield* Clock.currentTimeMillis) - searchedAt >= indexIdleMillis) {
+        lastSearchedAt.delete(indexKey);
+        yield* workspaceSearchIndexes.invalidate(indexKey);
+        return;
+      }
+      const recoverRefreshFailure = Effect.fn("WorkspaceEntries.recoverRefreshFailure")(function* (
+        cause:
+          | WorkspaceSearchIndex.WorkspaceSearchIndexCreateFailed
+          | WorkspaceSearchIndex.WorkspaceSearchIndexRefreshFailed,
+      ) {
+        yield* Effect.logWarning("Failed to refresh workspace search index", {
+          cwd,
+          cause,
+        });
+        yield* workspaceSearchIndexes.invalidate(indexKey);
+      });
+      yield* Effect.gen(function* () {
+        const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
+        yield* searchIndex.refresh();
+      }).pipe(
+        Effect.provide(workspaceSearchIndexes.get(indexKey)),
+        Effect.catchTags({
+          WorkspaceSearchIndexCreateFailed: recoverRefreshFailure,
+          WorkspaceSearchIndexRefreshFailed: recoverRefreshFailure,
+        }),
+      );
     },
   );
 
@@ -317,7 +312,7 @@ export const make = Effect.gen(function* () {
       const normalizedQuery = normalizeSearchQuery(input.query, {
         trimLeadingPattern: /^[@./]+/,
       });
-      const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd, "paths");
+      const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd);
       markSearched(indexKey, yield* Clock.currentTimeMillis);
       const result = yield* Effect.gen(function* () {
         const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
@@ -411,7 +406,7 @@ export const make = Effect.gen(function* () {
     "WorkspaceEntries.searchContents",
   )(function* (input) {
     const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
-    const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd, "content");
+    const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd);
     markSearched(indexKey, yield* Clock.currentTimeMillis);
     return yield* Effect.gen(function* () {
       const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
@@ -591,7 +586,7 @@ export const make = Effect.gen(function* () {
           truncated: false,
         };
       }
-      const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd, "paths");
+      const indexKey = WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd);
       markSearched(indexKey, yield* Clock.currentTimeMillis);
       return yield* Effect.gen(function* () {
         const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;

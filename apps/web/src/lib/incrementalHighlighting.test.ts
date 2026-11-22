@@ -1,4 +1,13 @@
-import { toHtml } from "hast-util-to-html";
+import { elToHtml } from "@t3tools/shared/markdown";
+
+const toHtml = (node: Parameters<typeof elToHtml>[0]) => elToHtml(node).replaceAll("&gt;", ">");
+const normalizeEntities = (html: string) =>
+  html
+    .replaceAll("&#x3C;", "&lt;")
+    .replaceAll("&#x3E;", "&gt;")
+    .replaceAll("&#x26;", "&amp;")
+    .replaceAll("&#x27;", "&#39;")
+    .replaceAll("&#x22;", "&quot;");
 import { disposeHighlighter, getSharedHighlighter } from "@pierre/diffs";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -40,7 +49,7 @@ describe.each(["shiki-wasm", "highlights"] as const)(
           for (let end = 0; end <= code.length; end++) {
             const text = code.slice(0, end);
             expect(toHtml(highlight(text)), `${theme}, prefix ${end}`).toBe(
-              highlighter.codeToHtml(text, { lang: language, theme }),
+              normalizeEntities(highlighter.codeToHtml(text, { lang: language, theme })),
             );
           }
           highlight.dispose();
@@ -69,7 +78,9 @@ describe.each(["shiki-wasm", "highlights"] as const)(
       ];
       for (const text of inputs) {
         expect(toHtml(highlight(text))).toBe(
-          highlighter.codeToHtml(text, { lang: "typescript", theme: "pierre-dark" }),
+          normalizeEntities(
+            highlighter.codeToHtml(text, { lang: "typescript", theme: "pierre-dark" }),
+          ),
         );
       }
       highlight.dispose();
@@ -100,7 +111,9 @@ describe.each(["shiki-wasm", "highlights"] as const)(
       for (let end = 0; end <= code.length; end++) {
         const text = code.slice(0, end);
         expect(toHtml(highlight(text))).toBe(
-          highlighter.codeToHtml(text, { lang: "typescript", theme: "pierre-dark" }),
+          normalizeEntities(
+            highlighter.codeToHtml(text, { lang: "typescript", theme: "pierre-dark" }),
+          ),
         );
       }
     });

@@ -18,7 +18,7 @@ import {
   WrapTextIcon,
   XIcon,
   CheckIcon,
-  Code2Icon,
+  CodeXmlIcon as Code2Icon,
   CopyIcon,
   EyeIcon,
   Table2Icon,

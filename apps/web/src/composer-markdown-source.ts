@@ -24,7 +24,10 @@ import { caretTakesMarksBefore, serializeEditorDoc, visitRuns } from "~/composer
 const ATOM = "\uFFFC";
 const DELIMITER = /[*_~`]/;
 
-export interface TextRange { from: number; to: number }
+export interface TextRange {
+  from: number;
+  to: number;
+}
 export interface StyledRange extends TextRange {
   escapedOpener: boolean;
   markers: { at: number; closing: boolean; text: string }[];
@@ -43,7 +46,7 @@ function forEachUnitRun(
   units: ReadonlyArray<RichTextMark[] | null>,
   visit: (start: number, end: number, marks: RichTextMark[] | null) => void,
 ): void {
-  for (let s = 0; s < units.length; ) {
+  for (let s = 0; s < units.length;) {
     let e = s + 1;
     while (e < units.length && sameMarks(units[e]!, units[s]!)) e += 1;
     visit(s, e, units[s]!);
@@ -51,56 +54,82 @@ function forEachUnitRun(
   }
 }
 
-export function touchesRange(sel: ComposerSelection, { from, to }: TextRange): boolean {
+function touchesRange(sel: ComposerSelection, { from, to }: TextRange): boolean {
   const s = selectionFrom(sel);
   const e = selectionTo(sel);
   return s === e ? s >= from && s <= to : s < to && e > from;
 }
 
-export function touchesMarkdownSource(state: ComposerEditorState, from: number, to: number): boolean {
+export function touchesMarkdownSource(
+  state: ComposerEditorState,
+  from: number,
+  to: number,
+): boolean {
   const s = resolveFlatOffset(state.doc, from);
   if (s.block.kind !== "line") return false;
   if (from < to) {
     if (s.blockIndex !== resolveFlatOffset(state.doc, to).blockIndex) return false;
-    return sliceInlines(s.block.inlines, from - s.start, to - s.start).some((i) => i.kind === "text" && i.isMarkdownSource);
+    return sliceInlines(s.block.inlines, from - s.start, to - s.start).some(
+      (i) => i.kind === "text" && i.isMarkdownSource,
+    );
   }
   const before = inlineBeforeOffset(s.block.inlines, s.offsetInBlock);
   const after = inlineAfterOffset(s.block.inlines, s.offsetInBlock);
-  return Boolean((before?.kind === "text" && before.isMarkdownSource) || (after?.kind === "text" && after.isMarkdownSource));
+  return Boolean(
+    (before?.kind === "text" && before.isMarkdownSource) ||
+    (after?.kind === "text" && after.isMarkdownSource),
+  );
 }
 
 /** Styled ranges never cross blocks, so `within` limits the walk to blocks touching it. */
-export function collectStyledRanges(doc: ComposerDoc, within?: TextRange): StyledRange[] {
+function collectStyledRanges(doc: ComposerDoc, within?: TextRange): StyledRange[] {
   const ranges: StyledRange[] = [];
   const map = serializeEditorDoc(doc);
   let range: StyledRange | null = null;
   let openLen = 0;
-  visitRuns(map, (run, flat, md) => {
-    if (run.nodeName === "codeBlock") return;
-    const flatStart = flat + run.flatStart;
-    const mdStart = md + run.mdStart;
-    if (run.openLen > 0) {
-      let slashes = 0;
-      while (map.value[mdStart - slashes - 1] === "\\") slashes += 1;
-      range ??= { from: flatStart, to: flatStart, escapedOpener: slashes % 2 !== 0, markers: [] };
-      range.markers.push({ at: flatStart, closing: false, text: map.value.slice(mdStart, mdStart + run.openLen) });
-    }
-    if (!range) return;
-    range.to = flatStart + run.docLen;
-    if (run.closeLen > 0) {
-      const end = mdStart + run.mdLen;
-      range.markers.push({ at: range.to, closing: true, text: map.value.slice(end - run.closeLen, end) });
-    }
-    openLen += run.openLen - run.closeLen;
-    if (openLen === 0) {
-      ranges.push(range);
-      range = null;
-    }
-  }, within?.from, within?.to);
+  visitRuns(
+    map,
+    (run, flat, md) => {
+      if (run.nodeName === "codeBlock") return;
+      const flatStart = flat + run.flatStart;
+      const mdStart = md + run.mdStart;
+      if (run.openLen > 0) {
+        let slashes = 0;
+        while (map.value[mdStart - slashes - 1] === "\\") slashes += 1;
+        range ??= { from: flatStart, to: flatStart, escapedOpener: slashes % 2 !== 0, markers: [] };
+        range.markers.push({
+          at: flatStart,
+          closing: false,
+          text: map.value.slice(mdStart, mdStart + run.openLen),
+        });
+      }
+      if (!range) return;
+      range.to = flatStart + run.docLen;
+      if (run.closeLen > 0) {
+        const end = mdStart + run.mdLen;
+        range.markers.push({
+          at: range.to,
+          closing: true,
+          text: map.value.slice(end - run.closeLen, end),
+        });
+      }
+      openLen += run.openLen - run.closeLen;
+      if (openLen === 0) {
+        ranges.push(range);
+        range = null;
+      }
+    },
+    within?.from,
+    within?.to,
+  );
   return ranges;
 }
 
-function withAdjacentDelimiters(inlines: readonly ComposerInline[], lineStart: number, region: TextRange): TextRange {
+function withAdjacentDelimiters(
+  inlines: readonly ComposerInline[],
+  lineStart: number,
+  region: TextRange,
+): TextRange {
   const lf = region.from - lineStart;
   const lt = region.to - lineStart;
   let { from, to } = region;
@@ -124,13 +153,15 @@ function withAdjacentDelimiters(inlines: readonly ComposerInline[], lineStart: n
   return { from, to };
 }
 
-export function revealsFaithfully(doc: ComposerDoc, range: StyledRange): boolean {
+function revealsFaithfully(doc: ComposerDoc, range: StyledRange): boolean {
   if (range.escapedOpener) return false;
   const res = resolveFlatOffset(doc, range.from);
   if (res.block.kind !== "line") return false;
   const adj = withAdjacentDelimiters(res.block.inlines, res.start, range);
   if (adj.from !== range.from || adj.to !== range.to) return false;
-  const markers = range.markers.toSorted((a, b) => a.at - b.at || Number(b.closing) - Number(a.closing));
+  const markers = range.markers.toSorted(
+    (a, b) => a.at - b.at || Number(b.closing) - Number(a.closing),
+  );
   const expected: Array<RichTextMark[] | null> = [];
   let text = "";
   let next = 0;
@@ -142,7 +173,11 @@ export function revealsFaithfully(doc: ComposerDoc, range: StyledRange): boolean
     }
   };
   let pos = range.from;
-  for (const item of sliceInlines(res.block.inlines, range.from - res.start, range.to - res.start)) {
+  for (const item of sliceInlines(
+    res.block.inlines,
+    range.from - res.start,
+    range.to - res.start,
+  )) {
     const content = item.kind === "text" ? item.text : ATOM;
     const marks = [...(item.marks ?? [])];
     for (let i = 0; i < content.length; i += 1) {
@@ -173,7 +208,15 @@ function collectSourceRegions(doc: ComposerDoc) {
       const len = inlineFlatLength(item);
       if (item.kind === "text" && item.isMarkdownSource) {
         if (cur) cur.to = pos + len;
-        else regions.push((cur = { blockIndex: span.blockIndex, lineStart: span.start, from: pos, to: pos + len }));
+        else
+          regions.push(
+            (cur = {
+              blockIndex: span.blockIndex,
+              lineStart: span.start,
+              from: pos,
+              to: pos + len,
+            }),
+          );
       } else cur = null;
       pos += len;
     }
@@ -184,7 +227,11 @@ function collectSourceRegions(doc: ComposerDoc) {
 export function collapseShownMarkdownSource(
   state: ComposerEditorState,
   keep: (region: TextRange) => boolean = () => false,
-): { readonly doc: ComposerDoc; readonly selection: ComposerSelection; readonly collapsed: boolean } {
+): {
+  readonly doc: ComposerDoc;
+  readonly selection: ComposerSelection;
+  readonly collapsed: boolean;
+} {
   const raw = collectSourceRegions(state.doc);
   if (raw.length === 0) return { doc: state.doc, selection: state.selection, collapsed: false };
   let doc = state.doc;
@@ -207,7 +254,16 @@ export function collapseShownMarkdownSource(
         );
         doc = {
           blocks: doc.blocks.map((b, i) =>
-            i === region.blockIndex ? { ...block, inlines: normalizeInlines([...sliceInlines(block.inlines, 0, lf), ...mid, ...sliceInlines(block.inlines, lt, len)]) } : b,
+            i === region.blockIndex
+              ? {
+                  ...block,
+                  inlines: normalizeInlines([
+                    ...sliceInlines(block.inlines, 0, lf),
+                    ...mid,
+                    ...sliceInlines(block.inlines, lt, len),
+                  ]),
+                }
+              : b,
           ),
         };
         collapsed = true;
@@ -229,8 +285,7 @@ export function collapseShownMarkdownSource(
             const { marks: _dropped, ...rest } = item;
             rebuilt.push(rest);
           }
-        }
-        else deletions.push({ from: ext.from + u, to: ext.from + u + 1 });
+        } else deletions.push({ from: ext.from + u, to: ext.from + u + 1 });
         u += 1;
       } else {
         forEachUnitRun(units.slice(u, u + item.text.length), (s, e, m) => {
@@ -243,7 +298,14 @@ export function collapseShownMarkdownSource(
     doc = {
       blocks: doc.blocks.map((b, i) =>
         i === region.blockIndex
-          ? { ...block, inlines: normalizeInlines([...sliceInlines(block.inlines, 0, lf), ...rebuilt, ...sliceInlines(block.inlines, lt, len)]) }
+          ? {
+              ...block,
+              inlines: normalizeInlines([
+                ...sliceInlines(block.inlines, 0, lf),
+                ...rebuilt,
+                ...sliceInlines(block.inlines, lt, len),
+              ]),
+            }
           : b,
       ),
     };
@@ -251,19 +313,35 @@ export function collapseShownMarkdownSource(
 
   if (!collapsed) return { doc: state.doc, selection: state.selection, collapsed: false };
   const mapOff = (o: number) =>
-    Math.max(0, deletions.reduce((n, d) => (d.to <= o ? n - (d.to - d.from) : d.from < o ? n - (o - d.from) : n), o));
+    Math.max(
+      0,
+      deletions.reduce(
+        (n, d) => (d.to <= o ? n - (d.to - d.from) : d.from < o ? n - (o - d.from) : n),
+        o,
+      ),
+    );
   return {
     doc,
-    selection: { anchor: mapOff(state.selection.anchor), head: mapOff(state.selection.head), ...(caretAtEnd ? { storedMarks: [] } : {}) },
+    selection: {
+      anchor: mapOff(state.selection.anchor),
+      head: mapOff(state.selection.head),
+      ...(caretAtEnd ? { storedMarks: [] } : {}),
+    },
     collapsed: true,
   };
 }
 
-export function normalizeMarkdownSource(state: ComposerEditorState, typed: boolean): ComposerEditorState | null {
+export function normalizeMarkdownSource(
+  state: ComposerEditorState,
+  typed: boolean,
+): ComposerEditorState | null {
   const col = collapseShownMarkdownSource(state, (r) => touchesRange(state.selection, r));
   let { doc, selection } = col;
   let changed = col.collapsed;
-  const ranges = collectStyledRanges(doc, { from: selectionFrom(selection), to: selectionTo(selection) }).filter((r) => touchesRange(selection, r) && revealsFaithfully(doc, r));
+  const ranges = collectStyledRanges(doc, {
+    from: selectionFrom(selection),
+    to: selectionTo(selection),
+  }).filter((r) => touchesRange(selection, r) && revealsFaithfully(doc, r));
   if (ranges.length === 0) return changed ? { doc, selection } : null;
 
   const takesBefore = caretTakesMarksBefore({ doc, selection });
@@ -273,7 +351,9 @@ export function normalizeMarkdownSource(state: ComposerEditorState, typed: boole
     const res = resolveFlatOffset(doc, range.from);
     if (res.block.kind !== "line") continue;
     const mid = sliceInlines(res.block.inlines, range.from - res.start, range.to - res.start);
-    const markers = range.markers.toSorted((a, b) => a.at - b.at || Number(b.closing) - Number(a.closing));
+    const markers = range.markers.toSorted(
+      (a, b) => a.at - b.at || Number(b.closing) - Number(a.closing),
+    );
     const src: ComposerInline[] = [];
     let mi = 0;
     const flush = (pos: number) => {
@@ -305,7 +385,11 @@ export function normalizeMarkdownSource(state: ComposerEditorState, typed: boole
       ...src,
       ...sliceInlines(res.block.inlines, range.to - res.start, len),
     ]);
-    doc = { blocks: doc.blocks.map((b, i) => (i === res.blockIndex ? { ...res.block, inlines: nextInlines } : b)) };
+    doc = {
+      blocks: doc.blocks.map((b, i) =>
+        i === res.blockIndex ? { ...res.block, inlines: nextInlines } : b,
+      ),
+    };
     changed = true;
   }
 
@@ -317,10 +401,15 @@ export function normalizeMarkdownSource(state: ComposerEditorState, typed: boole
     }
     return next;
   };
-  return changed ? { doc, selection: { anchor: mapPos(selection.anchor), head: mapPos(selection.head) } } : null;
+  return changed
+    ? { doc, selection: { anchor: mapPos(selection.anchor), head: mapPos(selection.head) } }
+    : null;
 }
 
-export function previewMarkdownSourceSpans(text: string, hideDelimiters = false): MarkdownSourcePreviewSegment[] {
+export function previewMarkdownSourceSpans(
+  text: string,
+  hideDelimiters = false,
+): MarkdownSourcePreviewSegment[] {
   const segments: MarkdownSourcePreviewSegment[] = [];
   forEachUnitRun(inlineMarkdownUnitMarks(text), (s, e, marks) => {
     segments.push(

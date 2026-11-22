@@ -1,4 +1,4 @@
-export { decodeHtmlEntities, escapeHtmlAttr, escapeHtmlText } from "./entities.ts";
+export { decodeHtmlEntities } from "./entities.ts";
 export {
   decodeMarkdownLinkEscapes,
   elToHtml,
@@ -7,29 +7,16 @@ export {
   extractCodexDirectives,
   extractHtmlComments,
   extractReferenceDefinitions,
-  htmlAttributeName,
-  mdToElements,
   renderMarkdownToElements,
-  renderMarkdownToHtml,
   URL_ATTRIBUTES,
   type ExtractedCodexDirective,
   type ReactRuntimeLike,
 } from "./emit.ts";
-export { renderMathSvg, wrapMathSvg } from "./mathSvg.ts";
-export { parseMarkdown, plainTextOf } from "./parser.ts";
+export { wrapMathSvg } from "./mathSvg.ts";
+export { parseMarkdown } from "./parser.ts";
 export {
-  BOOLEAN_PROPS,
-  CLOSES_PARAGRAPH_TAGS,
   createRawHtmlBuilder,
-  HREF_PROTOCOLS,
   htmlAttrToProp,
-  isAllowedProtocol,
-  normalizeLocalEditorLinksOnTree,
-  parseRawHtmlAttributes,
-  preserveImageSourceMetaOnTree,
-  SAFE_HTML_TAGS,
-  sanitizeElTree,
-  SRC_PROTOCOLS,
   STRIP_CONTENT_TAGS,
   VOID_HTML_TAGS,
 } from "./sanitize.ts";

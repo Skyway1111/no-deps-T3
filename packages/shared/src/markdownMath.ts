@@ -1,6 +1,6 @@
 import { parseMarkdown, type MdNode, type MdRoot } from "./markdown/index.ts";
 
-export function parseMarkdownWithMath(source: string): MdRoot {
+function parseMarkdownWithMath(source: string): MdRoot {
   return parseMarkdown(source, {
     gfm: true,
     math: true,
@@ -37,7 +37,8 @@ export function markdownMathRanges(source: string, tree?: MdRoot) {
         const close = /\n[ \t>]*(`{3,}|~{3,})[ \t\r]*$/.exec(authored)?.[1];
         if (!open || !close || open[0] !== close[0] || close.length < open.length) return;
       }
-      const display = node.type !== "inlineMath" || node.display === true || /^(?:\$\$|\\\[)/.test(authored);
+      const display =
+        node.type !== "inlineMath" || node.display === true || /^(?:\$\$|\\\[)/.test(authored);
       ranges.push({ start, end, source: authored, tex: node.value, display, inTable: table });
     } else if ("children" in node && Array.isArray(node.children)) {
       for (const child of node.children) visit(child, table);
@@ -69,10 +70,4 @@ function mayContainDollarMath(text: string): boolean {
     }
   }
   return false;
-}
-
-export function mathKind(className: string | undefined): "inline" | "display" | null {
-  if (!className?.includes("language-math")) return null;
-  if (className.includes("math-display")) return "display";
-  return className.includes("math-inline") ? "inline" : null;
 }

@@ -1330,9 +1330,7 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: strin
 });
 
 // One index per workspace answers both path and content searches.
-export const WORKSPACE_SEARCH_INDEX_VARIANTS = ["paths"] as const;
-export type WorkspaceSearchIndexVariant = "paths" | "content";
-export const workspaceSearchIndexKey = (cwd: string, _variant?: WorkspaceSearchIndexVariant) => cwd;
+export const workspaceSearchIndexKey = (cwd: string) => cwd;
 
 /** @public */
 export const layer = (cwd: string) => Layer.effect(WorkspaceSearchIndex, make(cwd));

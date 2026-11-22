@@ -7,7 +7,7 @@ import { decodeHtmlEntities } from "./entities.ts";
 import type { ElContent, ElElement, ElProperties, ElRoot } from "./types.ts";
 
 // GitHub / defaultSchema safe HTML tags.
-export const SAFE_HTML_TAGS = new Set([
+const SAFE_HTML_TAGS = new Set([
   "h1",
   "h2",
   "h3",
@@ -112,7 +112,7 @@ export const VOID_HTML_TAGS = new Set([
   "wbr",
 ]);
 
-export const CLOSES_PARAGRAPH_TAGS = new Set(
+const CLOSES_PARAGRAPH_TAGS = new Set(
   "address article aside blockquote center details dialog dir div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr li listing main menu nav ol p plaintext pre search section summary table ul xmp dd dt".split(
     " ",
   ),
@@ -242,7 +242,7 @@ const TAG_EXTRA_ATTRS: Readonly<Record<string, ReadonlySet<string>>> = {
 
 const CLOBBER_ATTRS = new Set(["id", "name"]);
 
-export const HREF_PROTOCOLS = new Set([
+const HREF_PROTOCOLS = new Set([
   "http",
   "https",
   "mailto",
@@ -256,7 +256,7 @@ export const HREF_PROTOCOLS = new Set([
   ...LOCAL_FILE_LINK_SCHEMES,
 ]);
 
-export const SRC_PROTOCOLS = new Set(["http", "https", "file", "t3-context"]);
+const SRC_PROTOCOLS = new Set(["http", "https", "file", "t3-context"]);
 const CITE_PROTOCOLS = new Set(["http", "https"]);
 
 const PROTOCOL_BY_ATTR: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -332,7 +332,7 @@ export function htmlAttrToProp(attrName: string): string {
   return lower;
 }
 
-export function isAllowedProtocol(value: string, allowed: ReadonlySet<string>): boolean {
+function isAllowedProtocol(value: string, allowed: ReadonlySet<string>): boolean {
   // Strip ASCII whitespace/control characters before checking protocol, matching browser/hast-util-sanitize.
   let colon = -1;
   for (let i = 0; i < value.length; i++) {
@@ -492,7 +492,7 @@ export interface RawHtmlToken {
   readonly selfClosing?: boolean;
 }
 
-export function parseRawHtmlAttributes(attrSource: string | undefined): ElProperties {
+function parseRawHtmlAttributes(attrSource: string | undefined): ElProperties {
   const result: ElProperties = {};
   if (!attrSource) return result;
   ATTR_REGEX.lastIndex = 0;

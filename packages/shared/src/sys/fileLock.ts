@@ -2,7 +2,7 @@ import * as NodeChildProcess from "node:child_process";
 
 import { t3SysPath } from "./binary.ts";
 
-export class FileLockedError extends Error {
+class FileLockedError extends Error {
   readonly code = "ELOCKED";
   readonly path: string;
   constructor(path: string) {
@@ -26,10 +26,14 @@ export interface LockOptions {
 export function lockFile(path: string, options: LockOptions = {}): Promise<() => Promise<void>> {
   const lockPath = `${path}.flock`;
   const waitMs = options.waitMs ?? 2 ** 31;
-  const child = NodeChildProcess.spawn(t3SysPath(), ["flock", lockPath, "--wait-ms", String(waitMs)], {
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-  });
+  const child = NodeChildProcess.spawn(
+    t3SysPath(),
+    ["flock", lockPath, "--wait-ms", String(waitMs)],
+    {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
   const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
   let stderr = "";
   let stdout = "";
@@ -62,7 +66,8 @@ export function lockFile(path: string, options: LockOptions = {}): Promise<() =>
         reject(
           code === 3
             ? new FileLockedError(path)
-            : (options.signal?.reason ?? new Error(stderr.trim() || `Could not lock ${lockPath} (${code}).`)),
+            : (options.signal?.reason ??
+                new Error(stderr.trim() || `Could not lock ${lockPath} (${code}).`)),
         );
       }
     });

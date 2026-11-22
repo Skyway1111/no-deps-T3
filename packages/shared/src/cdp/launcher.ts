@@ -55,6 +55,7 @@ const isExecutable = async (candidate: string): Promise<boolean> => {
   try {
     await NodeFSP.access(
       candidate,
+      // oxlint-disable-next-line t3code/no-global-process-runtime -- pure zero-dep Node module outside Effect runtime.
       process.platform === "win32" ? NodeFS.constants.F_OK : NodeFS.constants.X_OK,
     );
     const stat = await NodeFSP.stat(candidate);
@@ -79,6 +80,7 @@ const resolveOnPath = async (
 
 export async function discoverChromiumExecutable(
   env: NodeJS.ProcessEnv = process.env,
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- pure zero-dep Node module outside Effect runtime.
   platform: NodeJS.Platform = process.platform,
 ): Promise<string | null> {
   for (const key of ENV_EXECUTABLE_KEYS) {
@@ -117,7 +119,7 @@ export async function discoverChromiumExecutable(
   return null;
 }
 
-export const DEFAULT_CHROMIUM_ARGS: ReadonlyArray<string> = [
+const DEFAULT_CHROMIUM_ARGS: ReadonlyArray<string> = [
   "--disable-background-networking",
   "--disable-background-timer-throttling",
   "--disable-backgrounding-occluded-windows",
@@ -202,7 +204,9 @@ export interface LaunchedChromium {
   readonly close: () => Promise<void>;
 }
 
-export async function launchChromium(options: LaunchChromiumOptions = {}): Promise<LaunchedChromium> {
+export async function launchChromium(
+  options: LaunchChromiumOptions = {},
+): Promise<LaunchedChromium> {
   const env = options.env ?? process.env;
   const executablePath = options.executablePath ?? (await discoverChromiumExecutable(env));
   if (!executablePath) {
@@ -315,9 +319,7 @@ export async function launchChromium(options: LaunchChromiumOptions = {}): Promi
       const onExit = () => {
         const detail = stderr.trim();
         const reason =
-          exitSignal !== null
-            ? `signal ${exitSignal}`
-            : `exit code ${exitCode ?? "unknown"}`;
+          exitSignal !== null ? `signal ${exitSignal}` : `exit code ${exitCode ?? "unknown"}`;
         finish(() =>
           reject(
             new Error(

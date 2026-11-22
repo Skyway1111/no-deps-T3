@@ -1,5 +1,12 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { DownloadIcon, CopyIcon, CheckIcon, Code2Icon, EyeIcon, Table2Icon } from "~/ui-core/icons";
+import {
+  DownloadIcon,
+  CopyIcon,
+  CheckIcon,
+  CodeXmlIcon as Code2Icon,
+  EyeIcon,
+  Table2Icon,
+} from "~/ui-core/icons";
 import { msg, T, useGT, useMessages, Var } from "@t3tools/shared/i18n/react";
 import { m, type MessageResolver } from "~/i18n/messages";
 import { namedClipboardTarget, useCopyToClipboard } from "~/hooks/useCopyToClipboard";
@@ -49,7 +56,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
-import { FolderTree, Globe2, WrapTextIcon } from "~/ui-core/icons";
+import { FolderTreeIcon as FolderTree, EarthIcon as Globe2, WrapTextIcon } from "~/ui-core/icons";
 import * as Schema from "effect/Schema";
 import {
   lazy,
@@ -265,7 +272,7 @@ const htmlPreviewFrame = (
   ),
 });
 
-export function WorkspaceBrowserPreview(props: {
+function WorkspaceBrowserPreview(props: {
   readonly environmentId: EnvironmentId;
   readonly threadRef: ScopedThreadRef;
   readonly draft: boolean;
@@ -1955,7 +1962,7 @@ export default function FilePreviewPanel({
 }
 
 const LargeTextViewer = lazy(() => import("./LargeTextViewer"));
-export function WorkspaceLargeTextPreview(props: {
+function WorkspaceLargeTextPreview(props: {
   environmentId: EnvironmentId;
   threadRef: ScopedThreadRef;
   absolutePath: string;

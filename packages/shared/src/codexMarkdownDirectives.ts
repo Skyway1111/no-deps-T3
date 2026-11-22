@@ -1,12 +1,11 @@
 import {
-  codexArtifactTemplatePresentationLabel,
   resolveCodexArtifactTemplate,
   type CodexArtifactTemplate,
 } from "./codexArtifactTemplates.ts";
 import { codexFileCitationMarkdown, resolveCodexFileCitationLink } from "./codexFileCitations.ts";
 import { extractCodexDirectives, type ExtractedCodexDirective } from "./markdown/index.ts";
 
-export { extractCodexDirectives, type ExtractedCodexDirective };
+export { type ExtractedCodexDirective };
 
 const CODEX_FILE_CITATION_NAME = "codex-file-citation";
 const CODEX_FOLLOW_UP_NAME = "codex-followup";
@@ -57,25 +56,6 @@ export function renderCodexInlineDirectivesAsMarkdown(markdown: string): string 
     return markdown;
   }
   return replaceDirectives(markdown, inlineDirectiveReplacement);
-}
-
-export function renderCodexDirectivesForCopy(markdown: string): string {
-  if (
-    !markdown.includes(`:${CODEX_FILE_CITATION_NAME}`) &&
-    !markdown.includes(`:${CODEX_FOLLOW_UP_NAME}`) &&
-    !markdown.includes(`::${CODEX_ARTIFACT_TEMPLATE_NAME}`)
-  ) {
-    return markdown;
-  }
-  return replaceDirectives(markdown, (directive) => {
-    if (directive.name !== CODEX_ARTIFACT_TEMPLATE_NAME) {
-      return inlineDirectiveReplacement(directive);
-    }
-    const template = resolveCodexArtifactTemplate(directive.attributes);
-    return template
-      ? `${template.displayName} (${codexArtifactTemplatePresentationLabel(template.artifactKind)})`
-      : undefined;
-  });
 }
 
 export function splitCodexArtifactTemplateMarkdown(

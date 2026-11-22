@@ -1,11 +1,12 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+// oxlint-disable-next-line t3code/no-global-process-runtime -- pure zero-dep Node module outside Effect runtime.
 const NAME = process.platform === "win32" ? "t3-sys.exe" : "t3-sys";
 let resolved: string | undefined;
 
 /** Candidate locations: override, packaged app resources, beside the executable, then a cargo build in an ancestor (source or bundled dist). */
-export function t3SysCandidates(): string[] {
+function t3SysCandidates(): string[] {
   const resources = (process as { resourcesPath?: string }).resourcesPath;
   const executableDir = NodePath.dirname(process.execPath);
   const ancestors = Array.from({ length: 7 }, (_, up) =>

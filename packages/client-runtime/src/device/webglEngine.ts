@@ -195,7 +195,9 @@ export class Quaternion {
   }
   normalize() {
     const l = this.length();
-    return l === 0 ? this.set(0, 0, 0, 1) : this.set(this._x / l, this._y / l, this._z / l, this._w / l);
+    return l === 0
+      ? this.set(0, 0, 0, 1)
+      : this.set(this._x / l, this._y / l, this._z / l, this._w / l);
   }
   invert() {
     return this.set(-this._x, -this._y, -this._z, this._w);
@@ -243,7 +245,15 @@ export class Quaternion {
   setFromRotationMatrix(m: Matrix4) {
     const e = m.elements;
     const [m11, m12, m13, m21, m22, m23, m31, m32, m33] = [
-      e[0]!, e[4]!, e[8]!, e[1]!, e[5]!, e[9]!, e[2]!, e[6]!, e[10]!,
+      e[0]!,
+      e[4]!,
+      e[8]!,
+      e[1]!,
+      e[5]!,
+      e[9]!,
+      e[2]!,
+      e[6]!,
+      e[10]!,
     ];
     const trace = m11 + m22 + m33;
     if (trace > 0) {
@@ -276,13 +286,23 @@ export class Quaternion {
     const sqrSin = 1 - cos * cos;
     if (sqrSin <= Number.EPSILON) {
       const s = 1 - t;
-      return this.set(s * this._x + t * x, s * this._y + t * y, s * this._z + t * z, s * this._w + t * w).normalize();
+      return this.set(
+        s * this._x + t * x,
+        s * this._y + t * y,
+        s * this._z + t * z,
+        s * this._w + t * w,
+      ).normalize();
     }
     const sin = Math.sqrt(sqrSin);
     const half = Math.atan2(sin, cos);
     const a = Math.sin((1 - t) * half) / sin;
     const b = Math.sin(t * half) / sin;
-    return this.set(this._x * a + x * b, this._y * a + y * b, this._z * a + z * b, this._w * a + w * b);
+    return this.set(
+      this._x * a + x * b,
+      this._y * a + y * b,
+      this._z * a + z * b,
+      this._w * a + w * b,
+    );
   }
 }
 
@@ -344,7 +364,8 @@ export class Matrix4 {
   set(...values: number[]) {
     // Row-major arguments, column-major storage.
     for (let row = 0; row < 4; row++)
-      for (let column = 0; column < 4; column++) this.elements[column * 4 + row] = values[row * 4 + column]!;
+      for (let column = 0; column < 4; column++)
+        this.elements[column * 4 + row] = values[row * 4 + column]!;
     return this;
   }
   identity() {
@@ -383,22 +404,118 @@ export class Matrix4 {
   private invertRaw() {
     const m = this.elements;
     const inv = new Array<number>(16);
-    inv[0] = m[5]! * m[10]! * m[15]! - m[5]! * m[11]! * m[14]! - m[9]! * m[6]! * m[15]! + m[9]! * m[7]! * m[14]! + m[13]! * m[6]! * m[11]! - m[13]! * m[7]! * m[10]!;
-    inv[4] = -m[4]! * m[10]! * m[15]! + m[4]! * m[11]! * m[14]! + m[8]! * m[6]! * m[15]! - m[8]! * m[7]! * m[14]! - m[12]! * m[6]! * m[11]! + m[12]! * m[7]! * m[10]!;
-    inv[8] = m[4]! * m[9]! * m[15]! - m[4]! * m[11]! * m[13]! - m[8]! * m[5]! * m[15]! + m[8]! * m[7]! * m[13]! + m[12]! * m[5]! * m[11]! - m[12]! * m[7]! * m[9]!;
-    inv[12] = -m[4]! * m[9]! * m[14]! + m[4]! * m[10]! * m[13]! + m[8]! * m[5]! * m[14]! - m[8]! * m[6]! * m[13]! - m[12]! * m[5]! * m[10]! + m[12]! * m[6]! * m[9]!;
-    inv[1] = -m[1]! * m[10]! * m[15]! + m[1]! * m[11]! * m[14]! + m[9]! * m[2]! * m[15]! - m[9]! * m[3]! * m[14]! - m[13]! * m[2]! * m[11]! + m[13]! * m[3]! * m[10]!;
-    inv[5] = m[0]! * m[10]! * m[15]! - m[0]! * m[11]! * m[14]! - m[8]! * m[2]! * m[15]! + m[8]! * m[3]! * m[14]! + m[12]! * m[2]! * m[11]! - m[12]! * m[3]! * m[10]!;
-    inv[9] = -m[0]! * m[9]! * m[15]! + m[0]! * m[11]! * m[13]! + m[8]! * m[1]! * m[15]! - m[8]! * m[3]! * m[13]! - m[12]! * m[1]! * m[11]! + m[12]! * m[3]! * m[9]!;
-    inv[13] = m[0]! * m[9]! * m[14]! - m[0]! * m[10]! * m[13]! - m[8]! * m[1]! * m[14]! + m[8]! * m[2]! * m[13]! + m[12]! * m[1]! * m[10]! - m[12]! * m[2]! * m[9]!;
-    inv[2] = m[1]! * m[6]! * m[15]! - m[1]! * m[7]! * m[14]! - m[5]! * m[2]! * m[15]! + m[5]! * m[3]! * m[14]! + m[13]! * m[2]! * m[7]! - m[13]! * m[3]! * m[6]!;
-    inv[6] = -m[0]! * m[6]! * m[15]! + m[0]! * m[7]! * m[14]! + m[4]! * m[2]! * m[15]! - m[4]! * m[3]! * m[14]! - m[12]! * m[2]! * m[7]! + m[12]! * m[3]! * m[6]!;
-    inv[10] = m[0]! * m[5]! * m[15]! - m[0]! * m[7]! * m[13]! - m[4]! * m[1]! * m[15]! + m[4]! * m[3]! * m[13]! + m[12]! * m[1]! * m[7]! - m[12]! * m[3]! * m[5]!;
-    inv[14] = -m[0]! * m[5]! * m[14]! + m[0]! * m[6]! * m[13]! + m[4]! * m[1]! * m[14]! - m[4]! * m[2]! * m[13]! - m[12]! * m[1]! * m[6]! + m[12]! * m[2]! * m[5]!;
-    inv[3] = -m[1]! * m[6]! * m[11]! + m[1]! * m[7]! * m[10]! + m[5]! * m[2]! * m[11]! - m[5]! * m[3]! * m[10]! - m[9]! * m[2]! * m[7]! + m[9]! * m[3]! * m[6]!;
-    inv[7] = m[0]! * m[6]! * m[11]! - m[0]! * m[7]! * m[10]! - m[4]! * m[2]! * m[11]! + m[4]! * m[3]! * m[10]! + m[8]! * m[2]! * m[7]! - m[8]! * m[3]! * m[6]!;
-    inv[11] = -m[0]! * m[5]! * m[11]! + m[0]! * m[7]! * m[9]! + m[4]! * m[1]! * m[11]! - m[4]! * m[3]! * m[9]! - m[8]! * m[1]! * m[7]! + m[8]! * m[3]! * m[5]!;
-    inv[15] = m[0]! * m[5]! * m[10]! - m[0]! * m[6]! * m[9]! - m[4]! * m[1]! * m[10]! + m[4]! * m[2]! * m[9]! + m[8]! * m[1]! * m[6]! - m[8]! * m[2]! * m[5]!;
+    inv[0] =
+      m[5]! * m[10]! * m[15]! -
+      m[5]! * m[11]! * m[14]! -
+      m[9]! * m[6]! * m[15]! +
+      m[9]! * m[7]! * m[14]! +
+      m[13]! * m[6]! * m[11]! -
+      m[13]! * m[7]! * m[10]!;
+    inv[4] =
+      -m[4]! * m[10]! * m[15]! +
+      m[4]! * m[11]! * m[14]! +
+      m[8]! * m[6]! * m[15]! -
+      m[8]! * m[7]! * m[14]! -
+      m[12]! * m[6]! * m[11]! +
+      m[12]! * m[7]! * m[10]!;
+    inv[8] =
+      m[4]! * m[9]! * m[15]! -
+      m[4]! * m[11]! * m[13]! -
+      m[8]! * m[5]! * m[15]! +
+      m[8]! * m[7]! * m[13]! +
+      m[12]! * m[5]! * m[11]! -
+      m[12]! * m[7]! * m[9]!;
+    inv[12] =
+      -m[4]! * m[9]! * m[14]! +
+      m[4]! * m[10]! * m[13]! +
+      m[8]! * m[5]! * m[14]! -
+      m[8]! * m[6]! * m[13]! -
+      m[12]! * m[5]! * m[10]! +
+      m[12]! * m[6]! * m[9]!;
+    inv[1] =
+      -m[1]! * m[10]! * m[15]! +
+      m[1]! * m[11]! * m[14]! +
+      m[9]! * m[2]! * m[15]! -
+      m[9]! * m[3]! * m[14]! -
+      m[13]! * m[2]! * m[11]! +
+      m[13]! * m[3]! * m[10]!;
+    inv[5] =
+      m[0]! * m[10]! * m[15]! -
+      m[0]! * m[11]! * m[14]! -
+      m[8]! * m[2]! * m[15]! +
+      m[8]! * m[3]! * m[14]! +
+      m[12]! * m[2]! * m[11]! -
+      m[12]! * m[3]! * m[10]!;
+    inv[9] =
+      -m[0]! * m[9]! * m[15]! +
+      m[0]! * m[11]! * m[13]! +
+      m[8]! * m[1]! * m[15]! -
+      m[8]! * m[3]! * m[13]! -
+      m[12]! * m[1]! * m[11]! +
+      m[12]! * m[3]! * m[9]!;
+    inv[13] =
+      m[0]! * m[9]! * m[14]! -
+      m[0]! * m[10]! * m[13]! -
+      m[8]! * m[1]! * m[14]! +
+      m[8]! * m[2]! * m[13]! +
+      m[12]! * m[1]! * m[10]! -
+      m[12]! * m[2]! * m[9]!;
+    inv[2] =
+      m[1]! * m[6]! * m[15]! -
+      m[1]! * m[7]! * m[14]! -
+      m[5]! * m[2]! * m[15]! +
+      m[5]! * m[3]! * m[14]! +
+      m[13]! * m[2]! * m[7]! -
+      m[13]! * m[3]! * m[6]!;
+    inv[6] =
+      -m[0]! * m[6]! * m[15]! +
+      m[0]! * m[7]! * m[14]! +
+      m[4]! * m[2]! * m[15]! -
+      m[4]! * m[3]! * m[14]! -
+      m[12]! * m[2]! * m[7]! +
+      m[12]! * m[3]! * m[6]!;
+    inv[10] =
+      m[0]! * m[5]! * m[15]! -
+      m[0]! * m[7]! * m[13]! -
+      m[4]! * m[1]! * m[15]! +
+      m[4]! * m[3]! * m[13]! +
+      m[12]! * m[1]! * m[7]! -
+      m[12]! * m[3]! * m[5]!;
+    inv[14] =
+      -m[0]! * m[5]! * m[14]! +
+      m[0]! * m[6]! * m[13]! +
+      m[4]! * m[1]! * m[14]! -
+      m[4]! * m[2]! * m[13]! -
+      m[12]! * m[1]! * m[6]! +
+      m[12]! * m[2]! * m[5]!;
+    inv[3] =
+      -m[1]! * m[6]! * m[11]! +
+      m[1]! * m[7]! * m[10]! +
+      m[5]! * m[2]! * m[11]! -
+      m[5]! * m[3]! * m[10]! -
+      m[9]! * m[2]! * m[7]! +
+      m[9]! * m[3]! * m[6]!;
+    inv[7] =
+      m[0]! * m[6]! * m[11]! -
+      m[0]! * m[7]! * m[10]! -
+      m[4]! * m[2]! * m[11]! +
+      m[4]! * m[3]! * m[10]! +
+      m[8]! * m[2]! * m[7]! -
+      m[8]! * m[3]! * m[6]!;
+    inv[11] =
+      -m[0]! * m[5]! * m[11]! +
+      m[0]! * m[7]! * m[9]! +
+      m[4]! * m[1]! * m[11]! -
+      m[4]! * m[3]! * m[9]! -
+      m[8]! * m[1]! * m[7]! +
+      m[8]! * m[3]! * m[5]!;
+    inv[15] =
+      m[0]! * m[5]! * m[10]! -
+      m[0]! * m[6]! * m[9]! -
+      m[4]! * m[1]! * m[10]! +
+      m[4]! * m[2]! * m[9]! +
+      m[8]! * m[1]! * m[6]! -
+      m[8]! * m[2]! * m[5]!;
     const det = m[0]! * inv[0] + m[1]! * inv[4] + m[2]! * inv[8] + m[3]! * inv[12];
     return { inv, det };
   }
@@ -423,10 +540,22 @@ export class Matrix4 {
   makeRotationFromQuaternion(q: Quaternion) {
     const { x, y, z, w } = q;
     return this.set(
-      1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 0,
-      2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 0,
-      2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y), 0,
-      0, 0, 0, 1,
+      1 - 2 * (y * y + z * z),
+      2 * (x * y - z * w),
+      2 * (x * z + y * w),
+      0,
+      2 * (x * y + z * w),
+      1 - 2 * (x * x + z * z),
+      2 * (y * z - x * w),
+      0,
+      2 * (x * z - y * w),
+      2 * (y * z + x * w),
+      1 - 2 * (x * x + y * y),
+      0,
+      0,
+      0,
+      0,
+      1,
     );
   }
   makeRotationZ(theta: number) {
@@ -442,10 +571,22 @@ export class Matrix4 {
     const column = (i: number) => 1 / (Math.hypot(e[i]!, e[i + 1]!, e[i + 2]!) || 1);
     const [sx, sy, sz] = [column(0), column(4), column(8)];
     return this.set(
-      e[0]! * sx, e[4]! * sy, e[8]! * sz, 0,
-      e[1]! * sx, e[5]! * sy, e[9]! * sz, 0,
-      e[2]! * sx, e[6]! * sy, e[10]! * sz, 0,
-      0, 0, 0, 1,
+      e[0]! * sx,
+      e[4]! * sy,
+      e[8]! * sz,
+      0,
+      e[1]! * sx,
+      e[5]! * sy,
+      e[9]! * sz,
+      0,
+      e[2]! * sx,
+      e[6]! * sy,
+      e[10]! * sz,
+      0,
+      0,
+      0,
+      0,
+      1,
     );
   }
   lookAt(eye: Vector3, target: Vector3, up: Vector3) {
@@ -460,16 +601,38 @@ export class Matrix4 {
     x.normalize();
     const y = z.clone().cross(x);
     const e = this.elements;
-    [e[0], e[1], e[2], e[4], e[5], e[6], e[8], e[9], e[10]] = [x.x, x.y, x.z, y.x, y.y, y.z, z.x, z.y, z.z];
+    [e[0], e[1], e[2], e[4], e[5], e[6], e[8], e[9], e[10]] = [
+      x.x,
+      x.y,
+      x.z,
+      y.x,
+      y.y,
+      y.z,
+      z.x,
+      z.y,
+      z.z,
+    ];
     return this;
   }
   makePerspective(fov: number, aspect: number, near: number, far: number) {
     const f = 1 / Math.tan((fov * Math.PI) / 360);
     return this.set(
-      f / aspect, 0, 0, 0,
-      0, f, 0, 0,
-      0, 0, -(far + near) / (far - near), (-2 * far * near) / (far - near),
-      0, 0, -1, 0,
+      f / aspect,
+      0,
+      0,
+      0,
+      0,
+      f,
+      0,
+      0,
+      0,
+      0,
+      -(far + near) / (far - near),
+      (-2 * far * near) / (far - near),
+      0,
+      0,
+      -1,
+      0,
     );
   }
 }
@@ -477,7 +640,10 @@ export class Matrix4 {
 export class Box3 {
   min: Vector3;
   max: Vector3;
-  constructor(min = new Vector3(Infinity, Infinity, Infinity), max = new Vector3(-Infinity, -Infinity, -Infinity)) {
+  constructor(
+    min = new Vector3(Infinity, Infinity, Infinity),
+    max = new Vector3(-Infinity, -Infinity, -Infinity),
+  ) {
     this.min = min;
     this.max = max;
   }
@@ -507,7 +673,9 @@ export class Box3 {
     return this.expandByPoint(b.min).expandByPoint(b.max);
   }
   getCenter(target: Vector3) {
-    return this.isEmpty() ? target.set(0, 0, 0) : target.copy(this.min).add(this.max).multiplyScalar(0.5);
+    return this.isEmpty()
+      ? target.set(0, 0, 0)
+      : target.copy(this.min).add(this.max).multiplyScalar(0.5);
   }
   getSize(target: Vector3) {
     return this.isEmpty() ? target.set(0, 0, 0) : target.copy(this.max).sub(this.min);
@@ -516,7 +684,9 @@ export class Box3 {
     if (this.isEmpty()) return this;
     const { min, max } = this;
     const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) =>
-      new Vector3(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z).applyMatrix4(m),
+      new Vector3(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z).applyMatrix4(
+        m,
+      ),
     );
     this.makeEmpty();
     for (const corner of corners) this.expandByPoint(corner);
@@ -546,7 +716,7 @@ export class Plane {
   }
 }
 
-export class Ray {
+class Ray {
   origin: Vector3;
   direction: Vector3;
   constructor(origin = new Vector3(), direction = new Vector3(0, 0, -1)) {
@@ -567,7 +737,8 @@ export class Ray {
   }
   intersectPlane(plane: Plane, target: Vector3) {
     const denominator = plane.normal.dot(this.direction);
-    if (denominator === 0) return plane.normal.dot(this.origin) + plane.constant === 0 ? target.copy(this.origin) : null;
+    if (denominator === 0)
+      return plane.normal.dot(this.origin) + plane.constant === 0 ? target.copy(this.origin) : null;
     const t = -(this.origin.dot(plane.normal) + plane.constant) / denominator;
     return t >= 0 ? this.at(t, target) : null;
   }
@@ -634,7 +805,13 @@ class Disposable {
   }
 }
 
-type AttributeArray = Float32Array | Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array;
+type AttributeArray =
+  | Float32Array
+  | Uint8Array
+  | Uint16Array
+  | Uint32Array
+  | Int8Array
+  | Int16Array;
 export class BufferAttribute extends Disposable {
   array: AttributeArray;
   itemSize: number;
@@ -691,7 +868,10 @@ export class BufferGeometry extends Disposable {
     this.index =
       index instanceof BufferAttribute
         ? index
-        : new BufferAttribute(index.length > 65535 ? new Uint32Array(index) : new Uint16Array(index), 1);
+        : new BufferAttribute(
+            index.length > 65535 ? new Uint32Array(index) : new Uint16Array(index),
+            1,
+          );
     return this;
   }
   translate(x: number, y: number, z: number) {
@@ -722,7 +902,8 @@ export class BufferGeometry extends Disposable {
     const box = (this.boundingBox ??= new Box3()).makeEmpty();
     if (!position) return;
     const point = new Vector3();
-    for (let i = 0; i < position.count; i++) box.expandByPoint(point.fromBufferAttribute(position, i));
+    for (let i = 0; i < position.count; i++)
+      box.expandByPoint(point.fromBufferAttribute(position, i));
   }
   computeBoundingSphere() {
     this.computeBoundingBox();
@@ -753,7 +934,10 @@ export class BufferGeometry extends Disposable {
   }
 }
 
-function forEachTriangle(geometry: BufferGeometry, visit: (a: number, b: number, c: number) => void) {
+function forEachTriangle(
+  geometry: BufferGeometry,
+  visit: (a: number, b: number, c: number) => void,
+) {
   const index = geometry.index?.array;
   const count = index ? index.length : geometry.getAttribute("position").count;
   for (let i = 0; i + 2 < count; i += 3)
@@ -766,7 +950,16 @@ class GeometryBuilder {
   normals: number[] = [];
   uvs: number[] = [];
   indices: number[] = [];
-  vertex(x: number, y: number, z: number, nx: number, ny: number, nz: number, u: number, v: number) {
+  vertex(
+    x: number,
+    y: number,
+    z: number,
+    nx: number,
+    ny: number,
+    nz: number,
+    u: number,
+    v: number,
+  ) {
     this.positions.push(x, y, z);
     this.normals.push(nx, ny, nz);
     this.uvs.push(u, v);
@@ -803,7 +996,10 @@ export class Shape {
       Array.from({ length: divisions }, (_, step) => {
         const t = (step + 1) / divisions;
         const k = 1 - t;
-        return new Vector2(k * k * start.x + 2 * k * t * cx + t * t * x, k * k * start.y + 2 * k * t * cy + t * t * y);
+        return new Vector2(
+          k * k * start.x + 2 * k * t * cx + t * t * x,
+          k * k * start.y + 2 * k * t * cy + t * t * y,
+        );
       }),
     );
     return this;
@@ -814,7 +1010,9 @@ export class Shape {
   /** The outline, counter-clockwise, without a repeated closing point. */
   getPoints(divisions = 12) {
     this.points = this.segments.flatMap((segment) => segment(divisions));
-    const out = this.points.filter((p, i, all) => i === 0 || p.x !== all[i - 1]!.x || p.y !== all[i - 1]!.y);
+    const out = this.points.filter(
+      (p, i, all) => i === 0 || p.x !== all[i - 1]!.x || p.y !== all[i - 1]!.y,
+    );
     const last = out.at(-1);
     if (out.length > 1 && last && last.x === out[0]!.x && last.y === out[0]!.y) out.pop();
     let area = 0;
@@ -828,10 +1026,19 @@ export class Shape {
 }
 
 /** Convex outlines fan from their centroid. */
-function capFan(builder: GeometryBuilder, outline: Vector2[], z: number, facing: 1 | -1, bounds: [number, number, number, number]) {
+function capFan(
+  builder: GeometryBuilder,
+  outline: Vector2[],
+  z: number,
+  facing: 1 | -1,
+  bounds: [number, number, number, number],
+) {
   const [minX, minY, width, height] = bounds;
   const uv = (p: Vector2) => [(p.x - minX) / width, (p.y - minY) / height] as const;
-  const center = outline.reduce((sum, p) => sum.set(sum.x + p.x / outline.length, sum.y + p.y / outline.length), new Vector2());
+  const center = outline.reduce(
+    (sum, p) => sum.set(sum.x + p.x / outline.length, sum.y + p.y / outline.length),
+    new Vector2(),
+  );
   const middle = builder.vertex(center.x, center.y, z, 0, 0, facing, ...uv(center));
   const first = builder.positions.length / 3;
   for (const p of outline) builder.vertex(p.x, p.y, z, 0, 0, facing, ...uv(p));
@@ -901,17 +1108,25 @@ export class ExtrudeGeometry extends BufferGeometry {
     const rings: { offset: number; z: number }[] = [];
     for (let b = 0; b <= segments; b++) {
       const t = segments ? b / segments : 1;
-      rings.push({ offset: size * Math.sin((t * Math.PI) / 2), z: -thickness * Math.cos((t * Math.PI) / 2) });
+      rings.push({
+        offset: size * Math.sin((t * Math.PI) / 2),
+        z: -thickness * Math.cos((t * Math.PI) / 2),
+      });
     }
     for (let b = segments; b >= 0; b--) {
       const t = segments ? b / segments : 1;
-      rings.push({ offset: size * Math.sin((t * Math.PI) / 2), z: depth + thickness * Math.cos((t * Math.PI) / 2) });
+      rings.push({
+        offset: size * Math.sin((t * Math.PI) / 2),
+        z: depth + thickness * Math.cos((t * Math.PI) / 2),
+      });
     }
     const sides = new GeometryBuilder();
     const contours = rings.map((ring) => offsetOutline(outline, ring.offset));
     const n = outline.length;
     contours.forEach((contour, r) => {
-      contour.forEach((p, i) => sides.vertex(p.x, p.y, rings[r]!.z, 0, 0, 0, i / n, r / (rings.length - 1)));
+      contour.forEach((p, i) =>
+        sides.vertex(p.x, p.y, rings[r]!.z, 0, 0, 0, i / n, r / (rings.length - 1)),
+      );
     });
     for (let r = 0; r + 1 < rings.length; r++)
       for (let i = 0; i < n; i++) {
@@ -930,7 +1145,12 @@ export class ExtrudeGeometry extends BufferGeometry {
 }
 
 function mergeInto(target: BufferGeometry, parts: BufferGeometry[]) {
-  const merged = { position: [] as number[], normal: [] as number[], uv: [] as number[], index: [] as number[] };
+  const merged = {
+    position: [] as number[],
+    normal: [] as number[],
+    uv: [] as number[],
+    index: [] as number[],
+  };
   for (const part of parts) {
     const offset = merged.position.length / 3;
     merged.position.push(...part.getAttribute("position").array);
@@ -953,7 +1173,10 @@ export class PlaneGeometry extends BufferGeometry {
         builder.vertex(
           (ix / widthSegments - 0.5) * width,
           (0.5 - iy / heightSegments) * height,
-          0, 0, 0, 1,
+          0,
+          0,
+          0,
+          1,
           ix / widthSegments,
           1 - iy / heightSegments,
         );
@@ -1003,7 +1226,16 @@ export class CylinderGeometry extends BufferGeometry {
         const theta = (x / radialSegments) * thetaLength + thetaStart;
         const [s, c] = [Math.sin(theta), Math.cos(theta)];
         const normal = new Vector3(s, slope, c).normalize();
-        builder.vertex(radius * s, -v * height + height / 2, radius * c, normal.x, normal.y, normal.z, x / radialSegments, 1 - v);
+        builder.vertex(
+          radius * s,
+          -v * height + height / 2,
+          radius * c,
+          normal.x,
+          normal.y,
+          normal.z,
+          x / radialSegments,
+          1 - v,
+        );
       }
     }
     for (let x = 0; x < radialSegments; x++)
@@ -1021,10 +1253,21 @@ export class CylinderGeometry extends BufferGeometry {
         for (let x = 0; x <= radialSegments; x++) {
           const theta = (x / radialSegments) * thetaLength + thetaStart;
           const [s, c] = [Math.sin(theta), Math.cos(theta)];
-          builder.vertex(radius * s, (height / 2) * sign, radius * c, 0, sign, 0, (s + 1) / 2, (c * sign + 1) / 2);
+          builder.vertex(
+            radius * s,
+            (height / 2) * sign,
+            radius * c,
+            0,
+            sign,
+            0,
+            (s + 1) / 2,
+            (c * sign + 1) / 2,
+          );
         }
         for (let x = 0; x < radialSegments; x++)
-          builder.indices.push(...(top ? [first + x, first + x + 1, center] : [first + x + 1, first + x, center]));
+          builder.indices.push(
+            ...(top ? [first + x, first + x + 1, center] : [first + x + 1, first + x, center]),
+          );
       }
     builder.build(this);
   }
@@ -1035,7 +1278,14 @@ export class BoxGeometry extends BufferGeometry {
     super();
     const builder = new GeometryBuilder();
     const half = new Vector3(width / 2, height / 2, depth / 2);
-    for (const [axis, sign] of [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]] as const) {
+    for (const [axis, sign] of [
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [2, 1],
+      [2, -1],
+    ] as const) {
       const normal = [0, 0, 0];
       normal[axis] = sign;
       const u = [0, 0, 0];
@@ -1043,11 +1293,29 @@ export class BoxGeometry extends BufferGeometry {
       u[(axis + 1) % 3] = 1;
       v[(axis + 2) % 3] = 1;
       const first = builder.positions.length / 3;
-      for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
-        const p = [0, 1, 2].map((k) => (normal[k]! + u[k]! * su + v[k]! * sv) * [half.x, half.y, half.z][k]!);
-        builder.vertex(p[0]!, p[1]!, p[2]!, normal[0]!, normal[1]!, normal[2]!, (su + 1) / 2, (sv + 1) / 2);
+      for (const [su, sv] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const) {
+        const p = [0, 1, 2].map(
+          (k) => (normal[k]! + u[k]! * su + v[k]! * sv) * [half.x, half.y, half.z][k]!,
+        );
+        builder.vertex(
+          p[0]!,
+          p[1]!,
+          p[2]!,
+          normal[0]!,
+          normal[1]!,
+          normal[2]!,
+          (su + 1) / 2,
+          (sv + 1) / 2,
+        );
       }
-      builder.indices.push(...(sign > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]).map((i) => i + first));
+      builder.indices.push(
+        ...(sign > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]).map((i) => i + first),
+      );
     }
     builder.build(this);
   }
@@ -1073,8 +1341,8 @@ export class CanvasTexture extends Texture {
   }
 }
 
-export const FrontSide = 0;
-export const DoubleSide = 2;
+const FrontSide = 0;
+const DoubleSide = 2;
 type MaterialOptions = Partial<{
   color: number;
   map: Texture | null;
@@ -1129,7 +1397,9 @@ export class MeshStandardMaterial extends MeshBasicMaterial {
     this.roughness = options.roughness ?? 1;
   }
   override textures() {
-    return [this.map, this.metalnessMap, this.normalMap, this.emissiveMap, this.aoMap].filter((t): t is Texture => !!t);
+    return [this.map, this.metalnessMap, this.normalMap, this.emissiveMap, this.aoMap].filter(
+      (t): t is Texture => !!t,
+    );
   }
 }
 export class MeshPhysicalMaterial extends MeshStandardMaterial {
@@ -1201,7 +1471,9 @@ export class Object3D {
   updateWorldMatrix(updateParents: boolean, updateChildren: boolean) {
     if (updateParents) this.parent?.updateWorldMatrix(true, false);
     this.updateMatrix();
-    this.matrixWorld = this.parent ? new Matrix4().multiplyMatrices(this.parent.matrixWorld, this.matrix) : this.matrix.clone();
+    this.matrixWorld = this.parent
+      ? new Matrix4().multiplyMatrices(this.parent.matrixWorld, this.matrix)
+      : this.matrix.clone();
     if (updateChildren) for (const child of this.children) child.updateWorldMatrix(false, true);
   }
   updateMatrixWorld(_force = false) {
@@ -1267,7 +1539,9 @@ export class PerspectiveCamera extends Object3D {
   lookAt(x: number, y: number, z: number) {
     this.updateWorldMatrix(true, false);
     const eye = new Vector3().setFromMatrixPosition(this.matrixWorld);
-    this.quaternion.setFromRotationMatrix(new Matrix4().lookAt(eye, new Vector3(x, y, z), new Vector3(0, 1, 0)));
+    this.quaternion.setFromRotationMatrix(
+      new Matrix4().lookAt(eye, new Vector3(x, y, z), new Vector3(0, 1, 0)),
+    );
   }
   clone() {
     const camera = new PerspectiveCamera(this.fov, this.aspect, this.near, this.far);
@@ -1320,7 +1594,13 @@ export class Raycaster {
     const uv = geometry.attributes.uv;
     const culled = mesh.material.side === FrontSide;
     const [a, b, c] = [new Vector3(), new Vector3(), new Vector3()];
-    const [e1, e2, p, q, s] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+    const [e1, e2, p, q, s] = [
+      new Vector3(),
+      new Vector3(),
+      new Vector3(),
+      new Vector3(),
+      new Vector3(),
+    ];
     forEachTriangle(geometry, (i0, i1, i2) => {
       a.fromBufferAttribute(position, i0);
       b.fromBufferAttribute(position, i1);
@@ -1543,7 +1823,13 @@ void main() {
 
 type GpuBuffer = { attribute: BufferAttribute; buffer: WebGLBuffer; version: number };
 /** `layout` lists the attribute objects and versions the VAO was built from; while it matches, drawing skips setup. */
-type GpuGeometry = { vao: WebGLVertexArrayObject; buffers: Map<string, GpuBuffer>; index: GpuBuffer | null; count: number; layout: unknown[] };
+type GpuGeometry = {
+  vao: WebGLVertexArrayObject;
+  buffers: Map<string, GpuBuffer>;
+  index: GpuBuffer | null;
+  count: number;
+  layout: unknown[];
+};
 /** `shape` is the allocated storage; an update with the same shape replaces pixels in place. */
 type GpuTexture = { texture: WebGLTexture; version: number; shape: string };
 type GL = WebGL2RenderingContext | WebGLRenderingContext;
@@ -1554,11 +1840,18 @@ export class WebGLRenderer {
   /** Exposure ahead of ACES filmic tone mapping. Unlit materials, such as live displays, stay exact. */
   toneMappingExposure = 1;
   private readonly program: WebGLProgram;
-  private readonly vertexArrays: { create(): WebGLVertexArrayObject; bind(vao: WebGLVertexArrayObject | null): void; delete(vao: WebGLVertexArrayObject): void };
+  private readonly vertexArrays: {
+    create(): WebGLVertexArrayObject;
+    bind(vao: WebGLVertexArrayObject | null): void;
+    delete(vao: WebGLVertexArrayObject): void;
+  };
   private readonly uniforms = new Map<string, WebGLUniformLocation | null>();
   private readonly geometries = new Map<BufferGeometry, GpuGeometry>();
   private readonly textures = new Map<Texture, GpuTexture>();
-  private readonly shadow = new Mesh(new PlaneGeometry(), Object.assign(new MeshBasicMaterial({ depthWrite: false }), { side: DoubleSide }));
+  private readonly shadow = new Mesh(
+    new PlaneGeometry(),
+    Object.assign(new MeshBasicMaterial({ depthWrite: false }), { side: DoubleSide }),
+  );
   private disposed = false;
   // Scratch storage for per-draw uniforms, so a frame allocates no matrices.
   private readonly matrix16 = new Float32Array(16);
@@ -1568,7 +1861,12 @@ export class WebGLRenderer {
   private shadowFit: { key: number[]; apply: () => void } | null = null;
   /** Pixel-store state last set, so uploads skip redundant calls. */
   private unpack = { flipY: -1 };
-  constructor(options: { canvas: HTMLCanvasElement; alpha?: boolean; antialias?: boolean; powerPreference?: WebGLPowerPreference }) {
+  constructor(options: {
+    canvas: HTMLCanvasElement;
+    alpha?: boolean;
+    antialias?: boolean;
+    powerPreference?: WebGLPowerPreference;
+  }) {
     const attributes: WebGLContextAttributes = {
       alpha: options.alpha ?? false,
       antialias: options.antialias ?? false,
@@ -1582,16 +1880,34 @@ export class WebGLRenderer {
     this.webgl2 = !!gl2;
     let header: [string, string];
     if (gl2) {
-      this.vertexArrays = { create: () => gl2.createVertexArray()!, bind: (vao) => gl2.bindVertexArray(vao), delete: (vao) => gl2.deleteVertexArray(vao) };
-      const common = "#version 300 es\nprecision highp float;\n#define TEXTURE texture\n#define DERIVATIVES\n";
-      header = [`${common}#define ATTRIBUTE in\n#define VARYING out\n`, `${common}#define VARYING in\n#define FRAG_COLOR fragColor\nout vec4 fragColor;\n`];
+      this.vertexArrays = {
+        create: () => gl2.createVertexArray()!,
+        bind: (vao) => gl2.bindVertexArray(vao),
+        delete: (vao) => gl2.deleteVertexArray(vao),
+      };
+      const common =
+        "#version 300 es\nprecision highp float;\n#define TEXTURE texture\n#define DERIVATIVES\n";
+      header = [
+        `${common}#define ATTRIBUTE in\n#define VARYING out\n`,
+        `${common}#define VARYING in\n#define FRAG_COLOR fragColor\nout vec4 fragColor;\n`,
+      ];
     } else {
       const vao = gl.getExtension("OES_vertex_array_object");
-      if (!vao || !gl.getExtension("OES_element_index_uint")) throw new Error("WebGL is unavailable");
-      this.vertexArrays = { create: () => vao.createVertexArrayOES()!, bind: (array) => vao.bindVertexArrayOES(array), delete: (array) => vao.deleteVertexArrayOES(array) };
-      const derivatives = gl.getExtension("OES_standard_derivatives") ? "#extension GL_OES_standard_derivatives : enable\n#define DERIVATIVES\n" : "";
+      if (!vao || !gl.getExtension("OES_element_index_uint"))
+        throw new Error("WebGL is unavailable");
+      this.vertexArrays = {
+        create: () => vao.createVertexArrayOES()!,
+        bind: (array) => vao.bindVertexArrayOES(array),
+        delete: (array) => vao.deleteVertexArrayOES(array),
+      };
+      const derivatives = gl.getExtension("OES_standard_derivatives")
+        ? "#extension GL_OES_standard_derivatives : enable\n#define DERIVATIVES\n"
+        : "";
       const common = "precision highp float;\n#define TEXTURE texture2D\n";
-      header = [`${common}#define ATTRIBUTE attribute\n#define VARYING varying\n`, `${derivatives}${common}#define VARYING varying\n#define FRAG_COLOR gl_FragColor\n#define SRGB_DECODE\n`];
+      header = [
+        `${common}#define ATTRIBUTE attribute\n#define VARYING varying\n`,
+        `${derivatives}${common}#define VARYING varying\n#define FRAG_COLOR gl_FragColor\n#define SRGB_DECODE\n`,
+      ];
     }
     const compile = (type: number, source: string) => {
       const shader = gl.createShader(type)!;
@@ -1602,9 +1918,14 @@ export class WebGLRenderer {
       return shader;
     };
     this.program = gl.createProgram()!;
-    const shaders = [compile(gl.VERTEX_SHADER, header[0] + VERTEX), compile(gl.FRAGMENT_SHADER, header[1] + FRAGMENT)];
+    const shaders = [
+      compile(gl.VERTEX_SHADER, header[0] + VERTEX),
+      compile(gl.FRAGMENT_SHADER, header[1] + FRAGMENT),
+    ];
     for (const shader of shaders) gl.attachShader(this.program, shader);
-    ATTRIBUTE_LOCATIONS.forEach((name, location) => gl.bindAttribLocation(this.program, location, name));
+    ATTRIBUTE_LOCATIONS.forEach((name, location) =>
+      gl.bindAttribLocation(this.program, location, name),
+    );
     gl.linkProgram(this.program);
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS) && !gl.isContextLost())
       throw new Error(gl.getProgramInfoLog(this.program) ?? "Shader link failed");
@@ -1621,7 +1942,8 @@ export class WebGLRenderer {
     gl.clearColor(0, 0, 0, 0);
   }
   private uniform(name: string) {
-    if (!this.uniforms.has(name)) this.uniforms.set(name, this.gl.getUniformLocation(this.program, name));
+    if (!this.uniforms.has(name))
+      this.uniforms.set(name, this.gl.getUniformLocation(this.program, name));
     return this.uniforms.get(name)!;
   }
   setDrawingBufferSize(width: number, height: number, pixelRatio: number) {
@@ -1644,8 +1966,14 @@ export class WebGLRenderer {
       if (object instanceof Mesh) meshes.push(object);
       else if (object instanceof DirectionalLight) {
         if (directions.length < 12) {
-          directions.push(...new Vector3().setFromMatrixPosition(object.matrixWorld).normalize().toArray());
-          colors.push(object.color.r * object.intensity, object.color.g * object.intensity, object.color.b * object.intensity);
+          directions.push(
+            ...new Vector3().setFromMatrixPosition(object.matrixWorld).normalize().toArray(),
+          );
+          colors.push(
+            object.color.r * object.intensity,
+            object.color.g * object.intensity,
+            object.color.b * object.intensity,
+          );
         }
       } else if (object instanceof AmbientLight) {
         ambient[0]! += object.color.r * object.intensity;
@@ -1657,7 +1985,10 @@ export class WebGLRenderer {
     visit(scene);
     gl.useProgram(this.program);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const viewProjection = new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    const viewProjection = new Matrix4().multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    );
     const eye = new Vector3().setFromMatrixPosition(camera.matrixWorld);
     gl.uniformMatrix4fv(this.uniform("viewProjection"), false, viewProjection.elements);
     gl.uniform3f(this.uniform("cameraPosition"), eye.x, eye.y, eye.z);
@@ -1672,9 +2003,12 @@ export class WebGLRenderer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     if (scene.shadow > 0) this.drawShadow(meshes, camera, scene.shadow);
-    const depth = (mesh: Mesh) => new Vector3().setFromMatrixPosition(mesh.matrixWorld).distanceTo(eye);
+    const depth = (mesh: Mesh) =>
+      new Vector3().setFromMatrixPosition(mesh.matrixWorld).distanceTo(eye);
     const opaque = meshes.filter((mesh) => !mesh.material.transparent);
-    const blended = meshes.filter((mesh) => mesh.material.transparent).sort((a, b) => depth(b) - depth(a));
+    const blended = meshes
+      .filter((mesh) => mesh.material.transparent)
+      .sort((a, b) => depth(b) - depth(a));
     gl.disable(gl.BLEND);
     for (const mesh of opaque) this.draw(mesh);
     gl.enable(gl.BLEND);
@@ -1693,7 +2027,11 @@ export class WebGLRenderer {
       key.push(...mesh.matrixWorld.elements, min.x, min.y, min.z, max.x, max.y, max.z);
     }
     const previous = this.shadowFit;
-    if (!previous || previous.key.length !== key.length || previous.key.some((value, i) => value !== key[i]))
+    if (
+      !previous ||
+      previous.key.length !== key.length ||
+      previous.key.some((value, i) => value !== key[i])
+    )
       this.shadowFit = { key, apply: this.fitShadow(meshes, camera, opacity) };
     this.shadowFit!.apply();
   }
@@ -1710,13 +2048,20 @@ export class WebGLRenderer {
       if (min.x > max.x) continue;
       toView.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
       for (let i = 0; i < 8; i++) {
-        const corner = new Vector3(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z).applyMatrix4(toView);
+        const corner = new Vector3(
+          i & 1 ? max.x : min.x,
+          i & 2 ? max.y : min.y,
+          i & 4 ? max.z : min.z,
+        ).applyMatrix4(toView);
         bounds.expandByPoint(corner);
         corners.push(corner);
       }
     }
     if (bounds.isEmpty() || bounds.max.z >= 0) return none;
-    const z = bounds.min.z - (bounds.max.z - bounds.min.z) * 0.1 - 0.05 * bounds.getSize(new Vector3()).length();
+    const z =
+      bounds.min.z -
+      (bounds.max.z - bounds.min.z) * 0.1 -
+      0.05 * bounds.getSize(new Vector3()).length();
     // Minimum-area rectangle around the outline as projected onto the card: rotating calipers over its hull.
     const hull = convexHull(corners.map((p) => new Vector2(p.x, p.y).multiplyScalar(z / p.z)));
     let fit = { area: Infinity, c: 1, s: 0, extent: [0, 0, 0, 0] };
@@ -1741,7 +2086,10 @@ export class WebGLRenderer {
     const [width, height] = [extent[1]! - extent[0]!, extent[3]! - extent[2]!];
     const span = Math.max(width, height);
     if (!span) return none;
-    const lift = Math.min(1, ((bounds.max.z - bounds.min.z) * z) / (bounds.getCenter(new Vector3()).z * span));
+    const lift = Math.min(
+      1,
+      ((bounds.max.z - bounds.min.z) * z) / (bounds.getCenter(new Vector3()).z * span),
+    );
     const shrink = 0.47 - 0.12 * lift;
     const [halfX, halfY, blur] = [width * shrink, height * shrink, span * (0.045 + 0.1 * lift)];
     const u = (extent[0]! + extent[1]!) / 2;
@@ -1749,7 +2097,24 @@ export class WebGLRenderer {
     const drop = span * (0.02 + 0.05 * lift);
     const [quadX, quadY] = [2 * (halfX + 2 * blur), 2 * (halfY + 2 * blur)];
     const matrix = new Matrix4()
-      .set(c * quadX, -s * quadY, 0, u * c - v * s, s * quadX, c * quadY, 0, u * s + v * c - drop, 0, 0, 1, z, 0, 0, 0, 1)
+      .set(
+        c * quadX,
+        -s * quadY,
+        0,
+        u * c - v * s,
+        s * quadX,
+        c * quadY,
+        0,
+        u * s + v * c - drop,
+        0,
+        0,
+        1,
+        z,
+        0,
+        0,
+        0,
+        1,
+      )
       .premultiply(camera.matrixWorld);
     const radius = Math.min(halfX, halfY) * Math.min(1, 0.12 + 2 * lift);
     return () => {
@@ -1771,7 +2136,17 @@ export class WebGLRenderer {
     if (!material.unlit) {
       const n = this.inverse.copy(mesh.matrixWorld).invert().elements;
       const m = this.matrix9;
-      [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]] = [n[0]!, n[4]!, n[8]!, n[1]!, n[5]!, n[9]!, n[2]!, n[6]!, n[10]!];
+      [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]] = [
+        n[0]!,
+        n[4]!,
+        n[8]!,
+        n[1]!,
+        n[5]!,
+        n[9]!,
+        n[2]!,
+        n[6]!,
+        n[10]!,
+      ];
       gl.uniformMatrix3fv(this.uniform("normalMatrix"), false, m);
     }
     gl.uniform1i(this.uniform("unlit"), material.unlit ? 1 : 0);
@@ -1779,7 +2154,13 @@ export class WebGLRenderer {
     gl.uniform1i(this.uniform("flipBack"), material.side === DoubleSide ? 1 : 0);
     if (material.side === DoubleSide) gl.disable(gl.CULL_FACE);
     else gl.enable(gl.CULL_FACE);
-    gl.uniform4f(this.uniform("baseColor"), material.color.r, material.color.g, material.color.b, material.opacity);
+    gl.uniform4f(
+      this.uniform("baseColor"),
+      material.color.r,
+      material.color.g,
+      material.color.b,
+      material.opacity,
+    );
     gl.uniform1f(this.uniform("alphaTest"), material.alphaTest);
     let maps = 0;
     let uv1Maps = 0;
@@ -1803,14 +2184,30 @@ export class WebGLRenderer {
       gl.uniform1f(this.uniform("aoStrength"), material.aoMapIntensity);
       gl.uniform2f(this.uniform("normalScale"), material.normalScale.x, material.normalScale.y);
       const glow = material.emissiveIntensity;
-      gl.uniform3f(this.uniform("emissive"), material.emissive.r * glow, material.emissive.g * glow, material.emissive.b * glow);
+      gl.uniform3f(
+        this.uniform("emissive"),
+        material.emissive.r * glow,
+        material.emissive.g * glow,
+        material.emissive.b * glow,
+      );
     }
     gl.uniform1i(this.uniform("maps"), maps);
     gl.uniform1i(this.uniform("uv1Maps"), uv1Maps);
-    gl.colorMask(material.colorWrite, material.colorWrite, material.colorWrite, material.colorWrite);
+    gl.colorMask(
+      material.colorWrite,
+      material.colorWrite,
+      material.colorWrite,
+      material.colorWrite,
+    );
     gl.depthMask(material.depthWrite);
     this.vertexArrays.bind(gpu.vao);
-    if (gpu.index) gl.drawElements(gl.TRIANGLES, gpu.count, gpu.index.attribute.array instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+    if (gpu.index)
+      gl.drawElements(
+        gl.TRIANGLES,
+        gpu.count,
+        gpu.index.attribute.array instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
+        0,
+      );
     else gl.drawArrays(gl.TRIANGLES, 0, gpu.count);
     this.vertexArrays.bind(null);
   }
@@ -1819,7 +2216,13 @@ export class WebGLRenderer {
     let gpu = this.geometries.get(geometry);
     if (gpu && sameLayout(gpu.layout, geometry)) return gpu;
     if (!gpu) {
-      const created: GpuGeometry = { vao: this.vertexArrays.create(), buffers: new Map(), index: null, count: 0, layout: [] };
+      const created: GpuGeometry = {
+        vao: this.vertexArrays.create(),
+        buffers: new Map(),
+        index: null,
+        count: 0,
+        layout: [],
+      };
       gpu = created;
       this.geometries.set(geometry, created);
       geometry.disposeListeners.add(() => {
@@ -1834,7 +2237,11 @@ export class WebGLRenderer {
       gl.bindBuffer(target, entry.buffer);
       if (entry.version === entry.attribute.version) return;
       // Most geometry uploads once; a buffer that changes again is marked dynamic on its re-upload.
-      gl.bufferData(target, entry.attribute.array, entry.version === -1 ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW);
+      gl.bufferData(
+        target,
+        entry.attribute.array,
+        entry.version === -1 ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW,
+      );
       entry.version = entry.attribute.version;
     };
     ATTRIBUTE_LOCATIONS.forEach((name, location) => {
@@ -1846,10 +2253,18 @@ export class WebGLRenderer {
         entry = undefined;
       }
       if (!attribute) return gl.disableVertexAttribArray(location);
-      if (!entry) gpu.buffers.set(name, (entry = { attribute, buffer: gl.createBuffer()!, version: -1 }));
+      if (!entry)
+        gpu.buffers.set(name, (entry = { attribute, buffer: gl.createBuffer()!, version: -1 }));
       upload(gl.ARRAY_BUFFER, entry);
       gl.enableVertexAttribArray(location);
-      gl.vertexAttribPointer(location, attribute.itemSize, glType(gl, attribute.array), attribute.normalized, 0, 0);
+      gl.vertexAttribPointer(
+        location,
+        attribute.itemSize,
+        glType(gl, attribute.array),
+        attribute.normalized,
+        0,
+        0,
+      );
     });
     if (geometry.index) {
       if (gpu.index?.attribute !== geometry.index) {
@@ -1889,18 +2304,26 @@ export class WebGLRenderer {
       // WebGL1 decodes sRGB in the shader, and cannot repeat or mipmap non-power-of-two images.
       const { width, height } = texture.image as { width: number; height: number };
       const full = webgl2 || ((width & (width - 1)) === 0 && (height & (height - 1)) === 0);
-      const format = webgl2 && texture.colorSpace === "srgb" ? (gl as WebGL2RenderingContext).SRGB8_ALPHA8 : gl.RGBA;
+      const format =
+        webgl2 && texture.colorSpace === "srgb"
+          ? (gl as WebGL2RenderingContext).SRGB8_ALPHA8
+          : gl.RGBA;
       const wrap = texture.repeat && full ? gl.REPEAT : gl.CLAMP_TO_EDGE;
       const mipmaps = texture.mipmaps && full;
       const shape = `${width}x${height}:${format}:${wrap}:${mipmaps}`;
       // A live display re-uploads every frame at one size: replace its pixels, keeping storage and sampling state.
-      if (shape === gpu.shape) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+      if (shape === gpu.shape)
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
       else {
         gl.texImage2D(gl.TEXTURE_2D, 0, format, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+        gl.texParameteri(
+          gl.TEXTURE_2D,
+          gl.TEXTURE_MIN_FILTER,
+          mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR,
+        );
         gpu.shape = shape;
       }
       if (mipmaps) gl.generateMipmap(gl.TEXTURE_2D);
@@ -1909,8 +2332,10 @@ export class WebGLRenderer {
     return gpu.texture;
   }
   dispose() {
-    for (const geometry of [...this.geometries.keys()]) geometry.disposeListeners.forEach((listener) => listener());
-    for (const texture of [...this.textures.keys()]) texture.disposeListeners.forEach((listener) => listener());
+    for (const geometry of Array.from(this.geometries.keys()))
+      geometry.disposeListeners.forEach((listener) => listener());
+    for (const texture of Array.from(this.textures.keys()))
+      texture.disposeListeners.forEach((listener) => listener());
     this.gl.deleteProgram(this.program);
     this.disposed = true;
   }
@@ -1939,7 +2364,8 @@ function sameLayout(layout: unknown[], geometry: BufferGeometry) {
 /** Andrew's monotone chain, counter-clockwise. */
 function convexHull(points: Vector2[]) {
   const sorted = points.sort((a, b) => a.x - b.x || a.y - b.y);
-  const cross = (o: Vector2, a: Vector2, b: Vector2) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const cross = (o: Vector2, a: Vector2, b: Vector2) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
   const chain = (ordered: Vector2[]) => {
     const out: Vector2[] = [];
     for (const p of ordered) {
@@ -1976,7 +2402,8 @@ export function disposeObject(root: Object3D) {
   const images = new Set<ImageBitmap>();
   for (const texture of textures) {
     texture.dispose();
-    if (typeof ImageBitmap !== "undefined" && texture.image instanceof ImageBitmap) images.add(texture.image);
+    if (typeof ImageBitmap !== "undefined" && texture.image instanceof ImageBitmap)
+      images.add(texture.image);
   }
   for (const image of images) image.close();
 }
@@ -1985,12 +2412,38 @@ type TextureInfo = { index: number; texCoord?: number };
 type Gltf = {
   scene?: number;
   scenes?: { nodes?: number[] }[];
-  nodes?: { name?: string; mesh?: number; children?: number[]; matrix?: number[]; translation?: number[]; rotation?: number[]; scale?: number[] }[];
-  meshes?: { primitives: { attributes: Record<string, number>; indices?: number; material?: number; mode?: number }[] }[];
-  accessors?: { bufferView?: number; byteOffset?: number; componentType: number; count: number; type: string; normalized?: boolean }[];
+  nodes?: {
+    name?: string;
+    mesh?: number;
+    children?: number[];
+    matrix?: number[];
+    translation?: number[];
+    rotation?: number[];
+    scale?: number[];
+  }[];
+  meshes?: {
+    primitives: {
+      attributes: Record<string, number>;
+      indices?: number;
+      material?: number;
+      mode?: number;
+    }[];
+  }[];
+  accessors?: {
+    bufferView?: number;
+    byteOffset?: number;
+    componentType: number;
+    count: number;
+    type: string;
+    normalized?: boolean;
+  }[];
   bufferViews?: { buffer: number; byteOffset?: number; byteLength: number; byteStride?: number }[];
   images?: { bufferView?: number; mimeType?: string }[];
-  textures?: { source?: number; sampler?: number; extensions?: Record<string, { source?: number }> }[];
+  textures?: {
+    source?: number;
+    sampler?: number;
+    extensions?: Record<string, { source?: number }>;
+  }[];
   samplers?: { wrapS?: number; minFilter?: number }[];
   materials?: {
     name?: string;
@@ -2001,7 +2454,13 @@ type Gltf = {
     normalTexture?: TextureInfo & { scale?: number };
     occlusionTexture?: TextureInfo & { strength?: number };
     emissiveTexture?: TextureInfo;
-    pbrMetallicRoughness?: { baseColorFactor?: number[]; metallicFactor?: number; roughnessFactor?: number; baseColorTexture?: TextureInfo; metallicRoughnessTexture?: TextureInfo };
+    pbrMetallicRoughness?: {
+      baseColorFactor?: number[];
+      metallicFactor?: number;
+      roughnessFactor?: number;
+      baseColorTexture?: TextureInfo;
+      metallicRoughnessTexture?: TextureInfo;
+    };
     extensions?: {
       KHR_materials_clearcoat?: { clearcoatFactor?: number; clearcoatRoughnessFactor?: number };
       KHR_materials_emissive_strength?: { emissiveStrength?: number };
@@ -2010,17 +2469,34 @@ type Gltf = {
 };
 
 const COMPONENTS = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 } as Record<string, number>;
-const ARRAYS = { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array } as const;
-const ATTRIBUTES: Record<string, string> = { POSITION: "position", NORMAL: "normal", TEXCOORD_0: "uv", TEXCOORD_1: "uv1", COLOR_0: "color" };
+const ARRAYS = {
+  5120: Int8Array,
+  5121: Uint8Array,
+  5122: Int16Array,
+  5123: Uint16Array,
+  5125: Uint32Array,
+  5126: Float32Array,
+} as const;
+const ATTRIBUTES: Record<string, string> = {
+  POSITION: "position",
+  NORMAL: "normal",
+  TEXCOORD_0: "uv",
+  TEXCOORD_1: "uv1",
+  COLOR_0: "color",
+};
 
 /** Reads a binary glTF 2.0 file: uncompressed triangle meshes, PBR materials and embedded images. */
 export async function parseGlb(data: ArrayBuffer): Promise<Group> {
   const view = new DataView(data);
-  if (data.byteLength < 20 || view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2)
+  if (
+    data.byteLength < 20 ||
+    view.getUint32(0, true) !== 0x46546c67 ||
+    view.getUint32(4, true) !== 2
+  )
     throw new Error("Not a glTF 2.0 binary file");
   let json: Gltf | undefined;
   let bin = new Uint8Array();
-  for (let offset = 12; offset + 8 <= data.byteLength; ) {
+  for (let offset = 12; offset + 8 <= data.byteLength;) {
     const length = view.getUint32(offset, true);
     const type = view.getUint32(offset + 4, true);
     const chunk = new Uint8Array(data, offset + 8, length);
@@ -2032,7 +2508,10 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
   const gltf = json;
   const viewBytes = (index: number) => {
     const bufferView = gltf.bufferViews![index]!;
-    return bin.subarray(bufferView.byteOffset ?? 0, (bufferView.byteOffset ?? 0) + bufferView.byteLength);
+    return bin.subarray(
+      bufferView.byteOffset ?? 0,
+      (bufferView.byteOffset ?? 0) + bufferView.byteLength,
+    );
   };
   const accessor = (index: number) => {
     const meta = gltf.accessors![index]!;
@@ -2046,17 +2525,26 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     const stride = bufferView.byteStride || element;
     const source = new Uint8Array(out.buffer);
     for (let i = 0; i < meta.count; i++)
-      source.set(bytes.subarray((meta.byteOffset ?? 0) + i * stride, (meta.byteOffset ?? 0) + i * stride + element), i * element);
+      source.set(
+        bytes.subarray(
+          (meta.byteOffset ?? 0) + i * stride,
+          (meta.byteOffset ?? 0) + i * stride + element,
+        ),
+        i * element,
+      );
     return { array: out, size, normalized: !!meta.normalized };
   };
   const images = await Promise.all(
     (gltf.images ?? []).map((image) =>
       image.bufferView === undefined
         ? null
-        : createImageBitmap(new Blob([viewBytes(image.bufferView)], { type: image.mimeType ?? "image/png" }), {
-            premultiplyAlpha: "none",
-            colorSpaceConversion: "none",
-          }),
+        : createImageBitmap(
+            new Blob([viewBytes(image.bufferView)], { type: image.mimeType ?? "image/png" }),
+            {
+              premultiplyAlpha: "none",
+              colorSpaceConversion: "none",
+            },
+          ),
     ),
   );
   const textureCache = new Map<string, Texture>();
@@ -2072,7 +2560,8 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     const image = source === undefined ? null : images[source];
     if (!image) return null;
     usedImages.add(image);
-    const sampler = definition.sampler === undefined ? undefined : gltf.samplers?.[definition.sampler];
+    const sampler =
+      definition.sampler === undefined ? undefined : gltf.samplers?.[definition.sampler];
     const result = new Texture(image);
     result.flipY = false;
     result.colorSpace = srgb ? "srgb" : "linear";
@@ -2104,7 +2593,8 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     material.aoMapIntensity = definition.occlusionTexture?.strength ?? 1;
     const [er, eg, eb] = definition.emissiveFactor ?? [0, 0, 0];
     material.emissive.setRGB(er!, eg!, eb!);
-    material.emissiveIntensity = definition.extensions?.KHR_materials_emissive_strength?.emissiveStrength ?? 1;
+    material.emissiveIntensity =
+      definition.extensions?.KHR_materials_emissive_strength?.emissiveStrength ?? 1;
     material.side = definition.doubleSided ? DoubleSide : FrontSide;
     material.transparent = definition.alphaMode === "BLEND";
     material.alphaTest = definition.alphaMode === "MASK" ? (definition.alphaCutoff ?? 0.5) : 0;
@@ -2125,30 +2615,44 @@ export async function parseGlb(data: ArrayBuffer): Promise<Group> {
     }
     if (definition.indices !== undefined) {
       const { array } = accessor(definition.indices);
-      geometry.setIndex(new BufferAttribute(array instanceof Uint8Array ? new Uint16Array(array) : array, 1));
+      geometry.setIndex(
+        new BufferAttribute(array instanceof Uint8Array ? new Uint16Array(array) : array, 1),
+      );
     }
     if (!geometry.hasAttribute("normal")) geometry.computeVertexNormals();
-    const material = definition.material === undefined ? new MeshStandardMaterial() : materials[definition.material]!;
+    const material =
+      definition.material === undefined
+        ? new MeshStandardMaterial()
+        : materials[definition.material]!;
     // An absent color attribute reads as opaque white, so a shared material can always multiply it.
     if (geometry.hasAttribute("color")) material.vertexColors = true;
     return new Mesh(geometry, material);
   };
   const node = (index: number): Object3D => {
     const definition = gltf.nodes![index]!;
-    const primitives = definition.mesh === undefined ? [] : gltf.meshes![definition.mesh]!.primitives.map(primitive).filter((m): m is Mesh => !!m);
+    const primitives =
+      definition.mesh === undefined
+        ? []
+        : gltf.meshes![definition.mesh]!.primitives.map(primitive).filter((m): m is Mesh => !!m);
     const object: Object3D = primitives.length === 1 ? primitives[0]! : new Group();
     if (primitives.length > 1) object.add(...primitives);
     object.name = definition.name ?? "";
     if (definition.matrix) {
       const matrix = new Matrix4().fromArray(definition.matrix);
       const e = matrix.elements;
-      const scale = new Vector3(Math.hypot(e[0]!, e[1]!, e[2]!), Math.hypot(e[4]!, e[5]!, e[6]!), Math.hypot(e[8]!, e[9]!, e[10]!));
+      const scale = new Vector3(
+        Math.hypot(e[0]!, e[1]!, e[2]!),
+        Math.hypot(e[4]!, e[5]!, e[6]!),
+        Math.hypot(e[8]!, e[9]!, e[10]!),
+      );
       object.position.setFromMatrixPosition(matrix);
       object.quaternion.setFromRotationMatrix(new Matrix4().extractRotation(matrix));
       object.scale.copy(scale);
     }
-    if (definition.translation) object.position.set(...(definition.translation as [number, number, number]));
-    if (definition.rotation) object.quaternion.set(...(definition.rotation as [number, number, number, number]));
+    if (definition.translation)
+      object.position.set(...(definition.translation as [number, number, number]));
+    if (definition.rotation)
+      object.quaternion.set(...(definition.rotation as [number, number, number, number]));
     if (definition.scale) object.scale.set(...(definition.scale as [number, number, number]));
     for (const child of definition.children ?? []) object.add(node(child));
     return object;

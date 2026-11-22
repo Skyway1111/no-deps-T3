@@ -20,7 +20,7 @@ export type MFunctionType = <T extends string | null | undefined>(
 ) => T extends string ? string : T;
 export type Catalog = Readonly<Record<string, unknown>>;
 
-// ---- ICU: {var}, {n, plural, =0 {…} one {# …} other {…}}, {x, select, …}, '' and '{…}' quoting ----
+// ICU: {var}, {n, plural, =0 {…} one {# …} other {…}}, {x, select, …}, '' and '{…}' quoting
 
 const POUND = 0;
 interface Arg {
@@ -69,13 +69,13 @@ function parse(src: string): ReadonlyArray<Part> {
           text += "'";
           i += 2;
         } else if (next !== undefined && ("{}<>".includes(next) || (next === "#" && inPlural))) {
-          for (i++; i < src.length; ) {
+          for (i++; i < src.length;) {
             if (src[i] !== "'") text += src[i++];
-            else if (src[i + 1] === "'") (text += "'"), (i += 2);
+            else if (src[i + 1] === "'") ((text += "'"), (i += 2));
             else break;
           }
           i++;
-        } else (text += c), i++;
+        } else ((text += c), i++);
       } else if (c === "{") {
         flush();
         parts.push(argument());
@@ -84,7 +84,7 @@ function parse(src: string): ReadonlyArray<Part> {
         flush();
         parts.push(POUND);
         i++;
-      } else (text += c), i++;
+      } else ((text += c), i++);
     }
     flush();
     return parts;
@@ -93,13 +93,13 @@ function parse(src: string): ReadonlyArray<Part> {
     i++;
     const name = identifier() || fail();
     skipSpace();
-    if (src[i] === "}") return i++, { name };
+    if (src[i] === "}") return (i++, { name });
     expect(",");
     const type = identifier();
     if (type !== "plural" && type !== "select") {
       // number/date/time styles: unused in our catalogs, so they print the raw value.
       while (i < src.length && src[i] !== "}") i++;
-      return i++, { name };
+      return (i++, { name });
     }
     const plural = type === "plural";
     expect(",");
@@ -184,7 +184,7 @@ const compiled = new Map<string, ReadonlyArray<Part>>();
 const NO_VARS: TranslationOptions = {};
 
 /** Formats an ICU message; throws on malformed syntax or a missing variable. */
-export function formatICU(message: string, vars: TranslationOptions, locale: string): string {
+function formatICU(message: string, vars: TranslationOptions, locale: string): string {
   // Without braces or quotes the message is its own output.
   if (!message.includes("{") && !message.includes("'")) return message;
   let parts = compiled.get(message);
@@ -192,7 +192,7 @@ export function formatICU(message: string, vars: TranslationOptions, locale: str
   return render(parts, vars, locale);
 }
 
-// ---- Catalog keys: GT's hashSource (sha256 of a key-sorted JSON payload, first 16 hex) ----
+// Catalog keys: GT's hashSource (sha256 of a key-sorted JSON payload, first 16 hex)
 
 function stableStringify(value: unknown): string | undefined {
   if (value === undefined) return undefined;
@@ -219,7 +219,7 @@ export function catalogKey(source: unknown, format: "ICU" | "JSX", context?: str
   return key;
 }
 
-// ---- msg(): `english:base64(json options)`, the wire format GT clients and servers share ----
+// msg(): `english:base64(json options)`, the wire format GT clients and servers share
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -292,7 +292,7 @@ export function decodeMsg<T>(message: T): T {
   return (colon === -1 ? message : message.slice(0, colon)) as T;
 }
 
-// ---- Locale state ----
+// Locale state
 
 export interface I18nState {
   readonly locale: string;
@@ -338,7 +338,6 @@ let state = ENGLISH;
 const listeners = new Set<() => void>();
 
 /** English formatting, for code with no resolver handed in (logs, English comparisons). */
-export const gtFallback: GTFunctionType = ENGLISH.gt;
 export const mFallback: MFunctionType = ENGLISH.m;
 
 export const getI18nState = (): I18nState => state;
@@ -359,5 +358,4 @@ export function subscribeI18n(listener: () => void): () => void {
 }
 
 /** Call-time resolvers in the active locale, for code outside React. */
-export const gt: GTFunctionType = (message, options) => state.gt(message, options);
 export const m = ((message, options) => state.m(message, options)) as MFunctionType;

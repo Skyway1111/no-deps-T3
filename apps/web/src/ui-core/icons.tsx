@@ -987,6 +987,3 @@ export const WrapTextIcon = createIcon(
   "wrap-text",
   '<path d="M3 6h18"/><path d="M3 12h15a3 3 0 1 1 0 6h-4"/><polyline points="16 16 14 18 16 20"/><path d="M3 18h7"/>',
 );
-export const Code2Icon = CodeXmlIcon;
-export const FolderTree = FolderTreeIcon;
-export const Globe2 = EarthIcon;

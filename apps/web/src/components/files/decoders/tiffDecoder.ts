@@ -9,9 +9,14 @@ export class DecodeError extends Error {
   }
 }
 
-export const MAX_IMAGE_PIXELS = 32_000_000;
+const MAX_IMAGE_PIXELS = 32_000_000;
 export function checkImageSize(width: number, height: number) {
-  if (!(width > 0 && height > 0) || width > 16384 || height > 16384 || width > MAX_IMAGE_PIXELS / height)
+  if (
+    !(width > 0 && height > 0) ||
+    width > 16384 ||
+    height > 16384 ||
+    width > MAX_IMAGE_PIXELS / height
+  )
     throw new DecodeError("image-too-large");
 }
 
@@ -38,16 +43,18 @@ export type TiffIfd = {
 const TYPE_SIZE = [0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8, 4, 0, 0, 8, 8, 8];
 
 /** Reads the first image's directory, bounding every count and offset by the file. */
-export function readTiff(buffer: ArrayBuffer): TiffIfd {
+function readTiff(buffer: ArrayBuffer): TiffIfd {
   const view = new DataView(buffer);
   if (buffer.byteLength < 8) throw new DecodeError("tiff-metadata-invalid");
   const order = view.getUint16(0);
   const le = order === 0x4949;
-  if ((order !== 0x4949 && order !== 0x4d4d) || view.getUint16(2, le) !== 42) throw new DecodeError("tiff-metadata-invalid");
+  if ((order !== 0x4949 && order !== 0x4d4d) || view.getUint16(2, le) !== 42)
+    throw new DecodeError("tiff-metadata-invalid");
   const ifd = view.getUint32(4, le);
   if (ifd < 8 || ifd + 2 > buffer.byteLength) throw new DecodeError("tiff-metadata-invalid");
   const count = view.getUint16(ifd, le);
-  if (count > 2048 || ifd + 2 + count * 12 > buffer.byteLength) throw new DecodeError("tiff-metadata-truncated");
+  if (count > 2048 || ifd + 2 + count * 12 > buffer.byteLength)
+    throw new DecodeError("tiff-metadata-truncated");
   const tags = new Map<number, number[]>();
   for (let i = 0; i < count; i++) {
     const entry = ifd + 2 + i * 12;
@@ -64,9 +71,22 @@ export function readTiff(buffer: ArrayBuffer): TiffIfd {
     if (![1, 3, 4, 6, 8, 9].includes(type)) continue;
     const read = (k: number) => {
       const at = start + k * width;
-      return type === 3 ? view.getUint16(at, le) : type === 8 ? view.getInt16(at, le) : type === 4 ? view.getUint32(at, le) : type === 9 ? view.getInt32(at, le) : type === 6 ? view.getInt8(at) : view.getUint8(at);
+      return type === 3
+        ? view.getUint16(at, le)
+        : type === 8
+          ? view.getInt16(at, le)
+          : type === 4
+            ? view.getUint32(at, le)
+            : type === 9
+              ? view.getInt32(at, le)
+              : type === 6
+                ? view.getInt8(at)
+                : view.getUint8(at);
     };
-    tags.set(tag, Array.from({ length: values }, (_, k) => read(k)));
+    tags.set(
+      tag,
+      Array.from({ length: values }, (_, k) => read(k)),
+    );
   }
   const one = (tag: number, fallback: number) => tags.get(tag)?.[0] ?? fallback;
   const width = one(256, 0);
@@ -74,14 +94,17 @@ export function readTiff(buffer: ArrayBuffer): TiffIfd {
   checkImageSize(width, height);
   const bitsPerSample = one(258, 1);
   const samplesPerPixel = one(277, 1);
-  if ((tags.get(258) ?? []).some((bits) => bits !== bitsPerSample)) throw new DecodeError("tiff-color-format");
+  if ((tags.get(258) ?? []).some((bits) => bits !== bitsPerSample))
+    throw new DecodeError("tiff-color-format");
   const tiled = tags.has(324);
   const offsets = tags.get(tiled ? 324 : 273) ?? [];
   const lengths = tags.get(tiled ? 325 : 279) ?? [];
-  if (!offsets.length || offsets.length > 65536 || lengths.length !== offsets.length) throw new DecodeError("tiff-strip-layout");
+  if (!offsets.length || offsets.length > 65536 || lengths.length !== offsets.length)
+    throw new DecodeError("tiff-strip-layout");
   const chunks = offsets.map((offset, i) => {
     const length = lengths[i]!;
-    if (offset < 0 || length < 0 || offset + length > buffer.byteLength) throw new DecodeError("tiff-strip-invalid");
+    if (offset < 0 || length < 0 || offset + length > buffer.byteLength)
+      throw new DecodeError("tiff-strip-invalid");
     return { offset, length };
   });
   const colorMap = tags.get(320);
@@ -106,7 +129,7 @@ export function readTiff(buffer: ArrayBuffer): TiffIfd {
 }
 
 /** TIFF LZW (MSB-first, early change), writing at most `limit` bytes. */
-export function lzwDecode(input: Uint8Array, limit: number) {
+function lzwDecode(input: Uint8Array, limit: number) {
   const out = new Uint8Array(limit);
   const prefix = new Uint16Array(4096);
   const suffix = new Uint8Array(4096);
@@ -124,12 +147,14 @@ export function lzwDecode(input: Uint8Array, limit: number) {
   const emit = (code: number) => {
     const size = length[code]!;
     const end = Math.min(written + size, limit);
-    for (let k = size - 1, c = code; k >= 0; k--, c = prefix[c]!) if (written + k < end) out[written + k] = suffix[c]!;
+    for (let k = size - 1, c = code; k >= 0; k--, c = prefix[c]!)
+      if (written + k < end) out[written + k] = suffix[c]!;
     written = end;
   };
   while (bitPos + bits <= total && written < limit) {
     let code = 0;
-    for (let i = 0; i < bits; i++, bitPos++) code = (code << 1) | ((input[bitPos >> 3]! >> (7 - (bitPos & 7))) & 1);
+    for (let i = 0; i < bits; i++, bitPos++)
+      code = (code << 1) | ((input[bitPos >> 3]! >> (7 - (bitPos & 7))) & 1);
     if (code === 257) break;
     if (code === 256) {
       bits = 9;
@@ -158,10 +183,10 @@ export function lzwDecode(input: Uint8Array, limit: number) {
   return out.subarray(0, written);
 }
 
-export function packBitsDecode(input: Uint8Array, limit: number) {
+function packBitsDecode(input: Uint8Array, limit: number) {
   const out = new Uint8Array(limit);
   let written = 0;
-  for (let i = 0; i < input.length && written < limit; ) {
+  for (let i = 0; i < input.length && written < limit;) {
     const n = (input[i++]! << 24) >> 24;
     if (n >= 0) {
       const count = Math.min(n + 1, limit - written, input.length - i);
@@ -178,7 +203,10 @@ export function packBitsDecode(input: Uint8Array, limit: number) {
 }
 
 async function inflate(input: Uint8Array, limit: number) {
-  const reader = new Blob([input as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
+  const reader = new Blob([input as Uint8Array<ArrayBuffer>])
+    .stream()
+    .pipeThrough(new DecompressionStream("deflate"))
+    .getReader();
   const out = new Uint8Array(limit);
   let written = 0;
   try {
@@ -215,10 +243,17 @@ async function decompress(ifd: TiffIfd, input: Uint8Array, limit: number) {
 export async function decodeTiff(buffer: ArrayBuffer) {
   const ifd = readTiff(buffer);
   const { width, height, bitsPerSample: bps, samplesPerPixel: spp, photometric } = ifd;
-  if (![1, 2, 4, 8, 16].includes(bps) || ifd.sampleFormat > 2 || ![0, 1, 2, 3, 5].includes(photometric) || spp < 1 || spp > 5)
+  if (
+    ![1, 2, 4, 8, 16].includes(bps) ||
+    ifd.sampleFormat > 2 ||
+    ![0, 1, 2, 3, 5].includes(photometric) ||
+    spp < 1 ||
+    spp > 5
+  )
     throw new DecodeError("tiff-color-format");
   if (ifd.predictor !== 1 && ifd.predictor !== 2) throw new DecodeError("tiff-compression");
-  if (ifd.tiled && (bps < 8 || !ifd.chunkWidth || !ifd.chunkHeight)) throw new DecodeError("tiff-strip-layout");
+  if (ifd.tiled && (bps < 8 || !ifd.chunkWidth || !ifd.chunkHeight))
+    throw new DecodeError("tiff-strip-layout");
   const planar = ifd.planar === 2 && spp > 1;
   const planes = planar ? spp : 1;
   const perPlane = planar ? 1 : spp;
@@ -245,7 +280,7 @@ export async function decodeTiff(buffer: ArrayBuffer) {
         const row = data.subarray(r * chunkRowBytes, (r + 1) * chunkRowBytes);
         if (ifd.predictor === 2) undoPredictor(row, perPlane, bps, le);
         const y = ty * ifd.chunkHeight + r;
-        const start = y * rowBytes + (tx * chunkRowBytes);
+        const start = y * rowBytes + tx * chunkRowBytes;
         const take = Math.min(row.length, rowBytes - tx * chunkRowBytes);
         if (take > 0) raw[plane]!.set(row.subarray(0, take), start);
       }
@@ -265,15 +300,24 @@ export async function decodeTiff(buffer: ArrayBuffer) {
     const byte = data[base + (bit >> 3)]!;
     return (byte >> (8 - bps - (bit & 7))) & ((1 << bps) - 1);
   };
-  const toByte = bps === 16 || bps === 8 ? (v: number) => v : (v: number) => Math.round((v * 255) / ((1 << bps) - 1));
+  const toByte =
+    bps === 16 || bps === 8
+      ? (v: number) => v
+      : (v: number) => Math.round((v * 255) / ((1 << bps) - 1));
   const colors = photometric === 2 ? 3 : photometric === 5 ? 4 : 1;
   const alphaSample = spp > colors ? colors : -1;
   const premultiplied = ifd.extraSamples[0] === 1;
   const rgba = new Uint8ClampedArray(width * height * 4);
   const palette = ifd.palette;
-  if (photometric === 3 && (!palette || palette.length < 3 * (1 << bps))) throw new DecodeError("tiff-color-format");
+  if (photometric === 3 && (!palette || palette.length < 3 * (1 << bps)))
+    throw new DecodeError("tiff-color-format");
   // Common 8-bit chunky gray and RGB(A) copy bytes straight through; rows hold `spp` bytes per pixel, unpadded.
-  if (bps === 8 && !planar && (photometric === 1 || photometric === 2) && !(premultiplied && alphaSample >= 0)) {
+  if (
+    bps === 8 &&
+    !planar &&
+    (photometric === 1 || photometric === 2) &&
+    !(premultiplied && alphaSample >= 0)
+  ) {
     const data = raw[0]!;
     const rgb = photometric === 2;
     for (let p = 0, i = 0, o = 0; p < width * height; p++, i += spp, o += 4) {
@@ -308,13 +352,15 @@ export async function decodeTiff(buffer: ArrayBuffer) {
       }
       const a = alphaSample >= 0 ? toByte(sample(x, y, alphaSample)) : 255;
       rgba[o + 3] = a;
-      if (premultiplied && a && a < 255) for (let c = 0; c < 3; c++) rgba[o + c] = (rgba[o + c]! * 255) / a;
+      if (premultiplied && a && a < 255)
+        for (let c = 0; c < 3; c++) rgba[o + c] = (rgba[o + c]! * 255) / a;
     }
   return { ...orient(rgba, width, height, ifd.orientation), alpha: alphaSample >= 0 };
 }
 
 function undoPredictor(row: Uint8Array, samples: number, bps: number, le: boolean) {
-  if (bps === 8) for (let i = samples; i < row.length; i++) row[i] = (row[i]! + row[i - samples]!) & 255;
+  if (bps === 8)
+    for (let i = samples; i < row.length; i++) row[i] = (row[i]! + row[i - samples]!) & 255;
   else if (bps === 16) {
     const view = new DataView(row.buffer, row.byteOffset, row.byteLength);
     for (let i = samples * 2; i + 1 < row.length; i += 2)
@@ -323,7 +369,12 @@ function undoPredictor(row: Uint8Array, samples: number, bps: number, le: boolea
 }
 
 /** Applies EXIF-style orientation 1–8 to an RGBA buffer. */
-function orient(rgba: Uint8ClampedArray<ArrayBuffer>, width: number, height: number, orientation: number) {
+function orient(
+  rgba: Uint8ClampedArray<ArrayBuffer>,
+  width: number,
+  height: number,
+  orientation: number,
+) {
   if (orientation <= 1 || orientation > 8) return { width, height, data: rgba };
   const swap = orientation >= 5;
   const [w, h] = swap ? [height, width] : [width, height];

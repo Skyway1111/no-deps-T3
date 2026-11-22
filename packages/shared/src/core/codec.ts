@@ -4,11 +4,11 @@
  */
 
 export const WIRE_FRAME_QUERY_PARAM = "wireFrame";
-export const WIRE_FRAME_MAGIC = 0x54;
-export const WIRE_FRAME_HEADER_BYTES = 6;
-export const DEFAULT_MAX_FRAME_BYTES = 64 * 1024 * 1024;
+const WIRE_FRAME_MAGIC = 0x54;
+const WIRE_FRAME_HEADER_BYTES = 6;
+const DEFAULT_MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
-export const FrameTag = {
+const FrameTag = {
   Json: 0x01,
   Utf8: 0x02,
   Binary: 0x03,
@@ -23,7 +23,7 @@ const VALID_FRAME_TAGS = new Set<number>(Object.values(FrameTag));
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-export class WireFrameError extends Error {
+class WireFrameError extends Error {
   readonly code: "invalid_magic" | "invalid_tag" | "truncated" | "limit_exceeded";
 
   constructor(
@@ -42,7 +42,7 @@ export interface DecodedFrame {
   readonly payload: Uint8Array | string;
 }
 
-export function isBinaryFrame(input: Uint8Array | string): boolean {
+function isBinaryFrame(input: Uint8Array | string): boolean {
   return (
     input instanceof Uint8Array &&
     input.byteLength >= WIRE_FRAME_HEADER_BYTES &&
@@ -101,7 +101,7 @@ function readUint32BE(buf: Uint8Array, offset: number): number {
   );
 }
 
-export function encodeFrame(tag: FrameTag, payload?: string | Uint8Array | unknown): Uint8Array {
+function encodeFrame(tag: FrameTag, payload?: string | Uint8Array | unknown): Uint8Array {
   const wire = payloadToWire(tag, payload);
   const len = wireByteLength(wire);
   const out = allocFrame(WIRE_FRAME_HEADER_BYTES + len);
@@ -110,7 +110,7 @@ export function encodeFrame(tag: FrameTag, payload?: string | Uint8Array | unkno
   return out;
 }
 
-export function decodeFrame(
+function decodeFrame(
   input: Uint8Array | string,
   options?: { readonly maxBytes?: number; readonly decodeText?: boolean },
 ): DecodedFrame {
@@ -154,7 +154,7 @@ export function decodeFrame(
   return { format: "binary", tag: typedTag, payload };
 }
 
-export function encodeBatch(
+function encodeBatch(
   frames: ReadonlyArray<{
     readonly tag: FrameTag;
     readonly payload?: string | Uint8Array | unknown;
@@ -190,7 +190,7 @@ export function encodeBatch(
   return out;
 }
 
-export function decodeBatch(
+function decodeBatch(
   input: Uint8Array,
   options?: { readonly maxBytes?: number; readonly decodeText?: boolean },
 ): ReadonlyArray<DecodedFrame> {
@@ -269,233 +269,3 @@ export function decodeWireChunks<T extends ReadonlyArray<string | Uint8Array>>(c
   }
   return out as unknown as T;
 }
-
-export class CodecError extends Error {
-  readonly path: string;
-
-  constructor(message: string, path = "$") {
-    super(`${path}: ${message}`);
-    this.name = "CodecError";
-    this.path = path;
-  }
-}
-
-export type DecodeResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: CodecError };
-
-export interface Codec<T> {
-  readonly name: string;
-  readonly check: (value: unknown) => value is T;
-  readonly decode: (value: unknown, path?: string) => T;
-  readonly safeDecode: (value: unknown) => DecodeResult<T>;
-}
-
-export type Infer<C extends Codec<unknown>> = C extends Codec<infer T> ? T : never;
-
-function makeCodec<T>(
-  name: string,
-  check: (value: unknown) => value is T,
-  decode?: (value: unknown, path: string) => T,
-): Codec<T> {
-  const runDecode =
-    decode ??
-    ((value: unknown, path: string): T => {
-      if (check(value)) return value;
-      throw new CodecError(`Expected ${name}`, path);
-    });
-  return {
-    name,
-    check,
-    decode: (value, path = "$") => runDecode(value, path),
-    safeDecode: (value) => {
-      try {
-        return { ok: true, value: runDecode(value, "$") };
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof CodecError ? error : new CodecError(String(error)),
-        };
-      }
-    },
-  };
-}
-
-export const c = {
-  string: makeCodec<string>("string", (v): v is string => typeof v === "string"),
-  number: makeCodec<number>(
-    "number",
-    (v): v is number => typeof v === "number" && !Number.isNaN(v),
-  ),
-  finiteNumber: makeCodec<number>(
-    "finite number",
-    (v): v is number => typeof v === "number" && Number.isFinite(v),
-  ),
-  integer: makeCodec<number>(
-    "integer",
-    (v): v is number => typeof v === "number" && Number.isSafeInteger(v),
-  ),
-  boolean: makeCodec<boolean>("boolean", (v): v is boolean => typeof v === "boolean"),
-  null_: makeCodec<null>("null", (v): v is null => v === null),
-  unknown: makeCodec<unknown>("unknown", (_v): _v is unknown => true),
-  bytes: makeCodec<Uint8Array>("Uint8Array", (v): v is Uint8Array => v instanceof Uint8Array),
-
-  literal<const T extends string | number | boolean>(expected: T): Codec<T> {
-    return makeCodec<T>(JSON.stringify(expected), (v): v is T => v === expected);
-  },
-
-  literals<const T extends readonly (string | number | boolean)[]>(...values: T): Codec<T[number]> {
-    const allowed = new Set<unknown>(values);
-    return makeCodec<T[number]>(
-      values.map((v) => JSON.stringify(v)).join(" | "),
-      (v): v is T[number] => allowed.has(v),
-    );
-  },
-
-  optional<T>(inner: Codec<T>): Codec<T | undefined> {
-    return makeCodec<T | undefined>(
-      `${inner.name} | undefined`,
-      (v): v is T | undefined => v === undefined || inner.check(v),
-      (v, path) => (v === undefined ? undefined : inner.decode(v, path)),
-    );
-  },
-
-  nullable<T>(inner: Codec<T>): Codec<T | null> {
-    return makeCodec<T | null>(
-      `${inner.name} | null`,
-      (v): v is T | null => v === null || inner.check(v),
-      (v, path) => (v === null ? null : inner.decode(v, path)),
-    );
-  },
-
-  array<T>(item: Codec<T>): Codec<Array<T>> {
-    return makeCodec<Array<T>>(
-      `${item.name}[]`,
-      (v): v is Array<T> => Array.isArray(v) && v.every(item.check),
-      (v, path) => {
-        if (!Array.isArray(v)) throw new CodecError("Expected array", path);
-        const out = new Array<T>(v.length);
-        for (let i = 0; i < v.length; i++) {
-          out[i] = item.decode(v[i], `${path}[${i}]`);
-        }
-        return out;
-      },
-    );
-  },
-
-  record<T>(value: Codec<T>): Codec<Record<string, T>> {
-    return makeCodec<Record<string, T>>(
-      `Record<string, ${value.name}>`,
-      (v): v is Record<string, T> => {
-        if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-        for (const entry of Object.values(v as Record<string, unknown>)) {
-          if (!value.check(entry)) return false;
-        }
-        return true;
-      },
-      (v, path) => {
-        if (typeof v !== "object" || v === null || Array.isArray(v)) {
-          throw new CodecError("Expected object", path);
-        }
-        const src = v as Record<string, unknown>;
-        const out: Record<string, T> = {};
-        for (const key of Object.keys(src)) {
-          out[key] = value.decode(src[key], `${path}.${key}`);
-        }
-        return out;
-      },
-    );
-  },
-
-  object<Shape extends Record<string, Codec<unknown>>>(
-    shape: Shape,
-  ): Codec<{ [K in keyof Shape]: Infer<Shape[K]> }> {
-    const entries = Object.entries(shape);
-    type Out = { [K in keyof Shape]: Infer<Shape[K]> };
-    return makeCodec<Out>(
-      "object",
-      (v): v is Out => {
-        if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-        const obj = v as Record<string, unknown>;
-        for (let i = 0; i < entries.length; i++) {
-          const [key, codec] = entries[i]!;
-          if (!codec.check(obj[key])) return false;
-        }
-        return true;
-      },
-      (v, path) => {
-        if (typeof v !== "object" || v === null || Array.isArray(v)) {
-          throw new CodecError("Expected object", path);
-        }
-        const src = v as Record<string, unknown>;
-        const out: Record<string, unknown> = {};
-        for (let i = 0; i < entries.length; i++) {
-          const [key, codec] = entries[i]!;
-          const decoded = codec.decode(src[key], `${path}.${key}`);
-          if (decoded !== undefined || Object.hasOwn(src, key)) {
-            out[key] = decoded;
-          }
-        }
-        return out as Out;
-      },
-    );
-  },
-
-  union<const Codecs extends readonly [Codec<unknown>, ...Codec<unknown>[]]>(
-    ...codecs: Codecs
-  ): Codec<Infer<Codecs[number]>> {
-    type Out = Infer<Codecs[number]>;
-    return makeCodec<Out>(
-      codecs.map((item) => item.name).join(" | "),
-      (v): v is Out => codecs.some((item) => item.check(v)),
-      (v, path) => {
-        for (let i = 0; i < codecs.length; i++) {
-          const res = codecs[i]!.safeDecode(v);
-          if (res.ok) return res.value as Out;
-        }
-        throw new CodecError(
-          `Expected one of ${codecs.map((item) => item.name).join(" | ")}`,
-          path,
-        );
-      },
-    );
-  },
-
-  discriminatedUnion<TagKey extends string, Variants extends Record<string, Codec<unknown>>>(
-    tagKey: TagKey,
-    variants: Variants,
-  ): Codec<Infer<Variants[keyof Variants]>> {
-    type Out = Infer<Variants[keyof Variants]>;
-    return makeCodec<Out>(
-      `union(${tagKey})`,
-      (v): v is Out => {
-        if (typeof v !== "object" || v === null) return false;
-        const tag = (v as Record<string, unknown>)[tagKey];
-        if (typeof tag !== "string" || !Object.hasOwn(variants, tag)) return false;
-        return variants[tag]!.check(v);
-      },
-      (v, path) => {
-        if (typeof v !== "object" || v === null) {
-          throw new CodecError("Expected object", path);
-        }
-        const tag = (v as Record<string, unknown>)[tagKey];
-        if (typeof tag !== "string" || !Object.hasOwn(variants, tag)) {
-          throw new CodecError(`Unexpected discriminant "${String(tag)}"`, `${path}.${tagKey}`);
-        }
-        return variants[tag]!.decode(v, path) as Out;
-      },
-    );
-  },
-
-  refine<T>(inner: Codec<T>, predicate: (value: T) => boolean, message: string): Codec<T> {
-    return makeCodec<T>(
-      inner.name,
-      (v): v is T => inner.check(v) && predicate(v),
-      (v, path) => {
-        const decoded = inner.decode(v, path);
-        if (!predicate(decoded)) throw new CodecError(message, path);
-        return decoded;
-      },
-    );
-  },
-};

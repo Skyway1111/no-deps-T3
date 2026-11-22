@@ -531,17 +531,9 @@
       "types": "./src/markdownTaskList.ts",
       "import": "./src/markdownTaskList.ts"
     },
-    "./markdownListIndentation": {
-      "types": "./src/markdownListIndentation.ts",
-      "import": "./src/markdownListIndentation.ts"
-    },
     "./proposedPlanText": {
       "types": "./src/proposedPlanText.ts",
       "import": "./src/proposedPlanText.ts"
-    },
-    "./markdownWindowsPaths": {
-      "types": "./src/markdownWindowsPaths.ts",
-      "import": "./src/markdownWindowsPaths.ts"
     },
     "./generatedImageMarkdown": {
       "types": "./src/generatedImageMarkdown.ts",
@@ -675,10 +667,6 @@
       "types": "./src/sqlite/readOnlySqliteReader.ts",
       "import": "./src/sqlite/readOnlySqliteReader.ts"
     },
-    "./core": {
-      "types": "./src/core/index.ts",
-      "import": "./src/core/index.ts"
-    },
     "./core/signal": {
       "types": "./src/core/signal.ts",
       "import": "./src/core/signal.ts"
@@ -758,35 +746,11 @@
     "./sys/keyring": {
       "types": "./src/sys/keyring.ts",
       "import": "./src/sys/keyring.ts"
-    },
-    "./ui-runtime": {
-      "types": "./src/ui-runtime/index.ts",
-      "import": "./src/ui-runtime/index.ts"
-    },
-    "./ui-runtime/jsx-runtime": {
-      "types": "./src/ui-runtime/jsx-runtime.ts",
-      "import": "./src/ui-runtime/jsx-runtime.ts"
-    },
-    "./ui-runtime/client": {
-      "types": "./src/ui-runtime/client.ts",
-      "import": "./src/ui-runtime/client.ts"
-    },
-    "./ui-runtime/server": {
-      "types": "./src/ui-runtime/server.ts",
-      "import": "./src/ui-runtime/server.ts"
     }
   },
   "scripts": {
     "typecheck": "effect-tsgo tsrs --noEmit",
     "test": "vp test run --config ../../vite.config.ts --dir ."
-  },
-  "peerDependencies": {
-    "react": ">=18"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
   },
   "dependencies": {
     "@t3tools/contracts": "workspace:*",
@@ -796,12 +760,16 @@
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
-    "@types/hast": "^3.0.5",
-    "@types/mdast": "^4.0.4",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "hast-util-to-html": "^9.0.5",
-    "micromark-util-types": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }

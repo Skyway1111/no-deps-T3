@@ -260,7 +260,7 @@ export class CdpRequest {
   }
 }
 
-export class CdpResponse {
+class CdpResponse {
   private readonly resUrl: string;
   private readonly resStatus: number;
   private readonly req: CdpRequest;

@@ -900,7 +900,7 @@ function restoreMathPlaceholders(node: ElRoot | ElElement, map: Map<string, ElEl
 }
 
 /** Compiles a parsed Markdown IR directly into an Element Tree (HAST-compatible). */
-export function mdToElements(root: MdRoot, options: EmitOptions = {}): ElRoot {
+function mdToElements(root: MdRoot, options: EmitOptions = {}): ElRoot {
   const ctx: EmitContext = {
     root,
     opts: options,
@@ -1011,7 +1011,7 @@ const SVG_PRESERVE_CASE_ATTRS = new Set([
   "refY",
 ]);
 
-export function htmlAttributeName(prop: string, inSvg: boolean): string {
+function htmlAttributeName(prop: string, inSvg: boolean): string {
   if (inSvg) {
     if (SVG_PRESERVE_CASE_ATTRS.has(prop)) return prop;
     if (prop === "className") return "class";
@@ -1067,17 +1067,6 @@ export function elToHtml(node: ElNode, inSvg = false): string {
   if (!svg && VOID_HTML_TAGS.has(node.tagName)) return html;
   for (const child of node.children) html += elToHtml(child, svg);
   return `${html}</${node.tagName}>`;
-}
-
-/** One-shot Markdown -> sanitized HTML string helper. */
-export function renderMarkdownToHtml(
-  markdown: string,
-  parseOptions?: ParseOptions,
-  emitOptions?: EmitOptions,
-): string {
-  return elToHtml(
-    renderMarkdownToElements(markdown, parseOptions, { sanitize: true, ...emitOptions }),
-  );
 }
 
 export const URL_ATTRIBUTES: Readonly<Record<string, ReadonlyArray<string> | null>> = {

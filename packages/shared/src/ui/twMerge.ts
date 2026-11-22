@@ -26,7 +26,7 @@ function toClass(value: ClassValue): string {
   return out;
 }
 
-export function cx(...inputs: ClassValue[]): string {
+function cx(...inputs: ClassValue[]): string {
   return toClass(inputs);
 }
 
@@ -338,28 +338,52 @@ touch-{x,y,pz}:touch`;
 const POSTFIX_CONFLICTS: Record<string, readonly string[]> = { "font-size": ["leading"] };
 // Groups whose classes may themselves contain `/` (`@container/name`).
 const POSTFIX_LOOKUP = new Set(["container-type"]);
-const ORDER_SENSITIVE = new Set(["*", "**", "after", "backdrop", "before", "details-content", "file", "first-letter", "first-line", "marker", "placeholder", "selection"]);
+const ORDER_SENSITIVE = new Set([
+  "*",
+  "**",
+  "after",
+  "backdrop",
+  "before",
+  "details-content",
+  "file",
+  "first-letter",
+  "first-line",
+  "marker",
+  "placeholder",
+  "selection",
+]);
 
 const ARBITRARY_VALUE = /^\[(?:(\w[\w-]*):)?(.+)\]$/i;
 const ARBITRARY_VARIABLE = /^\((?:(\w[\w-]*):)?(.+)\)$/i;
-const LENGTH = /\d+(%|px|r?em|[sdl]?v([hwib]|min|max)|pt|pc|in|cm|mm|Q|cap|ch|ex|r?lh|cq(w|h|i|b|min|max))|\b(calc|min|max|clamp)\(.+\)|^--spacing\(.+\)|^0$/;
-const COLOR_FUNCTION = /^(rgba?|hsla?|hwb|(ok)?(lab|lch)|color-mix|color|light-dark|contrast-color|device-cmyk|--alpha)\(.+\)$/i;
-const MASK_POSITION = /^(?:_*[+-]?(?:\d|\.\d)|[\w-]+\(|_*(?:inherit|initial|revert(?:-layer)?|unset)_*$)/i;
+const LENGTH =
+  /\d+(%|px|r?em|[sdl]?v([hwib]|min|max)|pt|pc|in|cm|mm|Q|cap|ch|ex|r?lh|cq(w|h|i|b|min|max))|\b(calc|min|max|clamp)\(.+\)|^--spacing\(.+\)|^0$/;
+const COLOR_FUNCTION =
+  /^(rgba?|hsla?|hwb|(ok)?(lab|lch)|color-mix|color|light-dark|contrast-color|device-cmyk|--alpha)\(.+\)$/i;
+const MASK_POSITION =
+  /^(?:_*[+-]?(?:\d|\.\d)|[\w-]+\(|_*(?:inherit|initial|revert(?:-layer)?|unset)_*$)/i;
 const SHADOW = /^(inset_)?-?((\d+)?\.?(\d+)[a-z]+|0)_-?((\d+)?\.?(\d+)[a-z]+|0)/;
-const IMAGE = /^(url|image|image-set|cross-fade|element|(repeating-)?(linear|radial|conic)-gradient)\(.+\)$/;
+const IMAGE =
+  /^(url|image|image-set|cross-fade|element|(repeating-)?(linear|radial|conic)-gradient)\(.+\)$/;
 
 type Test = (value: string) => boolean;
 const isNumber: Test = (v) => !!v && !Number.isNaN(Number(v));
 const never: Test = () => false;
-const arbitrary = (label: Test, value: Test): Test => (v) => {
-  const m = ARBITRARY_VALUE.exec(v);
-  return m ? (m[1] ? label(m[1]) : value(m[2]!)) : false;
-};
-const variable = (label: Test, unlabeled = false): Test => (v) => {
-  const m = ARBITRARY_VARIABLE.exec(v);
-  return m ? (m[1] ? label(m[1]) : unlabeled) : false;
-};
-const is = (...labels: string[]): Test => (l) => labels.includes(l);
+const arbitrary =
+  (label: Test, value: Test): Test =>
+  (v) => {
+    const m = ARBITRARY_VALUE.exec(v);
+    return m ? (m[1] ? label(m[1]) : value(m[2]!)) : false;
+  };
+const variable =
+  (label: Test, unlabeled = false): Test =>
+  (v) => {
+    const m = ARBITRARY_VARIABLE.exec(v);
+    return m ? (m[1] ? label(m[1]) : unlabeled) : false;
+  };
+const is =
+  (...labels: string[]): Test =>
+  (l) =>
+    labels.includes(l);
 const TESTS: Record<string, Test> = {
   num: isNumber,
   int: (v) => !!v && Number.isInteger(Number(v)),
@@ -370,7 +394,9 @@ const TESTS: Record<string, Test> = {
   nonarb: (v) => !ARBITRARY_VALUE.test(v) && !ARBITRARY_VARIABLE.test(v),
   ncq: (v) =>
     v.startsWith("@container") &&
-    ((v[10] === "/" && v[11] !== undefined) || (v[11] === "s" && v[16] !== undefined && v.startsWith("-size/", 10)) || (v[11] === "n" && v[18] !== undefined && v.startsWith("-normal/", 10))),
+    ((v[10] === "/" && v[11] !== undefined) ||
+      (v[11] === "s" && v[16] !== undefined && v.startsWith("-size/", 10)) ||
+      (v[11] === "n" && v[18] !== undefined && v.startsWith("-normal/", 10))),
   a: (v) => ARBITRARY_VALUE.test(v),
   v: (v) => ARBITRARY_VARIABLE.test(v),
   aLen: arbitrary(is("length"), (v) => LENGTH.test(v) && !COLOR_FUNCTION.test(v)),
@@ -388,7 +414,10 @@ const TESTS: Record<string, Test> = {
   aFam: arbitrary(is("family-name"), never),
   vFam: variable(is("family-name")),
   aNum: arbitrary(is("number"), isNumber),
-  aMask: arbitrary((l) => l !== "color", (v) => MASK_POSITION.test(v) && !COLOR_FUNCTION.test(v)),
+  aMask: arbitrary(
+    (l) => l !== "color",
+    (v) => MASK_POSITION.test(v) && !COLOR_FUNCTION.test(v),
+  ),
   vMask: variable((l) => l !== "color", true),
 };
 
@@ -431,7 +460,8 @@ function buildRegistry(groups: string): Registry {
   const conflicts = new Map<string, readonly string[]>();
   for (const line of CONFLICTS.split("\n")) {
     const colon = line.indexOf(":");
-    for (const [id, list] of expand(line.slice(0, colon), line.slice(colon + 1))) conflicts.set(id, list.split(" "));
+    for (const [id, list] of expand(line.slice(0, colon), line.slice(colon + 1)))
+      conflicts.set(id, list.split(" "));
   }
   return { exact, tests, conflicts };
 }
@@ -439,7 +469,9 @@ function buildRegistry(groups: string): Registry {
 function groupOf({ exact, tests }: Registry, className: string): string | undefined {
   if (className[0] === "[" && className.endsWith("]")) {
     const colon = className.indexOf(":");
-    return colon > 1 && colon < className.length - 1 ? `arbitrary..${className.slice(1, colon)}` : undefined;
+    return colon > 1 && colon < className.length - 1
+      ? `arbitrary..${className.slice(1, colon)}`
+      : undefined;
   }
   const base = className[0] === "-" && className.length > 1 ? className.slice(1) : className;
   const hit = exact.get(base);
@@ -466,7 +498,10 @@ function sortModifiers(modifiers: string[]): string {
   return [...out, ...run.sort()].join(":");
 }
 
-interface ClassInfo { readonly id: string; readonly conflicts: readonly string[] }
+interface ClassInfo {
+  readonly id: string;
+  readonly conflicts: readonly string[];
+}
 
 function classInfo(registry: Registry, className: string): ClassInfo | null {
   const modifiers: string[] = [];
@@ -522,7 +557,8 @@ function classInfo(registry: Registry, className: string): ClassInfo | null {
     if (!hasPostfix || !(group = groupOf(registry, base))) return null;
     hasPostfix = false;
   }
-  const variant = modifiers.length === 0 ? "" : modifiers.length === 1 ? modifiers[0]! : sortModifiers(modifiers);
+  const variant =
+    modifiers.length === 0 ? "" : modifiers.length === 1 ? modifiers[0]! : sortModifiers(modifiers);
   const prefix = important ? `${variant}!` : variant;
   const conflicts = registry.conflicts.get(group) ?? [];
   const extra = hasPostfix ? POSTFIX_CONFLICTS[group] : undefined;
@@ -552,7 +588,9 @@ export function createTwMerge(extraGroups = ""): (...inputs: ClassValue[]) => st
   const intern = (key: string) => keys.get(key) ?? keys.set(key, keys.size).size - 1;
   let stamps = new Int32Array(1024);
   let epoch = 0;
-  const infos = boundedCache<{ readonly id: number; readonly conflicts: readonly number[] } | null>(4096);
+  const infos = boundedCache<{ readonly id: number; readonly conflicts: readonly number[] } | null>(
+    4096,
+  );
   const results = boundedCache<string>(1024);
   const info = (className: string) => {
     let hit = infos.get(className);
@@ -575,7 +613,9 @@ export function createTwMerge(extraGroups = ""): (...inputs: ClassValue[]) => st
       stamps.fill(0);
       epoch = 1;
     }
-    const classes = OTHER_SPACE.test(classList) ? classList.trim().split(/\s+/) : classList.split(" ");
+    const classes = OTHER_SPACE.test(classList)
+      ? classList.trim().split(/\s+/)
+      : classList.split(" ");
     let out = "";
     for (let i = classes.length - 1; i >= 0; i--) {
       const className = classes[i]!;
@@ -591,21 +631,31 @@ export function createTwMerge(extraGroups = ""): (...inputs: ClassValue[]) => st
     results.set(classList, out);
     return out;
   };
-  return (...inputs) => merge(inputs.length === 1 && typeof inputs[0] === "string" ? inputs[0] : toClass(inputs));
+  return (...inputs) =>
+    merge(inputs.length === 1 && typeof inputs[0] === "string" ? inputs[0] : toClass(inputs));
 }
 
 export const twMerge = createTwMerge();
 
 type StringToBoolean<T> = T extends "true" | "false" ? boolean : T;
 type VariantSchema = Record<string, Record<string, ClassValue>>;
-type VariantSelection<T extends VariantSchema> = { [K in keyof T]?: StringToBoolean<keyof T[K]> | null | undefined };
+type VariantSelection<T extends VariantSchema> = {
+  [K in keyof T]?: StringToBoolean<keyof T[K]> | null | undefined;
+};
 type ClassProp = { class?: ClassValue; className?: ClassValue };
 interface CvaConfig<T extends VariantSchema> {
   variants?: T;
   defaultVariants?: VariantSelection<T>;
-  compoundVariants?: Array<{ [K in keyof T]?: StringToBoolean<keyof T[K]> | Array<StringToBoolean<keyof T[K]>> } & ClassProp>;
+  compoundVariants?: Array<
+    {
+      [K in keyof T]?: StringToBoolean<keyof T[K]> | Array<StringToBoolean<keyof T[K]>>;
+    } & ClassProp
+  >;
 }
-export type VariantProps<C extends (...args: never[]) => unknown> = Omit<NonNullable<Parameters<C>[0]>, "class" | "className">;
+export type VariantProps<C extends (...args: never[]) => unknown> = Omit<
+  NonNullable<Parameters<C>[0]>,
+  "class" | "className"
+>;
 
 const variantKey = (v: unknown) => (typeof v === "boolean" ? `${v}` : v === 0 ? "0" : v);
 
@@ -624,7 +674,9 @@ export function cva<T extends VariantSchema>(base?: ClassValue, config?: CvaConf
     for (const k in given) if (given[k] !== undefined) selection[k] = given[k];
     const compound: ClassValue[] = [];
     for (const { class: cls, className, ...when } of config?.compoundVariants ?? []) {
-      const match = Object.entries(when).every(([k, v]) => (Array.isArray(v) ? v.includes(selection[k]) : selection[k] === v));
+      const match = Object.entries(when).every(([k, v]) =>
+        Array.isArray(v) ? v.includes(selection[k]) : selection[k] === v,
+      );
       if (match) compound.push(cls, className);
     }
     return cx(base, picked, compound, props?.class, props?.className);

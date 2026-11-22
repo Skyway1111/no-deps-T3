@@ -1,4 +1,4 @@
-import { toHtml } from "hast-util-to-html";
+import { elToHtml as toHtml } from "@t3tools/shared/markdown";
 import { describe, expect, it } from "vite-plus/test";
 
 import { wordsHast } from "~/markdown/wordsHast";

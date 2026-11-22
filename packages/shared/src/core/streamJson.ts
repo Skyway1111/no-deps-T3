@@ -9,7 +9,7 @@
 export type JsonPathSegment = string | number | null;
 export type JsonPath = ReadonlyArray<JsonPathSegment>;
 
-export class StreamJsonLimitError extends Error {
+class StreamJsonLimitError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "StreamJsonLimitError";

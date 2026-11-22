@@ -55,7 +55,7 @@ const CRC_TABLE = (() => {
   return t;
 })();
 
-export function crc32(bytes: Uint8Array): number {
+function crc32(bytes: Uint8Array): number {
   let c = 0xffffffff;
   for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]!) & 0xff]! ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
@@ -81,7 +81,14 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-function readZip64Extra(view: DataView, start: number, len: number, needU: boolean, needC: boolean, needOff: boolean) {
+function readZip64Extra(
+  view: DataView,
+  start: number,
+  len: number,
+  needU: boolean,
+  needC: boolean,
+  needOff: boolean,
+) {
   let c = start;
   const end = start + len;
   while (c + 4 <= end) {
@@ -92,8 +99,14 @@ function readZip64Extra(view: DataView, start: number, len: number, needU: boole
     if (id === 0x0001) {
       let p = c;
       const out: { u?: number; c?: number; off?: number } = {};
-      if (needU && p + 8 <= c + sz) { out.u = Number(view.getBigUint64(p, true)); p += 8; }
-      if (needC && p + 8 <= c + sz) { out.c = Number(view.getBigUint64(p, true)); p += 8; }
+      if (needU && p + 8 <= c + sz) {
+        out.u = Number(view.getBigUint64(p, true));
+        p += 8;
+      }
+      if (needC && p + 8 <= c + sz) {
+        out.c = Number(view.getBigUint64(p, true));
+        p += 8;
+      }
       if (needOff && p + 8 <= c + sz) out.off = Number(view.getBigUint64(p, true));
       return out;
     }
@@ -115,7 +128,10 @@ export class NativeZipReader {
     const minEocd = Math.max(0, this.bytes.byteLength - 65_557);
     let eocd = -1;
     for (let off = this.bytes.byteLength - 22; off >= minEocd; off--) {
-      if (this.view.getUint32(off, true) === SIG_EOCD && off + 22 + this.view.getUint16(off + 20, true) === this.bytes.byteLength) {
+      if (
+        this.view.getUint32(off, true) === SIG_EOCD &&
+        off + 22 + this.view.getUint16(off + 20, true) === this.bytes.byteLength
+      ) {
         eocd = off;
         break;
       }
@@ -125,11 +141,19 @@ export class NativeZipReader {
     let cdSize = this.view.getUint32(eocd + 12, true);
     let cdOffset = this.view.getUint32(eocd + 16, true);
     let cdEnd = eocd;
-    if (this.view.getUint16(eocd + 10, true) === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
+    if (
+      this.view.getUint16(eocd + 10, true) === 0xffff ||
+      cdSize === 0xffffffff ||
+      cdOffset === 0xffffffff
+    ) {
       if (options.rejectZip64) throw new Error("Unsupported ZIP64 archive");
       const loc = eocd - 20;
       const rec = loc - 56;
-      if (rec < 0 || this.view.getUint32(loc, true) !== SIG_ZIP64_LOCATOR || this.view.getUint32(rec, true) !== SIG_ZIP64_EOCD) {
+      if (
+        rec < 0 ||
+        this.view.getUint32(loc, true) !== SIG_ZIP64_LOCATOR ||
+        this.view.getUint32(rec, true) !== SIG_ZIP64_EOCD
+      ) {
         throw new Error("Invalid ZIP64 end of central directory");
       }
       cdSize = Number(this.view.getBigUint64(rec + 40, true));
@@ -143,12 +167,18 @@ export class NativeZipReader {
     const parsed: NativeZipEntry[] = [];
     const maxEntries = options.maxEntries ?? Infinity;
     const limit = cdOffset + cdSize;
-    for (let cur = cdOffset; cur < limit; ) {
-      if (cur + 46 > limit || this.view.getUint32(cur, true) !== SIG_CENTRAL) throw new Error("Invalid ZIP central directory entry");
-      if (parsed.length >= maxEntries) throw new Error(`ZIP archive exceeds maximum entry limit (${maxEntries})`);
-      if ((this.view.getUint16(cur + 8, true) & 1) !== 0) throw new Error("Encrypted ZIP entries are not supported");
+    for (let cur = cdOffset; cur < limit;) {
+      if (cur + 46 > limit || this.view.getUint32(cur, true) !== SIG_CENTRAL)
+        throw new Error("Invalid ZIP central directory entry");
+      if (parsed.length >= maxEntries)
+        throw new Error(`ZIP archive exceeds maximum entry limit (${maxEntries})`);
+      if ((this.view.getUint16(cur + 8, true) & 1) !== 0)
+        throw new Error("Encrypted ZIP entries are not supported");
       const compressionMethod = this.view.getUint16(cur + 10, true);
-      const date = decodeDosDate(this.view.getUint16(cur + 12, true), this.view.getUint16(cur + 14, true));
+      const date = decodeDosDate(
+        this.view.getUint16(cur + 12, true),
+        this.view.getUint16(cur + 14, true),
+      );
       const entryCrc = this.view.getUint32(cur + 16, true);
       let compressedSize = this.view.getUint32(cur + 20, true);
       let uncompressedSize = this.view.getUint32(cur + 24, true);
@@ -160,9 +190,20 @@ export class NativeZipReader {
       const next = cur + 46 + nameLen + extraLen + commentLen;
       if (next > limit) throw new Error("Truncated ZIP central directory entry");
 
-      if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || localHeaderOffset === 0xffffffff) {
+      if (
+        compressedSize === 0xffffffff ||
+        uncompressedSize === 0xffffffff ||
+        localHeaderOffset === 0xffffffff
+      ) {
         if (options.rejectZip64) throw new Error("Unsupported ZIP64 entry metadata");
-        const z = readZip64Extra(this.view, cur + 46 + nameLen, extraLen, uncompressedSize === 0xffffffff, compressedSize === 0xffffffff, localHeaderOffset === 0xffffffff);
+        const z = readZip64Extra(
+          this.view,
+          cur + 46 + nameLen,
+          extraLen,
+          uncompressedSize === 0xffffffff,
+          compressedSize === 0xffffffff,
+          localHeaderOffset === 0xffffffff,
+        );
         if (z.u !== undefined) uncompressedSize = z.u;
         if (z.c !== undefined) compressedSize = z.c;
         if (z.off !== undefined) localHeaderOffset = z.off;
@@ -197,24 +238,31 @@ export class NativeZipReader {
     if (off + 30 > this.bytes.byteLength || this.view.getUint32(off, true) !== SIG_LOCAL) {
       throw new Error(`Invalid local file header for ZIP entry: ${entry.name}`);
     }
-    const dataStart = off + 30 + this.view.getUint16(off + 26, true) + this.view.getUint16(off + 28, true);
+    const dataStart =
+      off + 30 + this.view.getUint16(off + 26, true) + this.view.getUint16(off + 28, true);
     const dataEnd = dataStart + entry.compressedSize;
     if (dataEnd > this.bytes.byteLength) throw new Error(`Truncated ZIP entry data: ${entry.name}`);
     const emit = (bytes: Uint8Array<ArrayBuffer>) => {
       for (let i = 0; i < bytes.byteLength; i += FEED_CHUNK_BYTES) {
         signal?.throwIfAborted();
         const chunk = bytes.subarray(i, Math.min(i + FEED_CHUNK_BYTES, bytes.byteLength));
-        if (i + chunk.byteLength > maxBytes) throw new Error(`ZIP entry exceeds size limit: ${entry.name}`);
+        if (i + chunk.byteLength > maxBytes)
+          throw new Error(`ZIP entry exceeds size limit: ${entry.name}`);
         onChunk?.(chunk);
       }
     };
 
     if (entry.compressionMethod === 0) return emit(this.bytes.slice(dataStart, dataEnd));
-    if (entry.compressionMethod !== 8) throw new Error(`Unsupported ZIP compression method ${entry.compressionMethod}`);
+    if (entry.compressionMethod !== 8)
+      throw new Error(`Unsupported ZIP compression method ${entry.compressionMethod}`);
     if (entry.uncompressedSize <= SYNC_INFLATE_MAX_BYTES) {
       let inflated: Uint8Array<ArrayBuffer> | undefined;
       try {
-        inflated = inflateRaw(this.bytes.subarray(dataStart, dataEnd), entry.uncompressedSize, SYNC_INFLATE_MAX_BYTES);
+        inflated = inflateRaw(
+          this.bytes.subarray(dataStart, dataEnd),
+          entry.uncompressedSize,
+          SYNC_INFLATE_MAX_BYTES,
+        );
       } catch (error) {
         // Understated size: fall through to streaming, which enforces maxBytes chunk by chunk.
         if (!(error instanceof RangeError)) throw error;
@@ -226,7 +274,10 @@ export class NativeZipReader {
     let feed = 0;
     const reader = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull(ctrl) {
-        if (feed >= compressed.byteLength) { ctrl.close(); return; }
+        if (feed >= compressed.byteLength) {
+          ctrl.close();
+          return;
+        }
         const end = Math.min(feed + FEED_CHUNK_BYTES, compressed.byteLength);
         ctrl.enqueue(compressed.subarray(feed, end));
         feed = end;
@@ -234,7 +285,9 @@ export class NativeZipReader {
     })
       .pipeThrough(new DecompressionStream("deflate-raw"))
       .getReader();
-    const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
+    const abort = () => {
+      void reader.cancel(signal?.reason).catch(() => {});
+    };
     signal?.addEventListener("abort", abort, { once: true });
     let emitted = 0;
     try {
@@ -243,7 +296,8 @@ export class NativeZipReader {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = value as Uint8Array<ArrayBuffer>;
-        if ((emitted += chunk.byteLength) > maxBytes) throw new Error(`ZIP entry exceeds size limit: ${entry.name}`);
+        if ((emitted += chunk.byteLength) > maxBytes)
+          throw new Error(`ZIP entry exceeds size limit: ${entry.name}`);
         onChunk?.(chunk);
       }
     } finally {
@@ -253,21 +307,36 @@ export class NativeZipReader {
     }
   }
 
-  async readBytes(entryOrName: NativeZipEntry | string, options: Omit<ZipStreamOptions, "onChunk"> = {}): Promise<Uint8Array<ArrayBuffer>> {
+  async readBytes(
+    entryOrName: NativeZipEntry | string,
+    options: Omit<ZipStreamOptions, "onChunk"> = {},
+  ): Promise<Uint8Array<ArrayBuffer>> {
     const entry = typeof entryOrName === "string" ? this.byName.get(entryOrName) : entryOrName;
     if (!entry) throw new Error(`ZIP entry not found: ${String(entryOrName)}`);
     if (entry.directory) return new Uint8Array(0);
     const chunks: Uint8Array<ArrayBuffer>[] = [];
     let total = 0;
-    await this.streamEntry(entry, { ...options, onChunk(c) { chunks.push(c); total += c.byteLength; } });
+    await this.streamEntry(entry, {
+      ...options,
+      onChunk(c) {
+        chunks.push(c);
+        total += c.byteLength;
+      },
+    });
     if (chunks.length === 1) return chunks[0]!;
     const out = new Uint8Array(total);
     let offset = 0;
-    for (const c of chunks) { out.set(c, offset); offset += c.byteLength; }
+    for (const c of chunks) {
+      out.set(c, offset);
+      offset += c.byteLength;
+    }
     return out;
   }
 
-  async readText(entryOrName: NativeZipEntry | string, options: Omit<ZipStreamOptions, "onChunk"> = {}) {
+  async readText(
+    entryOrName: NativeZipEntry | string,
+    options: Omit<ZipStreamOptions, "onChunk"> = {},
+  ) {
     return utf8Decoder.decode(await this.readBytes(entryOrName, options));
   }
 }
@@ -285,7 +354,9 @@ export class MemoryZipArchive implements ZipArchiveReadable {
     if (content !== undefined) {
       this.files.set(
         path,
-        (typeof content === "string" ? utf8Encoder.encode(content) : content.slice()) as Uint8Array<ArrayBuffer>,
+        (typeof content === "string"
+          ? utf8Encoder.encode(content)
+          : content.slice()) as Uint8Array<ArrayBuffer>,
       );
       return this;
     }
@@ -293,7 +364,13 @@ export class MemoryZipArchive implements ZipArchiveReadable {
     if (!bytes) return null;
     return {
       async(type: "string" | "uint8array" | "base64"): Promise<any> {
-        return Promise.resolve(type === "string" ? utf8Decoder.decode(bytes) : type === "base64" ? bytesToBase64(bytes) : bytes);
+        return Promise.resolve(
+          type === "string"
+            ? utf8Decoder.decode(bytes)
+            : type === "base64"
+              ? bytesToBase64(bytes)
+              : bytes,
+        );
       },
     };
   }
@@ -305,7 +382,8 @@ export class MemoryZipArchive implements ZipArchiveReadable {
   toStoredZip(date = new Date()): ArrayBuffer {
     const yr = Math.max(1980, Math.min(2107, date.getUTCFullYear())) - 1980;
     const dosDate = (yr << 9) | ((date.getUTCMonth() + 1) << 5) | date.getUTCDate();
-    const dosTime = (date.getUTCHours() << 11) | (date.getUTCMinutes() << 5) | (date.getUTCSeconds() >> 1);
+    const dosTime =
+      (date.getUTCHours() << 11) | (date.getUTCMinutes() << 5) | (date.getUTCSeconds() >> 1);
     const items: Array<{ name: Uint8Array; data: Uint8Array; crc: number; off: number }> = [];
     let localTotal = 0;
     let cdTotal = 0;

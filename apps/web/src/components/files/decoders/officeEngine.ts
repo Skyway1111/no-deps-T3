@@ -27,7 +27,7 @@ const decodeEntities = (s: string) =>
       );
 
 /** A non-validating parser: element names lose their namespace prefix, attributes keep theirs. */
-export function parseXml(xml: string): XmlNode {
+function parseXml(xml: string): XmlNode {
   const root: XmlNode = { name: "#root", attrs: {}, children: [], text: "" };
   const stack = [root];
   const attrPattern = /([^\s=/]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
@@ -331,7 +331,7 @@ export type OfficeImage = { mime: string; bytes: Uint8Array };
 export type Measure = (text: string, font: string) => number;
 
 /** Character-count metrics for environments without a canvas. */
-export const approximateMeasure: Measure = (text, font) => {
+const approximateMeasure: Measure = (text, font) => {
   const size = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 16);
   let w = 0;
   for (const ch of text)
@@ -2303,7 +2303,7 @@ export const columnName = (index: number) => {
     name = String.fromCharCode(65 + ((n - 1) % 26)) + name;
   return name;
 };
-export function parseCellRef(ref: string) {
+function parseCellRef(ref: string) {
   const m = /^\$?([A-Z]{1,3})\$?(\d+)$/i.exec(ref.trim());
   if (!m) return undefined;
   let column = 0;
@@ -2576,7 +2576,7 @@ function conditional(a: Value[], aggregate: (picked: Value[]) => Value): Value {
   return aggregate(range.flatMap((v, i) => (test(v) ? [values[i] ?? null] : [])));
 }
 /** Moves a shared formula's relative references by the offset from its master cell. */
-export function shiftFormula(formula: string, rows: number, columns: number) {
+function shiftFormula(formula: string, rows: number, columns: number) {
   return formula
     .split(/("(?:[^"]|"")*")/)
     .map((part, i) =>
@@ -2607,10 +2607,7 @@ const display = (v: Value): string =>
         : String(v);
 
 /** Evaluates an A1-style formula: arithmetic, comparisons, `&`, ranges and common functions. */
-export function evaluateFormula(
-  formula: string,
-  lookup: (row: number, column: number) => Value,
-): Value {
+function evaluateFormula(formula: string, lookup: (row: number, column: number) => Value): Value {
   const tokens =
     formula
       .replace(/^=/, "")
@@ -2888,7 +2885,7 @@ function compileSection(raw: string): FormatSection {
 /** Number formats by code, each section compiled on first use; a workbook uses a few dozen. */
 const compiledFormats = new Map<string, { sections: string[]; compiled: FormatSection[] }>();
 
-export function formatValue(value: SheetCell["value"], format: string, date1904 = false): string {
+function formatValue(value: SheetCell["value"], format: string, date1904 = false): string {
   if (value === null) return "";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "string") {
@@ -3716,15 +3713,4 @@ export async function layoutPptx(
     });
   }
   return { slides, images };
-}
-
-/** All text of a laid-out frame in reading order, for search and copy. */
-export function frameText(frame: OfficeFrame) {
-  return frame.items
-    .filter((item): item is Extract<Paint, { t: "text" }> => item.t === "text")
-    .map(
-      (item, i, all) =>
-        (i && Math.abs(all[i - 1]!.y - item.y) > 2 ? "\n" : i ? " " : "") + item.text,
-    )
-    .join("");
 }

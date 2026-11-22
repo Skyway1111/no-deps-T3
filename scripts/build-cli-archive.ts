@@ -24,7 +24,6 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 import {
   createStagePatchedDependencies,
   createStageWorkspaceConfig,
-  resolveFffNativeDependencies,
   STAGE_INSTALL_ARGS,
 } from "./build-desktop-artifact.ts";
 import { assertLinuxArm64PageCompatibility } from "./lib/linux-arm64-sea.ts";
@@ -150,17 +149,7 @@ const stageRuntimeExternals = Effect.fn("stageRuntimeExternals")(function* (inpu
     catalog,
     "apps/server",
   );
-  const fffNodeVersion = serverDependencies["@ff-labs/fff-node"];
-  if (fffNodeVersion === undefined) {
-    return yield* new CliArchiveInputMissingError({
-      inputPath: "apps/server/package.json#dependencies['@ff-labs/fff-node']",
-      hint: "The archive stages fff's platform binary from this version.",
-    });
-  }
-  const dependencies = {
-    ...selectCliRuntimeExternalDependencies(serverDependencies),
-    ...resolveFffNativeDependencies(input.platform, input.arch, fffNodeVersion),
-  };
+  const dependencies = selectCliRuntimeExternalDependencies(serverDependencies);
   const patchedDependencies = createStagePatchedDependencies(
     workspace.patchedDependencies ?? {},
     dependencies,

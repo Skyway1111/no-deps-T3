@@ -34,8 +34,6 @@ import {
   type SqliteOperation,
 } from "./sqlite/SqliteClient.ts";
 
-export { SqliteClient } from "./sqlite/SqliteClient.ts";
-
 const ATTR_DB_SYSTEM_NAME = "db.system.name";
 const READER_STARTUP_TIMEOUT = Duration.seconds(10);
 const READER_RETRY_DELAY = Duration.seconds(1);
