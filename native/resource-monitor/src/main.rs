@@ -229,7 +229,7 @@ struct HistoryChunkEvent<'a> {
     event_type: &'static str,
     request_id: &'a str,
     done: bool,
-    snapshots: &'a [SnapshotEvent],
+    snapshots: &'a [&'a SnapshotEvent],
 }
 
 #[derive(Debug, Serialize)]
@@ -258,7 +258,7 @@ struct HistoryRecorder {
 }
 
 impl HistoryRecorder {
-    fn record(&mut self, snapshot: &SnapshotEvent) {
+    fn record(&mut self, snapshot: SnapshotEvent) {
         self.record_with_limits(
             snapshot,
             MAX_HISTORY_SNAPSHOTS,
@@ -269,7 +269,7 @@ impl HistoryRecorder {
 
     fn record_with_limits(
         &mut self,
-        snapshot: &SnapshotEvent,
+        mut snapshot: SnapshotEvent,
         max_snapshots: usize,
         max_retained_entries: usize,
         max_retained_bytes: usize,
@@ -278,17 +278,17 @@ impl HistoryRecorder {
             .snapshots
             .back()
             .is_some_and(|previous| previous.sampled_at_unix_ms > snapshot.sampled_at_unix_ms);
-        let mut retained = snapshot.clone();
-        retained.request_id = None;
+        snapshot.request_id = None;
+        let now_ms = snapshot.sampled_at_unix_ms;
         self.retained_entry_count = self
             .retained_entry_count
-            .saturating_add(retained.retained_entry_count());
+            .saturating_add(snapshot.retained_entry_count());
         self.retained_bytes = self
             .retained_bytes
-            .saturating_add(retained.estimated_history_bytes());
-        self.snapshots.push_back(retained);
+            .saturating_add(snapshot.estimated_history_bytes());
+        self.snapshots.push_back(snapshot);
         self.trim_to_limits(
-            snapshot.sampled_at_unix_ms,
+            now_ms,
             max_snapshots,
             max_retained_entries,
             max_retained_bytes,
@@ -338,7 +338,7 @@ impl HistoryRecorder {
         }
     }
 
-    fn read(&self, window_ms: u64, now_ms: u64) -> Vec<SnapshotEvent> {
+    fn read(&self, window_ms: u64, now_ms: u64) -> Vec<&SnapshotEvent> {
         let started_at_ms = now_ms.saturating_sub(window_ms.min(HISTORY_RETENTION_MS));
         self.snapshots
             .iter()
@@ -346,7 +346,6 @@ impl HistoryRecorder {
                 snapshot.sampled_at_unix_ms >= started_at_ms
                     && snapshot.sampled_at_unix_ms <= now_ms
             })
-            .cloned()
             .collect()
     }
 }
@@ -386,12 +385,16 @@ impl Collector {
             return Vec::new();
         };
         let mut buffer = Vec::with_capacity(512);
+        let mut path = String::with_capacity(32);
         let mut processes = entries
             .filter_map(|entry| {
+                use std::fmt::Write;
                 let entry = entry.ok()?;
                 let pid = entry.file_name().to_str()?.parse::<u32>().ok()?;
                 buffer.clear();
-                std::fs::File::open(entry.path().join("stat"))
+                path.clear();
+                let _ = write!(path, "/proc/{pid}/stat");
+                std::fs::File::open(&path)
                     .ok()?
                     .read_to_end(&mut buffer)
                     .ok()?;
@@ -649,8 +652,8 @@ fn matches_external_identity(
 }
 
 fn select_tracked_pids(rows: &[(u32, u32, u64)], roots: &HashSet<u32>) -> HashSet<u32> {
-    let mut children_by_parent = HashMap::<u32, Vec<(u32, u64)>>::new();
-    let mut start_time_by_pid = HashMap::<u32, u64>::new();
+    let mut children_by_parent = HashMap::<u32, Vec<(u32, u64)>>::with_capacity(rows.len());
+    let mut start_time_by_pid = HashMap::<u32, u64>::with_capacity(rows.len());
     for (pid, ppid, start_time_ms) in rows {
         children_by_parent
             .entry(*ppid)
@@ -795,7 +798,7 @@ fn write_error(
 fn write_history(
     writer: &mut impl Write,
     request_id: &str,
-    snapshots: &[SnapshotEvent],
+    snapshots: &[&SnapshotEvent],
 ) -> io::Result<()> {
     if snapshots.is_empty() {
         return write_event(
@@ -861,10 +864,10 @@ fn main() -> io::Result<()> {
             if let Some(current) = config.as_ref() {
                 if let Some(interval) = current.sample_interval {
                     let event = collector.sample(current, None);
-                    history.record(&event);
                     if streaming_enabled {
                         write_event(&mut writer, &event)?;
                     }
+                    history.record(event);
                     next_sample_at = Some(Instant::now() + interval);
                 } else {
                     next_sample_at = None;
@@ -954,8 +957,8 @@ fn main() -> io::Result<()> {
                     Command::SampleNow { request_id, .. } => {
                         if let Some(current) = config.as_ref() {
                             let event = collector.sample(current, Some(request_id));
-                            history.record(&event);
                             write_event(&mut writer, &event)?;
+                            history.record(event);
                             next_sample_at = sample_now_deadline(
                                 next_sample_at,
                                 current.sample_interval,
@@ -1239,7 +1242,7 @@ mod tests {
     fn retains_bounded_history_without_request_ids() {
         let mut history = HistoryRecorder::default();
         for sequence in 0..=MAX_HISTORY_SNAPSHOTS {
-            history.record(&SnapshotEvent {
+            history.record(SnapshotEvent {
                 version: PROTOCOL_VERSION,
                 event_type: "snapshot",
                 sequence: sequence as u64,
@@ -1293,11 +1296,11 @@ mod tests {
             external_processes: Vec::new(),
             processes: Vec::new(),
         };
-        history.record(&snapshot);
+        history.record(snapshot.clone());
 
         assert!(history.read(0, 1_000).is_empty());
 
-        history.record(&SnapshotEvent {
+        history.record(SnapshotEvent {
             sequence: 2,
             sampled_at_unix_ms: 1_000,
             ..snapshot
@@ -1333,7 +1336,7 @@ mod tests {
             std::mem::size_of::<SnapshotEvent>() + process.estimated_history_bytes();
         for sequence in 0..3 {
             history.record_with_limits(
-                &SnapshotEvent {
+                SnapshotEvent {
                     version: PROTOCOL_VERSION,
                     event_type: "snapshot",
                     sequence,
@@ -1391,7 +1394,7 @@ mod tests {
 
         for sequence in 0..3 {
             history.record_with_limits(
-                &SnapshotEvent {
+                SnapshotEvent {
                     sequence,
                     sampled_at_unix_ms: sequence * 1_000,
                     ..snapshot.clone()

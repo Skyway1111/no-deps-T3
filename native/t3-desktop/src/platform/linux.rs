@@ -192,7 +192,6 @@ extern "C" {
     fn gtk_widget_hide(widget: *mut GtkWidget);
     fn gtk_widget_destroy(widget: *mut GtkWidget);
     fn gtk_container_add(container: *mut GtkContainer, widget: *mut GtkWidget);
-    fn gtk_container_remove(container: *mut GtkContainer, widget: *mut GtkWidget);
     fn gtk_paned_new(orientation: c_int) -> *mut GtkWidget;
     fn gtk_paned_pack1(paned: *mut GtkPaned, child: *mut GtkWidget, resize: c_int, shrink: c_int);
     fn gtk_paned_pack2(paned: *mut GtkPaned, child: *mut GtkWidget, resize: c_int, shrink: c_int);
@@ -746,10 +745,8 @@ impl HostActions for LinuxHost {
             let mut borrow = cell.borrow_mut();
             let Some(ui) = borrow.as_mut() else { return };
             if let Some(entry) = ui.preview_tabs.remove(tab_id) {
-                unsafe {
-                    gtk_container_remove(ui.preview_stack as *mut GtkContainer, entry.widget);
-                    gtk_widget_destroy(entry.widget);
-                }
+                // Destroying removes it from the stack; removing first could drop the last reference.
+                unsafe { gtk_widget_destroy(entry.widget) };
             }
             if ui.active_preview_tab.as_deref() == Some(tab_id) {
                 ui.active_preview_tab = None;
@@ -990,7 +987,22 @@ fn run_file_chooser(action: c_int, options: FileDialogOptions) -> Vec<String> {
 /// Detects the Linux desktop color scheme directly via GIO D-Bus XDG Settings
 /// Portal (`org.freedesktop.appearance.color-scheme`), falling back to
 /// `GtkSettings` and `GTK_THEME`. No `dbus-next` or subprocesses required.
+/// Cached briefly: each lookup is a blocking D-Bus round trip on the GTK thread, and a window
+/// asks several times while it starts and opens previews.
 pub fn detect_linux_color_scheme() -> ColorScheme {
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, ColorScheme)>> = std::sync::Mutex::new(None);
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, scheme)) = *cache {
+        if at.elapsed() < std::time::Duration::from_secs(2) {
+            return scheme;
+        }
+    }
+    let scheme = query_linux_color_scheme();
+    *cache = Some((std::time::Instant::now(), scheme));
+    scheme
+}
+
+fn query_linux_color_scheme() -> ColorScheme {
     if let Some(scheme) = query_xdg_portal_color_scheme() {
         return scheme;
     }

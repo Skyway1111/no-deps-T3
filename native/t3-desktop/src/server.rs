@@ -115,8 +115,12 @@ impl ServerSupervisor {
                 .unwrap_or_else(|e| e.into_inner());
             guard = next_guard;
 
-            if guard.endpoint.is_none() && !self.is_running() {
-                guard.exited = true;
+            if guard.endpoint.is_none() {
+                // `is_running` takes this lock itself when it records an exit.
+                drop(guard);
+                let running = self.is_running();
+                guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+                guard.exited |= !running;
             }
         }
     }
@@ -327,5 +331,18 @@ mod tests {
 
         sup.shutdown(Duration::from_secs(2));
         assert!(!sup.is_running());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wait_ready_returns_when_the_backend_exits_early() {
+        let sup = Arc::new(ServerSupervisor::spawn(&ServerConfig::new("/bin/sh", vec!["-c".into(), "exit 3".into()])).expect("spawn"));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let waiter = Arc::clone(&sup);
+        thread::spawn(move || {
+            let _ = tx.send(waiter.wait_ready(Duration::from_secs(10)).map_err(|e| e.kind()));
+        });
+        let result = rx.recv_timeout(Duration::from_secs(3)).expect("wait_ready deadlocked");
+        assert_eq!(result, Err(io::ErrorKind::BrokenPipe));
     }
 }

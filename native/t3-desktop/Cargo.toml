@@ -5,3 +5,9 @@ edition = "2021"
 description = "Zero-dependency native OS WebView desktop shell for T3 Code"
 
 [dependencies]
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = true
