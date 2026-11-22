@@ -86,30 +86,20 @@ export class CommandReceiptStoreV2 extends Context.Service<
   CommandReceiptStoreV2Shape
 >()("t3/orchestration-v2/CommandReceiptStore/CommandReceiptStoreV2") {}
 
-const decodeReceipt = Schema.decodeUnknownEffect(
-  CommandReceiptV2.mapFields((fields) => ({
-    ...fields,
-    acceptedAt: Schema.DateTimeUtcFromString,
-  })),
-);
-const decodeProjectReceipt = Schema.decodeUnknownEffect(
-  ProjectCommandReceiptV2.mapFields((fields) => ({
-    ...fields,
-    acceptedAt: Schema.DateTimeUtcFromString,
-  })),
-);
-
-function fromApplicationReceipt(receipt: OrchestrationCommandReceipts.OrchestrationCommandReceipt) {
-  return decodeReceipt({
-    commandId: receipt.commandId,
-    threadId: receipt.aggregateId,
-    commandType: receipt.commandType,
-    acceptedAt: receipt.acceptedAt,
-    resultSequence: receipt.resultSequence,
-    status: receipt.status,
-    error: receipt.error,
-  });
-}
+// The repository already decoded every column; only the ISO timestamp still needs parsing.
+const fromApplicationReceipt = (
+  receipt: OrchestrationCommandReceipts.OrchestrationCommandReceipt,
+) =>
+  Effect.fromOption(DateTime.make(receipt.acceptedAt)).pipe(
+    Effect.map((acceptedAt) => ({
+      commandId: receipt.commandId,
+      commandType: receipt.commandType,
+      acceptedAt: DateTime.toUtc(acceptedAt),
+      resultSequence: receipt.resultSequence,
+      status: receipt.status,
+      error: receipt.error,
+    })),
+  );
 
 function toApplicationReceipt(
   receipt: AnyCommandReceiptV2,
@@ -165,7 +155,13 @@ const layerBase: Layer.Layer<
               onSome: (receipt) =>
                 receipt.aggregateKind !== "thread"
                   ? Effect.succeedNone
-                  : fromApplicationReceipt(receipt).pipe(Effect.asSome),
+                  : fromApplicationReceipt(receipt).pipe(
+                      Effect.map((fields): CommandReceiptV2 => ({
+                        ...fields,
+                        threadId: receipt.aggregateId as ThreadId,
+                      })),
+                      Effect.asSome,
+                    ),
             }),
           ),
           Effect.mapError(
@@ -181,15 +177,13 @@ const layerBase: Layer.Layer<
           Effect.flatMap((receipt) =>
             Option.isNone(receipt) || receipt.value.aggregateKind !== "project"
               ? Effect.succeedNone
-              : decodeProjectReceipt({
-                  commandId: receipt.value.commandId,
-                  projectId: receipt.value.aggregateId,
-                  commandType: receipt.value.commandType,
-                  acceptedAt: receipt.value.acceptedAt,
-                  resultSequence: receipt.value.resultSequence,
-                  status: receipt.value.status,
-                  error: receipt.value.error,
-                }).pipe(Effect.asSome),
+              : fromApplicationReceipt(receipt.value).pipe(
+                  Effect.map((fields): ProjectCommandReceiptV2 => ({
+                    ...fields,
+                    projectId: receipt.value.aggregateId as ProjectId,
+                  })),
+                  Effect.asSome,
+                ),
           ),
           Effect.mapError((cause) => new CommandReceiptStoreReadError({ commandId, cause })),
         ),

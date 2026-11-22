@@ -299,12 +299,11 @@ const layerBase: Layer.Layer<
     const publishLiveEvents =
       /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
       Effect.fnUntraced(function* (events: ReadonlyArray<OrchestrationV2StoredEvent>) {
+        if (events.length === 0) return;
         yield* PubSub.publishAll(liveEvents, events);
         for (const [type, pubsub] of liveEventsByType) {
-          yield* PubSub.publishAll(
-            pubsub,
-            events.filter((stored) => stored.event.type === type),
-          );
+          const matching = events.filter((stored) => stored.event.type === type);
+          if (matching.length > 0) yield* PubSub.publishAll(pubsub, matching);
         }
       });
     const runOutcomes = makeRunOutcomeRecorder((threadId) =>
@@ -983,40 +982,19 @@ const layerBase: Layer.Layer<
       );
     });
 
+    // The store pages its own reads, so replay streams without collecting pages here.
     const catchUp = (input: {
       readonly afterSequence: number;
       readonly throughSequence: number;
       readonly threadId?: ThreadId;
       readonly eventType?: OrchestrationV2DomainEvent["type"];
-    }): Stream.Stream<OrchestrationV2StoredEvent, unknown> => {
-      const pageSize = 256;
-      const loop = (afterSequence: number): Stream.Stream<OrchestrationV2StoredEvent, unknown> =>
-        Stream.unwrap(
-          eventStore
-            .read({
-              afterSequence,
-              throughSequence: input.throughSequence,
-              ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
-              ...(input.eventType === undefined ? {} : { eventType: input.eventType }),
-              limit: pageSize,
-            })
-            .pipe(
-              Stream.runCollect,
-              Effect.map((chunk) => Array.from(chunk)),
-              Effect.map((events) => {
-                if (events.length === 0) {
-                  return Stream.empty;
-                }
-                const current = Stream.fromIterable(events);
-                const last = events.at(-1)?.sequence ?? input.throughSequence;
-                return events.length < pageSize || last >= input.throughSequence
-                  ? current
-                  : Stream.concat(current, loop(last));
-              }),
-            ),
-        );
-      return loop(input.afterSequence);
-    };
+    }): Stream.Stream<OrchestrationV2StoredEvent, unknown> =>
+      eventStore.read({
+        afterSequence: input.afterSequence,
+        throughSequence: input.throughSequence,
+        ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+        ...(input.eventType === undefined ? {} : { eventType: input.eventType }),
+      });
 
     const stream = (input?: Parameters<EventSinkV2Shape["stream"]>[0]) => {
       const afterSequence = input?.afterSequence ?? 0;

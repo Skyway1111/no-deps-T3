@@ -44,14 +44,22 @@ type ThreadSnapshotStreamItem = Extract<
   { readonly kind: "snapshot" }
 >;
 
-export function boundedSnapshotResponseFields(input: {
+type BoundedSnapshotResponseInput = {
   readonly bounded: BoundedProjectionResult;
   readonly compactTurnItems: boolean;
   readonly dedupeBodies: boolean;
   readonly compactIds: boolean;
-}) {
+};
+
+export function boundedSnapshotResponseFields(input: BoundedSnapshotResponseInput) {
+  return responseFields(input, capProjectionCheckpointFilesForWire(input.bounded.projection));
+}
+
+function responseFields(
+  input: BoundedSnapshotResponseInput,
+  capped: OrchestrationV2ThreadProjection,
+) {
   const { bounded } = input;
-  const capped = capProjectionCheckpointFilesForWire(bounded.projection);
   // Dedupe keeps shared items one object, which the compaction's identity check needs.
   const projection = input.dedupeBodies ? dedupeSnapshotBodies(capped) : capped;
   const compactProjection = input.compactTurnItems ? omitLocalVisibleTurnItems(projection) : null;
@@ -79,12 +87,16 @@ export function buildBoundedThreadStreamSnapshot(input: {
   return {
     kind: "snapshot",
     snapshotSequence: input.snapshotSequence,
-    ...boundedSnapshotResponseFields({
-      bounded,
-      compactTurnItems: input.compactTurnItems === true,
-      dedupeBodies: input.dedupeBodies === true,
-      compactIds: input.compactIds === true,
-    }),
+    // projectThreadProjectionForWire already capped checkpoint files.
+    ...responseFields(
+      {
+        bounded,
+        compactTurnItems: input.compactTurnItems === true,
+        dedupeBodies: input.dedupeBodies === true,
+        compactIds: input.compactIds === true,
+      },
+      bounded.projection,
+    ),
   };
 }
 

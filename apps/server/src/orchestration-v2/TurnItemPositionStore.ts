@@ -38,10 +38,47 @@ export class TurnItemPositionStoreV2 extends Context.Service<
   TurnItemPositionStoreV2Shape
 >()("t3/orchestration-v2/TurnItemPositionStore/TurnItemPositionStoreV2") {}
 
+const RUN_ORDINAL_CACHE_LIMIT = 2_048;
+const POSITION_CACHE_LIMIT = 8_192;
+
+/** Insertion-ordered Map as an LRU: a hit moves its key to the newest end. */
+const lruGet = <V>(map: Map<string, V>, key: string): V | undefined => {
+  const value = map.get(key);
+  if (value !== undefined) {
+    map.delete(key);
+    map.set(key, value);
+  }
+  return value;
+};
+const lruSet = <V>(map: Map<string, V>, key: string, value: V, limit: number) => {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > limit) map.delete(map.keys().next().value!);
+};
+
 export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlClient> = Layer.effect(
   TurnItemPositionStoreV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    // Streaming re-normalizes the same items on every delta. Rows never get deleted and run ordinals
+    // never change, so cached values stay true once committed. Fills wait for `afterCommit`, which
+    // drops a rolled-back transaction's or savepoint's callbacks; a move invalidates fills queued before it.
+    const runOrdinals = new Map<string, number>();
+    const positions = new Map<string, number>();
+    let moves = 0;
+    const rememberAfterCommit = (
+      cache: Map<string, number>,
+      limit: number,
+      key: string,
+      value: number,
+    ) => {
+      const movesAtFill = moves;
+      return sql.afterCommit(
+        Effect.sync(() => {
+          if (moves === movesAtFill) lruSet(cache, key, value, limit);
+        }),
+      );
+    };
 
     const allocate: TurnItemPositionStoreV2Shape["allocate"] =
       /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
@@ -54,25 +91,44 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
           placement = "append",
           keepExisting = false,
         }) {
-          const existing = yield* sql<{ readonly ordinal: number }>`
-          SELECT ordinal
-          FROM orchestration_v2_turn_item_positions
-          WHERE thread_id = ${threadId} AND turn_item_id = ${turnItemId}
-          LIMIT 1
-        `;
-          const runRows =
-            runId === null || suppliedRunOrdinal !== undefined
-              ? []
-              : yield* sql<{ readonly ordinal: number }>`
-                SELECT ordinal
-                FROM orchestration_v2_projection_runs
-                WHERE thread_id = ${threadId} AND run_id = ${runId}
-                LIMIT 1
-              `;
-          const runOrdinal = suppliedRunOrdinal ?? runRows[0]?.ordinal ?? null;
+          const positionKey = `${threadId}\u0000${turnItemId}`;
+          const runKey = runId === null ? undefined : `${threadId}\u0000${runId}`;
+          const cached = lruGet(positions, positionKey);
+          let current = cached;
+          let runOrdinal =
+            suppliedRunOrdinal ??
+            (runKey === undefined ? null : (lruGet(runOrdinals, runKey) ?? null));
+          const needsRun = runKey !== undefined && runOrdinal === null;
+          if (current === undefined || needsRun) {
+            const [row] = yield* sql<{
+              readonly existing: number | null;
+              readonly run_ordinal: number | null;
+            }>`
+              SELECT
+                (
+                  SELECT ordinal
+                  FROM orchestration_v2_turn_item_positions
+                  WHERE thread_id = ${threadId} AND turn_item_id = ${turnItemId}
+                ) AS existing,
+                ${
+                  needsRun
+                    ? sql`(
+                        SELECT ordinal
+                        FROM orchestration_v2_projection_runs
+                        WHERE thread_id = ${threadId} AND run_id = ${runId}
+                      )`
+                    : sql`NULL`
+                } AS run_ordinal
+            `;
+            if (needsRun && row?.run_ordinal != null) {
+              runOrdinal = row.run_ordinal;
+              yield* rememberAfterCommit(runOrdinals, RUN_ORDINAL_CACHE_LIMIT, runKey, runOrdinal);
+            }
+            current ??= row?.existing ?? undefined;
+          }
           const lowerBound = runOrdinal === null ? 0 : runOrdinal * 1_000_000;
           const upperBound = runOrdinal === null ? 999_999 : lowerBound + 999_999;
-          const current = existing[0]?.ordinal;
+          let allocated: ReadonlyArray<{ readonly ordinal: number }>;
           if (current !== undefined) {
             // A steer that missed its turn starts the next run; it moves into that run's range.
             if (
@@ -80,9 +136,14 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
               runOrdinal === null ||
               (current >= lowerBound && current <= upperBound)
             ) {
+              if (cached === undefined) {
+                yield* rememberAfterCommit(positions, POSITION_CACHE_LIMIT, positionKey, current);
+              }
               return current;
             }
-            yield* sql`
+            moves++;
+            positions.delete(positionKey);
+            allocated = yield* sql<{ readonly ordinal: number }>`
             UPDATE orchestration_v2_turn_item_positions
             SET ordinal = (
               SELECT COALESCE(MAX(ordinal), ${lowerBound}) + 1
@@ -92,9 +153,10 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
                 AND ordinal <= ${upperBound}
             )
             WHERE thread_id = ${threadId} AND turn_item_id = ${turnItemId}
+            RETURNING ordinal
           `;
           } else {
-            yield* sql`
+            allocated = yield* sql<{ readonly ordinal: number }>`
             INSERT INTO orchestration_v2_turn_item_positions (thread_id, turn_item_id, ordinal)
             SELECT
               ${threadId},
@@ -109,15 +171,18 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
               AND ordinal >= ${lowerBound}
               AND ordinal <= ${upperBound}
             ON CONFLICT(thread_id, turn_item_id) DO NOTHING
+            RETURNING ordinal
           `;
           }
-          const rows = yield* sql<{ readonly ordinal: number }>`
-          SELECT ordinal
-          FROM orchestration_v2_turn_item_positions
-          WHERE thread_id = ${threadId} AND turn_item_id = ${turnItemId}
-          LIMIT 1
-        `;
-          const ordinal = rows[0]?.ordinal;
+          // A conflicting insert returns nothing; read the row that won.
+          const ordinal =
+            allocated[0]?.ordinal ??
+            (yield* sql<{ readonly ordinal: number }>`
+              SELECT ordinal
+              FROM orchestration_v2_turn_item_positions
+              WHERE thread_id = ${threadId} AND turn_item_id = ${turnItemId}
+              LIMIT 1
+            `)[0]?.ordinal;
           if (ordinal === undefined) {
             return yield* new TurnItemPositionStoreError({
               threadId,
@@ -125,6 +190,7 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
               cause: "Position allocation returned no row.",
             });
           }
+          yield* rememberAfterCommit(positions, POSITION_CACHE_LIMIT, positionKey, ordinal);
           return ordinal;
         },
         (effect, { threadId, turnItemId }) =>

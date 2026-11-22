@@ -38,6 +38,8 @@ export interface SqliteClientOptions {
   readonly readerWorker?: boolean | undefined;
   readonly writerWorker?: boolean | undefined;
   readonly readerPoolSize?: number | undefined;
+  /** Connection-local PRAGMAs every connection runs when it opens, including respawned workers. */
+  readonly initPragmas?: string | undefined;
   readonly onCheckpointUnavailable?: ((reason: string) => void) | undefined;
 }
 
@@ -54,9 +56,21 @@ export interface SqliteRunResult {
 }
 
 export interface SqliteTransactionHandle {
-  query<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>, options?: SqliteQueryOptions): Promise<ReadonlyArray<T>>;
-  get<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>, options?: SqliteQueryOptions): Promise<T | undefined>;
-  run(sql: string, params?: ReadonlyArray<unknown>, options?: SqliteQueryOptions): Promise<SqliteRunResult>;
+  query<T = Record<string, unknown>>(
+    sql: string,
+    params?: ReadonlyArray<unknown>,
+    options?: SqliteQueryOptions,
+  ): Promise<ReadonlyArray<T>>;
+  get<T = Record<string, unknown>>(
+    sql: string,
+    params?: ReadonlyArray<unknown>,
+    options?: SqliteQueryOptions,
+  ): Promise<T | undefined>;
+  run(
+    sql: string,
+    params?: ReadonlyArray<unknown>,
+    options?: SqliteQueryOptions,
+  ): Promise<SqliteRunResult>;
   exec(sql: string): Promise<void>;
 }
 
@@ -83,17 +97,19 @@ export const isFileDatabasePath = (filename: string) => filename !== ":memory:" 
 const LARGE_BINDING_SIZE = 64 * 1024;
 const isBlob = (v: unknown): v is ArrayBufferView | ArrayBufferLike =>
   ArrayBuffer.isView(v) || NodeUtil.types.isAnyArrayBuffer(v);
-const bindingSize = (v: unknown) => (typeof v === "string" ? v.length : isBlob(v) ? v.byteLength : 0);
+const bindingSize = (v: unknown) =>
+  typeof v === "string" ? v.length : isBlob(v) ? v.byteLength : 0;
 
 export function hasLargeBinding(params: ReadonlyArray<unknown>): boolean {
   try {
     let size = 0;
     for (const p of params) {
       if ((typeof p === "object" || typeof p === "function") && p !== null && !isBlob(p)) {
-        for (const d of Object.values(Object.getOwnPropertyDescriptors(p))) {
-          if (!d.enumerable) continue;
-          if (!("value" in d)) return true;
-          size += bindingSize(d.value);
+        for (const key in p) {
+          if (!Object.hasOwn(p, key)) continue;
+          // Accessors could run arbitrary code; treat them as large rather than invoking them.
+          if (!("value" in Object.getOwnPropertyDescriptor(p, key)!)) return true;
+          size += bindingSize((p as Record<string, unknown>)[key]);
         }
       } else size += bindingSize(p);
     }
@@ -105,7 +121,8 @@ export function hasLargeBinding(params: ReadonlyArray<unknown>): boolean {
 
 export function toSqliteError(operation: SqliteOperation, cause: unknown): SqliteClientError {
   if (cause instanceof SqliteClientError) return cause;
-  const r = typeof cause === "object" && cause !== null ? (cause as Record<string, unknown>) : undefined;
+  const r =
+    typeof cause === "object" && cause !== null ? (cause as Record<string, unknown>) : undefined;
   return new SqliteClientError(
     operation,
     {
@@ -191,6 +208,7 @@ export class DirectSqliteConnection {
     readonly wal?: boolean | undefined;
     readonly busyTimeoutMs?: number | undefined;
     readonly prepareCacheSize?: number | undefined;
+    readonly initPragmas?: string | undefined;
   }) {
     try {
       this.db = new NodeSqlite.DatabaseSync(options.filename, {
@@ -200,16 +218,25 @@ export class DirectSqliteConnection {
       if (options.busyTimeoutMs && options.busyTimeoutMs > 0) {
         this.db.exec(`PRAGMA busy_timeout = ${Math.trunc(options.busyTimeoutMs)};`);
       }
-      if (options.wal === true && options.readonly !== true && isFileDatabasePath(options.filename)) {
+      if (
+        options.wal === true &&
+        options.readonly !== true &&
+        isFileDatabasePath(options.filename)
+      ) {
         this.db.exec("PRAGMA journal_mode = WAL;");
       }
+      if (options.initPragmas) this.db.exec(options.initPragmas);
     } catch (cause) {
       throw toSqliteError("open", cause);
     }
     this.cache = new StatementLruCache(this.db, options.prepareCacheSize);
   }
 
-  execute(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}): unknown {
+  execute(
+    sql: string,
+    params: ReadonlyArray<unknown> = [],
+    opts: SqliteQueryOptions = {},
+  ): unknown {
     const cached = opts.cached !== false && !hasLargeBinding(params);
     const stmt = this.cache.prepare(sql, cached);
     let arrays = false;
@@ -259,10 +286,15 @@ export interface WorkerRequestPayload {
   readonly safeIntegers: boolean;
 }
 
-type WorkerStartup = { readonly type: "ready" } | ({ readonly type: "unavailable" } & SqliteErrorInfo);
+type WorkerStartup =
+  | { readonly type: "ready" }
+  | ({ readonly type: "unavailable" } & SqliteErrorInfo);
 type WorkerReply =
   | { readonly id: number; readonly rows: unknown; readonly more?: boolean }
-  | { readonly id: number; readonly error: SqliteErrorInfo & { readonly operation: SqliteOperation } };
+  | {
+      readonly id: number;
+      readonly error: SqliteErrorInfo & { readonly operation: SqliteOperation };
+    };
 
 // Inline worker sources run in bundles and single-executable builds without sidecar files.
 const WORKER_SOURCE = `
@@ -274,17 +306,21 @@ try {
   const next = new DatabaseSync(workerData.filename, { readOnly: workerData.readOnly, allowExtension: workerData.allowExtension });
   next.exec("PRAGMA busy_timeout = " + workerData.busyTimeoutMs + ";");
   if (workerData.enableWal && !workerData.readOnly) next.exec("PRAGMA journal_mode = WAL;");
+  if (workerData.initPragmas) next.exec(workerData.initPragmas);
   const mode = String(next.prepare("PRAGMA journal_mode").get().journal_mode).toLowerCase();
   if (workerData.requireWal && mode !== "wal") throw Object.assign(new Error("database uses journal_mode " + mode + ", not wal"), { code: ${JSON.stringify(NOT_WAL_ERROR_CODE)} });
   db = next;
   parentPort.postMessage({ type: "ready" });
 } catch (e) { parentPort.postMessage({ type: "unavailable", ...describe(e) }); }
+// Each slot is single-flight, so one flag per worker paces every batched reply.
+const received = workerData.received;
 const statements = new Map();
 const prepare = (sql, cached) => {
-  if (!cached) return db.prepare(sql);
+  if (!cached) { const statement = db.prepare(sql); return { statement, hasRows: statement.columns().length > 0 }; }
   let s = statements.get(sql);
   if (s === undefined) {
-    s = db.prepare(sql);
+    const statement = db.prepare(sql);
+    s = { statement, hasRows: statement.columns().length > 0 };
     if (statements.size >= workerData.prepareCacheSize) statements.delete(statements.keys().next().value);
   } else statements.delete(sql);
   statements.set(sql, s);
@@ -292,17 +328,17 @@ const prepare = (sql, cached) => {
 };
 parentPort.on("message", (req) => {
   if (req.type === "close") { try { if (db) db.close(); } catch {} parentPort.close(); return; }
-  const { id, sql, params, cached, values, raw, safeIntegers, received, savepoints } = req;
+  const { id, sql, params, cached, values, raw, safeIntegers, savepoints } = req;
   let operation = "open", iterator;
   try {
     if (!db) throw new Error("database connection is unavailable");
     operation = "execute";
-    for (const sp of savepoints) db.exec(sp);
+    if (savepoints !== undefined) for (const sp of savepoints) db.exec(sp);
     operation = "prepare";
-    const s = prepare(sql, cached);
+    const { statement: s, hasRows } = prepare(sql, cached);
     operation = "execute";
     s.setReadBigInts(safeIntegers);
-    if (s.columns().length > 0) {
+    if (hasRows) {
       s.setReturnArrays(values);
       let rows = [], bytes = 0, pendingBatch = false;
       iterator = s.iterate(...params);
@@ -423,7 +459,11 @@ export interface WorkerInstance {
   readonly worker: NodeWorkerThreads.Worker;
   readonly started: Promise<WorkerStartup>;
   readonly send: (input: WorkerRequestPayload) => Promise<unknown>;
-  readonly sendUnprepared: (sql: string, params: ReadonlyArray<unknown>, safeIntegers: boolean) => Promise<unknown>;
+  readonly sendUnprepared: (
+    sql: string,
+    params: ReadonlyArray<unknown>,
+    safeIntegers: boolean,
+  ) => Promise<unknown>;
 }
 
 /** Manages one reader or writer worker_thread with batched row streaming and savepoint coalescing. */
@@ -434,6 +474,7 @@ export class SqliteWorkerSlot {
   private readonly enableWal: boolean;
   private readonly busyTimeoutMs: number;
   private readonly prepareCacheSize: number;
+  private readonly initPragmas: string | undefined;
   private readonly onReply: (() => void) | undefined;
   private current: WorkerInstance | undefined;
   private nextRequestId = 0;
@@ -447,6 +488,7 @@ export class SqliteWorkerSlot {
     readonly enableWal?: boolean | undefined;
     readonly busyTimeoutMs?: number | undefined;
     readonly prepareCacheSize?: number | undefined;
+    readonly initPragmas?: string | undefined;
     readonly onReply?: (() => void) | undefined;
   }) {
     this.filename = options.filename;
@@ -455,6 +497,7 @@ export class SqliteWorkerSlot {
     this.enableWal = options.enableWal ?? false;
     this.busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
     this.prepareCacheSize = options.prepareCacheSize ?? DEFAULT_PREPARE_CACHE_SIZE;
+    this.initPragmas = options.initPragmas;
     this.onReply = options.onReply;
   }
 
@@ -463,6 +506,7 @@ export class SqliteWorkerSlot {
   }
 
   private spawn(): WorkerInstance {
+    const received = new Int32Array(new SharedArrayBuffer(4));
     const worker = new NodeWorkerThreads.Worker(WORKER_SOURCE, {
       eval: true,
       workerData: {
@@ -473,6 +517,8 @@ export class SqliteWorkerSlot {
         busyTimeoutMs: this.busyTimeoutMs,
         allowExtension: false,
         prepareCacheSize: this.prepareCacheSize,
+        initPragmas: this.initPragmas,
+        received,
       },
     });
     let announce: (s: WorkerStartup) => void = () => {};
@@ -482,7 +528,6 @@ export class SqliteWorkerSlot {
       number,
       {
         readonly endsTx: boolean;
-        readonly received: Int32Array;
         readonly rows: unknown[];
         readonly resolve: (v: unknown) => void;
         readonly reject: (e: SqliteClientError) => void;
@@ -511,8 +556,8 @@ export class SqliteWorkerSlot {
       if (!req) return;
       if ("rows" in reply && reply.more) {
         for (const row of reply.rows as ReadonlyArray<unknown>) req.rows.push(row);
-        Atomics.store(req.received, 0, 1);
-        Atomics.notify(req.received, 0);
+        Atomics.store(received, 0, 1);
+        Atomics.notify(received, 0);
         return;
       }
       pending.delete(reply.id);
@@ -533,22 +578,24 @@ export class SqliteWorkerSlot {
         ? /^\s*(?:ROLLBACK|COMMIT)\b/i.test(input.sql)
         : /^\s*ROLLBACK\b/i.test(input.sql);
       if (stoppedMessage !== undefined) {
-        return endsTx ? Promise.resolve([]) : Promise.reject(new SqliteClientError("execute", { message: stoppedMessage }));
+        return endsTx
+          ? Promise.resolve([])
+          : Promise.reject(new SqliteClientError("execute", { message: stoppedMessage }));
       }
       return new Promise((resolve, reject) => {
         const id = this.nextRequestId++;
-        const received = new Int32Array(new SharedArrayBuffer(4));
-        pending.set(id, { endsTx, received, rows: [], resolve, reject });
+        pending.set(id, { endsTx, rows: [], resolve, reject });
         if (pending.size === 1) worker.ref();
         try {
-          // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Node workers do not accept a target origin.
-          worker.postMessage({
+          const request = {
             id,
             ...input,
             cached: input.cached && !hasLargeBinding(input.params),
-            received,
-            savepoints: [...this.pendingSavepoints],
-          });
+            savepoints:
+              this.pendingSavepoints.length === 0 ? undefined : this.pendingSavepoints.slice(),
+          };
+          // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Node workers do not accept a target origin.
+          worker.postMessage(request);
           this.pendingSavepoints.length = 0;
         } catch (cause) {
           pending.delete(id);
@@ -558,7 +605,11 @@ export class SqliteWorkerSlot {
       });
     };
 
-    const sendUnprepared = (sql: string, params: ReadonlyArray<unknown>, safeIntegers: boolean): Promise<unknown> => {
+    const sendUnprepared = (
+      sql: string,
+      params: ReadonlyArray<unknown>,
+      safeIntegers: boolean,
+    ): Promise<unknown> => {
       const stmt = this.readOnly && /^\s*BEGIN\b/i.test(sql) ? "BEGIN" : sql;
       if (!this.readOnly && /^SAVEPOINT effect_sql_\d+$/.test(stmt)) {
         this.pendingSavepoints.push(stmt);
@@ -619,7 +670,10 @@ export class SqliteWorkerSlot {
       throw new SqliteClientError("open", { message: `${this.label} stopped while starting` });
     }
     this.retire(instance.worker);
-    throw new SqliteClientError("open", outcome ?? { message: `${this.label} did not open the database within ${timeoutMs ?? 0} ms` });
+    throw new SqliteClientError(
+      "open",
+      outcome ?? { message: `${this.label} did not open the database within ${timeoutMs ?? 0} ms` },
+    );
   }
 
   async close(): Promise<void> {
@@ -683,6 +737,7 @@ export class SqliteClient {
     const wal = options.wal ?? true;
     const busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
     const prepareCacheSize = options.prepareCacheSize ?? DEFAULT_PREPARE_CACHE_SIZE;
+    const initPragmas = options.initPragmas;
 
     if (options.writerWorker === true && isFile) {
       this.writerSlot = new SqliteWorkerSlot({
@@ -692,18 +747,34 @@ export class SqliteClient {
         enableWal: wal,
         busyTimeoutMs,
         prepareCacheSize,
+        initPragmas,
         onReply: () => this.checkpoint?.notify(),
       });
-      if (!this.readonly) this.checkpoint = startCheckpointWorker(options.filename, options.onCheckpointUnavailable);
+      if (!this.readonly)
+        this.checkpoint = startCheckpointWorker(options.filename, options.onCheckpointUnavailable);
     } else {
-      this.direct = new DirectSqliteConnection({ filename: options.filename, readonly: this.readonly, wal, busyTimeoutMs, prepareCacheSize });
+      this.direct = new DirectSqliteConnection({
+        filename: options.filename,
+        readonly: this.readonly,
+        wal,
+        busyTimeoutMs,
+        prepareCacheSize,
+        initPragmas,
+      });
     }
 
     if (options.readerWorker === true && isFile) {
       const poolSize = Math.max(1, options.readerPoolSize ?? DEFAULT_READER_POOL_SIZE);
       for (let i = 0; i < poolSize; i++) {
         this.readerSlots.push({
-          slot: new SqliteWorkerSlot({ filename: options.filename, role: "reader", readOnly: true, busyTimeoutMs, prepareCacheSize }),
+          slot: new SqliteWorkerSlot({
+            filename: options.filename,
+            role: "reader",
+            readOnly: true,
+            busyTimeoutMs,
+            prepareCacheSize,
+            initPragmas,
+          }),
           claimed: false,
         });
       }
@@ -714,25 +785,47 @@ export class SqliteClient {
   async ready(): Promise<void> {
     if (!this.writerSlot) return;
     const instance = await this.writerSlot.acquire();
-    if (this.checkpoint) await instance.sendUnprepared(`PRAGMA wal_autocheckpoint = ${WRITER_BACKSTOP_FRAMES}`, [], false);
+    if (this.checkpoint)
+      await instance.sendUnprepared(
+        `PRAGMA wal_autocheckpoint = ${WRITER_BACKSTOP_FRAMES}`,
+        [],
+        false,
+      );
   }
 
   private assertDirect(method: string): DirectSqliteConnection {
-    if (!this.direct) throw new SqliteClientError("execute", { message: `${method}() requires writerWorker: false` });
+    if (!this.direct)
+      throw new SqliteClientError("execute", {
+        message: `${method}() requires writerWorker: false`,
+      });
     return this.direct;
   }
 
-  querySync<T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts?: SqliteQueryOptions) {
+  querySync<T = Record<string, unknown>>(
+    sql: string,
+    params: ReadonlyArray<unknown> = [],
+    opts?: SqliteQueryOptions,
+  ) {
     return this.assertDirect("querySync").execute(sql, params, opts) as ReadonlyArray<T>;
   }
-  getSync<T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts?: SqliteQueryOptions) {
+  getSync<T = Record<string, unknown>>(
+    sql: string,
+    params: ReadonlyArray<unknown> = [],
+    opts?: SqliteQueryOptions,
+  ) {
     return this.querySync<T>(sql, params, opts)[0];
   }
   valuesSync(sql: string, params: ReadonlyArray<unknown> = [], opts?: SqliteQueryOptions) {
-    return this.assertDirect("valuesSync").execute(sql, params, { ...opts, values: true }) as ReadonlyArray<ReadonlyArray<unknown>>;
+    return this.assertDirect("valuesSync").execute(sql, params, {
+      ...opts,
+      values: true,
+    }) as ReadonlyArray<ReadonlyArray<unknown>>;
   }
   runSync(sql: string, params: ReadonlyArray<unknown> = [], opts?: SqliteQueryOptions) {
-    return this.assertDirect("runSync").execute(sql, params, { ...opts, raw: true }) as SqliteRunResult;
+    return this.assertDirect("runSync").execute(sql, params, {
+      ...opts,
+      raw: true,
+    }) as SqliteRunResult;
   }
   execSync(sql: string) {
     this.assertDirect("execSync").exec(sql);
@@ -745,18 +838,40 @@ export class SqliteClient {
       conn.exec("COMMIT");
       return value;
     } catch (cause) {
-      try { conn.exec("ROLLBACK"); } catch {}
+      try {
+        conn.exec("ROLLBACK");
+      } catch {}
       throw cause;
     }
   }
 
-  private async execOnWriter(sql: string, params: ReadonlyArray<unknown>, opts: SqliteQueryOptions) {
+  private async execOnWriter(
+    sql: string,
+    params: ReadonlyArray<unknown>,
+    opts: SqliteQueryOptions,
+  ) {
     if (!this.writerSlot) return this.direct!.execute(sql, params, opts);
     const instance = await this.writerSlot.acquire();
-    return instance.send({ sql, params, cached: opts.cached !== false, values: opts.values === true, raw: opts.raw === true, safeIntegers: opts.safeIntegers === true });
+    return instance.send({
+      sql,
+      params,
+      cached: opts.cached !== false,
+      values: opts.values === true,
+      raw: opts.raw === true,
+      safeIntegers: opts.safeIntegers === true,
+    });
   }
 
-  private async withReader<T>(use: (exec: (sql: string, params: ReadonlyArray<unknown>, opts: SqliteQueryOptions) => Promise<unknown>) => Promise<T>, fallback: () => Promise<T>): Promise<T> {
+  private async withReader<T>(
+    use: (
+      exec: (
+        sql: string,
+        params: ReadonlyArray<unknown>,
+        opts: SqliteQueryOptions,
+      ) => Promise<unknown>,
+    ) => Promise<T>,
+    fallback: () => Promise<T>,
+  ): Promise<T> {
     if (!this.readerAdmission || this.readersDisabled) return fallback();
     return this.readerAdmission.run(async () => {
       const entry = this.readerSlots.find((s) => !s.claimed);
@@ -767,11 +882,19 @@ export class SqliteClient {
         try {
           instance = await entry.slot.acquire(10_000);
         } catch (cause) {
-          if (cause instanceof SqliteClientError && cause.code === NOT_WAL_ERROR_CODE) this.readersDisabled = true;
+          if (cause instanceof SqliteClientError && cause.code === NOT_WAL_ERROR_CODE)
+            this.readersDisabled = true;
           return await fallback();
         }
         return await use((sql, params, opts) =>
-          instance.send({ sql, params, cached: opts.cached !== false, values: opts.values === true, raw: opts.raw === true, safeIntegers: opts.safeIntegers === true }),
+          instance.send({
+            sql,
+            params,
+            cached: opts.cached !== false,
+            values: opts.values === true,
+            raw: opts.raw === true,
+            safeIntegers: opts.safeIntegers === true,
+          }),
         );
       } finally {
         entry.claimed = false;
@@ -779,34 +902,69 @@ export class SqliteClient {
     });
   }
 
-  private makeTxHandle(execFn: (sql: string, params: ReadonlyArray<unknown>, opts: SqliteQueryOptions) => Promise<unknown>): SqliteTransactionHandle {
+  private makeTxHandle(
+    execFn: (
+      sql: string,
+      params: ReadonlyArray<unknown>,
+      opts: SqliteQueryOptions,
+    ) => Promise<unknown>,
+  ): SqliteTransactionHandle {
     return {
-      query: <T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) =>
-        execFn(sql, params, opts) as Promise<ReadonlyArray<T>>,
-      get: async <T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) =>
-        ((await execFn(sql, params, opts)) as ReadonlyArray<T>)[0],
+      query: <T = Record<string, unknown>>(
+        sql: string,
+        params: ReadonlyArray<unknown> = [],
+        opts: SqliteQueryOptions = {},
+      ) => execFn(sql, params, opts) as Promise<ReadonlyArray<T>>,
+      get: async <T = Record<string, unknown>>(
+        sql: string,
+        params: ReadonlyArray<unknown> = [],
+        opts: SqliteQueryOptions = {},
+      ) => ((await execFn(sql, params, opts)) as ReadonlyArray<T>)[0],
       run: (sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) =>
         execFn(sql, params, { ...opts, raw: true }) as Promise<SqliteRunResult>,
-      exec: async (sql: string) => { await execFn(sql, [], { cached: false }); },
+      exec: async (sql: string) => {
+        await execFn(sql, [], { cached: false });
+      },
     };
   }
 
-  query<T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) {
-    return this.writerLock.run(() => this.execOnWriter(sql, params, opts) as Promise<ReadonlyArray<T>>);
+  query<T = Record<string, unknown>>(
+    sql: string,
+    params: ReadonlyArray<unknown> = [],
+    opts: SqliteQueryOptions = {},
+  ) {
+    return this.writerLock.run(
+      () => this.execOnWriter(sql, params, opts) as Promise<ReadonlyArray<T>>,
+    );
   }
-  async get<T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) {
+  async get<T = Record<string, unknown>>(
+    sql: string,
+    params: ReadonlyArray<unknown> = [],
+    opts: SqliteQueryOptions = {},
+  ) {
     return (await this.query<T>(sql, params, opts))[0];
   }
   values(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) {
-    return this.writerLock.run(() => this.execOnWriter(sql, params, { ...opts, values: true }) as Promise<ReadonlyArray<ReadonlyArray<unknown>>>);
+    return this.writerLock.run(
+      () =>
+        this.execOnWriter(sql, params, { ...opts, values: true }) as Promise<
+          ReadonlyArray<ReadonlyArray<unknown>>
+        >,
+    );
   }
   run(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) {
-    return this.writerLock.run(() => this.execOnWriter(sql, params, { ...opts, raw: true }) as Promise<SqliteRunResult>);
+    return this.writerLock.run(
+      () => this.execOnWriter(sql, params, { ...opts, raw: true }) as Promise<SqliteRunResult>,
+    );
   }
   async exec(sql: string) {
     await this.writerLock.run(() => this.execOnWriter(sql, [], { cached: false }));
   }
-  read<T = Record<string, unknown>>(sql: string, params: ReadonlyArray<unknown> = [], opts: SqliteQueryOptions = {}) {
+  read<T = Record<string, unknown>>(
+    sql: string,
+    params: ReadonlyArray<unknown> = [],
+    opts: SqliteQueryOptions = {},
+  ) {
     return this.withReader(
       (exec) => exec(sql, params, opts) as Promise<ReadonlyArray<T>>,
       () => this.query<T>(sql, params, opts),
@@ -820,7 +978,9 @@ export class SqliteClient {
         await this.execOnWriter("COMMIT", [], { cached: false });
         return res;
       } catch (cause) {
-        try { await this.execOnWriter("ROLLBACK", [], { cached: false }); } catch {}
+        try {
+          await this.execOnWriter("ROLLBACK", [], { cached: false });
+        } catch {}
         throw cause;
       }
     });
@@ -834,7 +994,9 @@ export class SqliteClient {
           await exec("COMMIT", [], { cached: false });
           return res;
         } catch (cause) {
-          try { await exec("ROLLBACK", [], { cached: false }); } catch {}
+          try {
+            await exec("ROLLBACK", [], { cached: false });
+          } catch {}
           throw cause;
         }
       },

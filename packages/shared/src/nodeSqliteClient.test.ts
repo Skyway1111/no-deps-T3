@@ -260,7 +260,7 @@ it.effect("coalesces savepoints with queries and preserves nested rollback", () 
           );
           assert.equal(messages.mock.calls.length, sent);
           assert.deepEqual(yield* sql`SELECT value FROM counters WHERE id = 1`, [{ value: 1 }]);
-          assert.deepEqual(messages.mock.calls.at(-1)?.[0].savepoints, []);
+          assert.isUndefined(messages.mock.calls.at(-1)?.[0].savepoints);
           yield* sql.withTransaction(
             sql
               .withTransaction(

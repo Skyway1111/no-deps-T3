@@ -146,13 +146,16 @@ it.effect("upgrades an existing database on a read-write worker connection", () 
         SqlitePersistence.layerFromPath(dbPath).pipe(Layer.provide(NodeServices.layer)),
       ),
     );
-    assert.deepInclude(workerData.slice(startedBefore), {
+    const writer = (workerData.slice(startedBefore) as Array<Record<string, unknown>>).find(
+      (data) => data.readOnly === false,
+    );
+    assert.include(writer, {
       filename: dbPath,
-      readOnly: false,
       requireWal: false,
       allowExtension: false,
       prepareCacheSize: 200,
     });
+    assert.include(writer?.initPragmas, "PRAGMA temp_store = MEMORY;");
   }).pipe(
     Effect.ensuring(Effect.sync(() => NodeFS.rmSync(tempDir, { recursive: true, force: true }))),
   );

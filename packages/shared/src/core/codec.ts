@@ -1,11 +1,6 @@
 /**
- * Zero-dependency runtime codec/validator + compact binary/JSON wire framing.
- *
- * Binary frame layout (6-byte header, big-endian):
- *   [0]     magic byte 0x54 ('T' - never a valid JSON start byte)
- *   [1]     FrameTag (Json=1, Utf8=2, Binary=3, Batch=4, Ping=5, Pong=6)
- *   [2..5]  uint32 payload byte length
- *   [6..N]  payload bytes
+ * Binary wire frame: 6-byte big-endian header [magic 0x54 ('T', never a JSON start byte),
+ * FrameTag, uint32 payload length] followed by the payload.
  */
 
 export const WIRE_FRAME_QUERY_PARAM = "wireFrame";
@@ -47,7 +42,7 @@ export interface DecodedFrame {
   readonly payload: Uint8Array | string;
 }
 
-export function isBinaryFrame(input: Uint8Array | string): input is Uint8Array {
+export function isBinaryFrame(input: Uint8Array | string): boolean {
   return (
     input instanceof Uint8Array &&
     input.byteLength >= WIRE_FRAME_HEADER_BYTES &&
@@ -55,12 +50,36 @@ export function isBinaryFrame(input: Uint8Array | string): input is Uint8Array {
   );
 }
 
-function payloadToBytes(tag: FrameTag, payload: unknown): Uint8Array {
+// Node sizes UTF-8 natively, so frames are allocated once at their exact size.
+// Browsers encode text up front; only Node ever sees string wire payloads below.
+interface NodeBufferApi {
+  readonly allocUnsafe: (size: number) => Uint8Array;
+  readonly byteLength: (text: string, encoding: "utf8") => number;
+}
+type NodeBufferInstance = Uint8Array & {
+  readonly write: (text: string, offset: number, encoding: "utf8") => number;
+};
+const NodeBuffer = (globalThis as { readonly Buffer?: NodeBufferApi }).Buffer;
+
+const allocFrame = (bytes: number): Uint8Array =>
+  NodeBuffer === undefined ? new Uint8Array(bytes) : NodeBuffer.allocUnsafe(bytes);
+
+function payloadToWire(tag: FrameTag, payload: unknown): string | Uint8Array {
   if (payload === undefined) return new Uint8Array(0);
   if (payload instanceof Uint8Array) return payload;
-  if (typeof payload === "string") return textEncoder.encode(payload);
-  if (tag === FrameTag.Json) return textEncoder.encode(JSON.stringify(payload));
-  throw new TypeError("Unsupported frame payload type");
+  let text: string;
+  if (typeof payload === "string") text = payload;
+  else if (tag === FrameTag.Json) text = JSON.stringify(payload);
+  else throw new TypeError("Unsupported frame payload type");
+  return NodeBuffer === undefined ? textEncoder.encode(text) : text;
+}
+
+const wireByteLength = (wire: string | Uint8Array): number =>
+  typeof wire === "string" ? NodeBuffer!.byteLength(wire, "utf8") : wire.byteLength;
+
+function writeWire(out: Uint8Array, offset: number, wire: string | Uint8Array): void {
+  if (typeof wire === "string") (out as NodeBufferInstance).write(wire, offset, "utf8");
+  else out.set(wire, offset);
 }
 
 function writeHeader(buf: Uint8Array, offset: number, tag: FrameTag, len: number): void {
@@ -83,18 +102,11 @@ function readUint32BE(buf: Uint8Array, offset: number): number {
 }
 
 export function encodeFrame(tag: FrameTag, payload?: string | Uint8Array | unknown): Uint8Array {
-  if (typeof payload === "string") {
-    // Fast single-allocation UTF-8 encode for typical ASCII-dominant JSON RPC frames.
-    const maxBytes = payload.length * 3;
-    const out = new Uint8Array(WIRE_FRAME_HEADER_BYTES + maxBytes);
-    const { written } = textEncoder.encodeInto(payload, out.subarray(WIRE_FRAME_HEADER_BYTES));
-    writeHeader(out, 0, tag, written);
-    return out.subarray(0, WIRE_FRAME_HEADER_BYTES + written);
-  }
-  const bytes = payloadToBytes(tag, payload);
-  const out = new Uint8Array(WIRE_FRAME_HEADER_BYTES + bytes.byteLength);
-  writeHeader(out, 0, tag, bytes.byteLength);
-  if (bytes.byteLength > 0) out.set(bytes, WIRE_FRAME_HEADER_BYTES);
+  const wire = payloadToWire(tag, payload);
+  const len = wireByteLength(wire);
+  const out = allocFrame(WIRE_FRAME_HEADER_BYTES + len);
+  writeHeader(out, 0, tag, len);
+  if (len > 0) writeWire(out, WIRE_FRAME_HEADER_BYTES, wire);
   return out;
 }
 
@@ -122,7 +134,10 @@ export function decodeFrame(
   }
   const len = readUint32BE(input, 2);
   if (len > maxBytes) {
-    throw new WireFrameError("limit_exceeded", `Frame payload (${len}) exceeds maxBytes (${maxBytes})`);
+    throw new WireFrameError(
+      "limit_exceeded",
+      `Frame payload (${len}) exceeds maxBytes (${maxBytes})`,
+    );
   }
   if (input.byteLength < WIRE_FRAME_HEADER_BYTES + len) {
     throw new WireFrameError(
@@ -140,30 +155,35 @@ export function decodeFrame(
 }
 
 export function encodeBatch(
-  frames: ReadonlyArray<{ readonly tag: FrameTag; readonly payload?: string | Uint8Array | unknown }>,
+  frames: ReadonlyArray<{
+    readonly tag: FrameTag;
+    readonly payload?: string | Uint8Array | unknown;
+  }>,
 ): Uint8Array {
-  const encoded: Array<{ readonly tag: FrameTag; readonly bytes: Uint8Array }> = [];
+  const wires: Array<string | Uint8Array> = [];
+  const lengths: Array<number> = [];
   let totalPayloadBytes = 0;
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i]!;
-    const bytes = payloadToBytes(frame.tag, frame.payload);
-    encoded.push({ tag: frame.tag, bytes });
-    totalPayloadBytes += 5 + bytes.byteLength;
+    const wire = payloadToWire(frame.tag, frame.payload);
+    const len = wireByteLength(wire);
+    wires.push(wire);
+    lengths.push(len);
+    totalPayloadBytes += 5 + len;
   }
-  const out = new Uint8Array(WIRE_FRAME_HEADER_BYTES + totalPayloadBytes);
+  const out = allocFrame(WIRE_FRAME_HEADER_BYTES + totalPayloadBytes);
   writeHeader(out, 0, FrameTag.Batch, totalPayloadBytes);
   let offset = WIRE_FRAME_HEADER_BYTES;
-  for (let i = 0; i < encoded.length; i++) {
-    const item = encoded[i]!;
-    const len = item.bytes.byteLength;
-    out[offset] = item.tag;
+  for (let i = 0; i < wires.length; i++) {
+    const len = lengths[i]!;
+    out[offset] = frames[i]!.tag;
     out[offset + 1] = (len >>> 24) & 0xff;
     out[offset + 2] = (len >>> 16) & 0xff;
     out[offset + 3] = (len >>> 8) & 0xff;
     out[offset + 4] = len & 0xff;
     offset += 5;
     if (len > 0) {
-      out.set(item.bytes, offset);
+      writeWire(out, offset, wires[i]!);
       offset += len;
     }
   }
@@ -211,7 +231,9 @@ export function encodeWireChunk(chunk: string | Uint8Array): Uint8Array {
 }
 
 export function encodeWireChunks(chunks: Iterable<string | Uint8Array>): Uint8Array | null {
-  const list = Array.isArray(chunks) ? (chunks as ReadonlyArray<string | Uint8Array>) : Array.from(chunks);
+  const list = Array.isArray(chunks)
+    ? (chunks as ReadonlyArray<string | Uint8Array>)
+    : Array.from(chunks);
   if (list.length === 0) return null;
   if (list.length === 1) return encodeWireChunk(list[0]!);
   return encodeBatch(
@@ -247,10 +269,6 @@ export function decodeWireChunks<T extends ReadonlyArray<string | Uint8Array>>(c
   }
   return out as unknown as T;
 }
-
-// ---------------------------------------------------------------------------
-// Zero-dependency runtime codec / validator (replaces Zod on hot paths)
-// ---------------------------------------------------------------------------
 
 export class CodecError extends Error {
   readonly path: string;
@@ -305,7 +323,10 @@ function makeCodec<T>(
 
 export const c = {
   string: makeCodec<string>("string", (v): v is string => typeof v === "string"),
-  number: makeCodec<number>("number", (v): v is number => typeof v === "number" && !Number.isNaN(v)),
+  number: makeCodec<number>(
+    "number",
+    (v): v is number => typeof v === "number" && !Number.isNaN(v),
+  ),
   finiteNumber: makeCodec<number>(
     "finite number",
     (v): v is number => typeof v === "number" && Number.isFinite(v),
@@ -323,9 +344,7 @@ export const c = {
     return makeCodec<T>(JSON.stringify(expected), (v): v is T => v === expected);
   },
 
-  literals<const T extends readonly (string | number | boolean)[]>(
-    ...values: T
-  ): Codec<T[number]> {
+  literals<const T extends readonly (string | number | boolean)[]>(...values: T): Codec<T[number]> {
     const allowed = new Set<unknown>(values);
     return makeCodec<T[number]>(
       values.map((v) => JSON.stringify(v)).join(" | "),
@@ -442,10 +461,7 @@ export const c = {
     );
   },
 
-  discriminatedUnion<
-    TagKey extends string,
-    Variants extends Record<string, Codec<unknown>>,
-  >(
+  discriminatedUnion<TagKey extends string, Variants extends Record<string, Codec<unknown>>>(
     tagKey: TagKey,
     variants: Variants,
   ): Codec<Infer<Variants[keyof Variants]>> {

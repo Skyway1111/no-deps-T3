@@ -531,6 +531,81 @@ export type ShellApplicationEvent =
       readonly event: Pick<OrchestrationV2StoredEvent["event"], "threadId">;
     };
 
+// Subscribers group events in their own 50 ms windows, so one event's items are read within
+// about that long of each other. Older entries are re-read rather than trusted.
+const SHARED_SHELL_ITEM_TTL_MS = 1_000;
+const SHARED_SHELL_ITEM_LIMIT = 512;
+// Keyed by the server's event store: sequences are unique only within one database.
+const sharedShellItems = new WeakMap<
+  object,
+  Map<number, { readonly item: Deferred.Deferred<ShellDelta | undefined>; readonly at: number }>
+>();
+
+/**
+ * Projects coalesced shell events once for every subscriber of `owner`'s store: the first
+ * subscriber to reach an event reads it, the rest await that read and send the same object, so
+ * the database work and LiveStreamBudget's per-object size cache are shared. A reader that fails
+ * or is interrupted releases its waiters to read for themselves.
+ */
+export const projectSharedShellItems = Effect.fnUntraced(function* <E, R>(
+  owner: object,
+  events: ReadonlyArray<ShellApplicationEvent>,
+  read: (
+    events: ReadonlyArray<ShellApplicationEvent>,
+  ) => Effect.Effect<ReadonlyArray<ShellDelta>, E, R>,
+) {
+  const now = yield* Clock.currentTimeMillis;
+  let cache = sharedShellItems.get(owner);
+  if (cache === undefined) sharedShellItems.set(owner, (cache = new Map()));
+  const waits: Array<Deferred.Deferred<ShellDelta | undefined> | undefined> = [];
+  const misses: Array<ShellApplicationEvent> = [];
+  const owned: Array<Deferred.Deferred<ShellDelta | undefined>> = [];
+  for (const stored of events) {
+    const entry = cache.get(stored.sequence);
+    if (entry !== undefined && now - entry.at < SHARED_SHELL_ITEM_TTL_MS) {
+      waits.push(entry.item);
+      continue;
+    }
+    const item = Deferred.makeUnsafe<ShellDelta | undefined>();
+    cache.delete(stored.sequence);
+    cache.set(stored.sequence, { item, at: now });
+    waits.push(undefined);
+    misses.push(stored);
+    owned.push(item);
+  }
+  for (const sequence of cache.keys()) {
+    if (cache.size <= SHARED_SHELL_ITEM_LIMIT) break;
+    cache.delete(sequence);
+  }
+  const readItems =
+    misses.length === 0
+      ? []
+      : yield* read(misses).pipe(
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              owned.forEach((item, index) => {
+                const value = Exit.isSuccess(exit) ? exit.value[index] : undefined;
+                if (value === undefined && cache.get(misses[index]!.sequence)?.item === item) {
+                  cache.delete(misses[index]!.sequence);
+                }
+                Deferred.doneUnsafe(item, Effect.succeed(value));
+              });
+            }),
+          ),
+        );
+  let next = 0;
+  return yield* Effect.forEach(events, (stored, index) => {
+    const wait = waits[index];
+    if (wait === undefined) return Effect.succeed(readItems[next++]!);
+    return Deferred.await(wait).pipe(
+      Effect.filterOrElse(
+        (item): item is ShellDelta => item !== undefined,
+        () => Effect.map(read([stored]), (items) => items[0]!),
+      ),
+    );
+  });
+});
+
 /** Focused subagents receive these updates through their thread subscription. */
 export function shouldPublishShellApplicationEvent(
   stored: ApplicationStoredEvent,

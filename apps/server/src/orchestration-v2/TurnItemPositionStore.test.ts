@@ -77,3 +77,32 @@ it.effect("places a run-start item ahead of the run's items, then appends once t
     assert.equal(yield* allocate("item:reply"), message + 2);
   }).pipe(Effect.provide(layerTest)),
 );
+
+it.effect("forgets positions allocated by a rolled-back transaction or savepoint", () =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const positions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
+    const item = (id: string) => ({
+      threadId: ThreadId.make("thread:position-rollback"),
+      turnItemId: TurnItemId.make(id),
+      runId: null,
+    });
+    yield* sql
+      .withTransaction(
+        positions.allocate(item("item:a")).pipe(Effect.andThen(Effect.fail("abort"))),
+      )
+      .pipe(Effect.ignore);
+    yield* sql.withTransaction(
+      sql
+        .withTransaction(
+          positions.allocate(item("item:b")).pipe(Effect.andThen(Effect.fail("abort"))),
+        )
+        .pipe(Effect.ignore),
+    );
+    // A cached ordinal without its row would let another item take the same position.
+    assert.equal(yield* positions.allocate(item("item:c")), 1);
+    assert.equal(yield* positions.allocate(item("item:a")), 2);
+    assert.equal(yield* positions.allocate(item("item:b")), 3);
+    assert.equal(yield* positions.allocate(item("item:c")), 1);
+  }).pipe(Effect.provide(layerTest)),
+);

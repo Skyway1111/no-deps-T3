@@ -119,11 +119,12 @@ export function projectedRowBoundedSnapshotEncodedBytes(
   row: OrchestrationV2ProjectedTurnItem,
   threadId: ThreadId | string,
 ): number {
-  const rowBytes = projectedRowEncodedBytes(row);
-  if (row.visibility === "local" || String(row.sourceThreadId) === String(threadId)) {
-    return rowBytes + bytesOfJson(row.item);
-  }
-  return rowBytes;
+  // Stringify the item once; the row's other fields are short, so encode them around a placeholder.
+  const itemBytes = bytesOfJson(row.item);
+  const rowBytes = itemBytes + bytesOfJson({ ...row, item: 0 }) - 1;
+  return row.visibility === "local" || String(row.sourceThreadId) === String(threadId)
+    ? rowBytes + itemBytes
+    : rowBytes;
 }
 
 function renumberPositions<Row extends HistoryRow>(items: ReadonlyArray<Row>): Row[] {

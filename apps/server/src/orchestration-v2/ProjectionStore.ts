@@ -42,6 +42,7 @@ import type {
   OrchestrationV2ProviderThread,
   OrchestrationV2ProviderTurn,
   OrchestrationV2Run,
+  OrchestrationV2RunAttempt,
   OrchestrationV2RuntimeRequest,
   OrchestrationV2Subagent,
   OrchestrationV2ThreadShellSnapshot,
@@ -104,6 +105,7 @@ import type * as Statement from "effect/sql/Statement";
 import { MCP_APP_OUTPUT_KEY } from "@t3tools/shared/mcpApp";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { threadHtmlRenderAttachmentIds } from "../attachmentStore.ts";
+import { storedPayloadJson } from "../persistence/OrchestrationEventStore.ts";
 import { DELEGATED_TASK_MESSAGE_CONDITION } from "./delegatedTaskMessage.ts";
 import {
   DEFERRED_COMMAND_MESSAGE_CONDITION,
@@ -1394,8 +1396,6 @@ const encodePlanPayload = Schema.encodeEffect(
 export const encodeTurnItemPayload = Schema.encodeEffect(
   Schema.fromJsonString(OrchestrationV2TurnItemJsonSchema),
 );
-// The codec every *Json payload schema uses for timestamps, so index columns match payload_json.
-const encodePayloadTimestamp = Schema.encodeEffect(Schema.DateTimeUtcFromString);
 const encodeCheckpointScopePayload = Schema.encodeEffect(
   Schema.fromJsonString(OrchestrationV2CheckpointScopeJsonSchema),
 );
@@ -1500,10 +1500,9 @@ function parseEncodedPayload(json: string): Record<string, unknown> {
   return JSON.parse(json) as Record<string, unknown>;
 }
 
-function stringField(payload: Record<string, unknown>, field: string): string {
-  const value = payload[field];
-  return typeof value === "string" ? value : String(value);
-}
+// Every *Json payload schema encodes timestamps with DateTimeUtcFromString, i.e. formatIso.
+const isoOrNull = (value: DateTime.Utc | null) =>
+  value === null ? null : DateTime.formatIso(value);
 
 function nullableStringField(payload: Record<string, unknown>, field: string): string | null {
   const value = payload[field];
@@ -1697,7 +1696,7 @@ function isRolledBackBeforeFork(
 }
 
 export function forkInheritedRunOrdinals(
-  runs: ReadonlyArray<OrchestrationV2Run>,
+  runs: ReadonlyArray<Pick<OrchestrationV2Run, "id" | "ordinal" | "status" | "completedAt">>,
   forkCreatedAt: DateTime.Utc,
 ): Map<RunId, number> {
   return new Map(
@@ -2446,7 +2445,16 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       readonly synthetic?: OrchestrationV2TurnItem;
     };
     type TimelineIndex = {
-      readonly records: ProjectionRecords<"runs" | "attempts">;
+      // Only the columns the visibility rules and fork cutoff read; full run payloads are large.
+      readonly records: {
+        readonly thread: OrchestrationV2AppThread;
+        readonly runs: ReadonlyArray<
+          Pick<OrchestrationV2Run, "id" | "ordinal" | "status" | "completedAt">
+        >;
+        readonly attempts: ReadonlyArray<
+          Pick<OrchestrationV2RunAttempt, "runId" | "rootNodeId" | "status">
+        >;
+      };
       /** The thread and every fork source the index read. */
       readonly threadIds: ReadonlyArray<ThreadId>;
       readonly local: ReadonlyArray<TimelineIndexRow>;
@@ -2466,6 +2474,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           for (const [key, cached] of timelineIndexes) {
             if (cached.index.threadIds.includes(event.threadId)) timelineIndexes.delete(key);
           }
+          // The event log already encoded this payload with the same *Json schema.
+          const storedJson = storedPayloadJson.get(event);
           const batch = yield* ProviderBatchProjectionState;
           // These rewrite the thread row from what they read, so a deferred bump must land first.
           const rewrittenThreadId = event.type.startsWith("thread.")
@@ -2526,8 +2536,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             case "thread.model-selection-updated":
             case "thread.provider-switched":
             case "thread.guest-share-updated": {
-              const payloadJson = yield* encodeThreadPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeThreadPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_threads (
                 thread_id,
@@ -2553,10 +2562,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.runtimeMode},
                 ${event.payload.interactionMode},
                 ${event.payload.activeProviderThreadId},
-                ${stringField(payload, "createdAt")},
-                ${stringField(payload, "updatedAt")},
-                ${nullableStringField(payload, "archivedAt")},
-                ${nullableStringField(payload, "deletedAt")},
+                ${DateTime.formatIso(event.payload.createdAt)},
+                ${DateTime.formatIso(event.payload.updatedAt)},
+                ${isoOrNull(event.payload.archivedAt)},
+                ${isoOrNull(event.payload.deletedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(thread_id)
@@ -2578,8 +2587,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             }
             case "run.created":
             case "run.updated": {
-              const payloadJson = yield* encodeRunPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeRunPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_runs (
                 run_id,
@@ -2601,8 +2609,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.providerInstanceId},
                 ${event.payload.providerThreadId},
                 ${event.payload.status},
-                ${stringField(payload, "requestedAt")},
-                ${nullableStringField(payload, "completedAt")},
+                ${DateTime.formatIso(event.payload.requestedAt)},
+                ${isoOrNull(event.payload.completedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(run_id)
@@ -2652,7 +2660,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             }
             case "run-attempt.created":
             case "run-attempt.updated": {
-              const payloadJson = yield* encodeRunAttemptPayload(event.payload);
+              const payloadJson = storedJson ?? (yield* encodeRunAttemptPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_run_attempts (
                 attempt_id,
@@ -2696,8 +2704,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "node.updated": {
-              const payloadJson = yield* encodeNodePayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeNodePayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_nodes (
                 node_id,
@@ -2723,8 +2730,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.status},
                 ${event.payload.providerThreadId},
                 ${event.payload.providerTurnId},
-                ${nullableStringField(payload, "startedAt")},
-                ${nullableStringField(payload, "completedAt")},
+                ${isoOrNull(event.payload.startedAt)},
+                ${isoOrNull(event.payload.completedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(node_id)
@@ -2745,8 +2752,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "subagent.updated": {
-              const payloadJson = yield* encodeSubagentPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeSubagentPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_subagents (
                 subagent_id,
@@ -2778,9 +2784,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.childThreadId},
                 ${event.payload.origin},
                 ${event.payload.status},
-                ${nullableStringField(payload, "startedAt")},
-                ${nullableStringField(payload, "completedAt")},
-                ${stringField(payload, "updatedAt")},
+                ${isoOrNull(event.payload.startedAt)},
+                ${isoOrNull(event.payload.completedAt)},
+                ${DateTime.formatIso(event.payload.updatedAt)},
                 ${event.payload.completionDelivery?.state ?? null},
                 ${payloadJson}
               )
@@ -2821,8 +2827,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             }
             case "provider-session.attached":
             case "provider-session.updated": {
-              const payloadJson = yield* encodeProviderSessionPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson =
+                storedJson ?? (yield* encodeProviderSessionPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_provider_sessions (
                 provider_session_id,
@@ -2841,7 +2847,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.driver},
                 ${event.payload.providerInstanceId},
                 ${event.payload.status},
-                ${stringField(payload, "updatedAt")},
+                ${DateTime.formatIso(event.payload.updatedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(provider_session_id)
@@ -2885,16 +2891,16 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   `
                 : [];
               const existing = existingRows[0];
-              const payloadJson = yield* encodeProviderThreadPayload(
-                attributePendingBackgroundTasks(
-                  event.payload,
-                  existing === undefined
-                    ? undefined
-                    : yield* decodeProviderThreadPayload(existing.payload_json),
-                  event.runId,
-                ),
+              const providerThread = attributePendingBackgroundTasks(
+                event.payload,
+                existing === undefined
+                  ? undefined
+                  : yield* decodeProviderThreadPayload(existing.payload_json),
+                event.runId,
               );
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson =
+                (providerThread === event.payload ? storedJson : undefined) ??
+                (yield* encodeProviderThreadPayload(providerThread));
               yield* sql`
               INSERT INTO orchestration_v2_projection_provider_threads (
                 provider_thread_id,
@@ -2921,7 +2927,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.status},
                 ${event.payload.firstRunOrdinal},
                 ${event.payload.lastRunOrdinal},
-                ${stringField(payload, "updatedAt")},
+                ${DateTime.formatIso(event.payload.updatedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(provider_thread_id)
@@ -2942,30 +2948,21 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 event.payload.appThreadId !== null &&
                 !isQueuedProviderThreadPlaceholder(event.payload)
               ) {
-                const threadRows = yield* sql<PayloadRow>`
-                SELECT payload_json
-                FROM orchestration_v2_projection_threads
+                const updatedAt = DateTime.formatIso(event.payload.updatedAt);
+                yield* sql`
+                UPDATE orchestration_v2_projection_threads
+                SET
+                  active_provider_thread_id = ${event.payload.id},
+                  updated_at = ${updatedAt},
+                  payload_json = json_set(
+                    payload_json,
+                    '$.activeProviderThreadId',
+                    ${event.payload.id},
+                    '$.updatedAt',
+                    ${updatedAt}
+                  )
                 WHERE thread_id = ${event.payload.appThreadId}
-                LIMIT 1
               `;
-                const threadRow = threadRows[0];
-                if (threadRow !== undefined) {
-                  const thread = yield* decodeThreadPayload(threadRow.payload_json);
-                  const updatedThread = {
-                    ...thread,
-                    activeProviderThreadId: event.payload.id,
-                    updatedAt: event.payload.updatedAt,
-                  };
-                  const updatedThreadPayloadJson = yield* encodeThreadPayload(updatedThread);
-                  yield* sql`
-                  UPDATE orchestration_v2_projection_threads
-                  SET
-                    active_provider_thread_id = ${event.payload.id},
-                    updated_at = ${stringField(parseEncodedPayload(updatedThreadPayloadJson), "updatedAt")},
-                    payload_json = ${updatedThreadPayloadJson}
-                  WHERE thread_id = ${event.payload.appThreadId}
-                `;
-                }
               }
               break;
             }
@@ -2987,8 +2984,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                       [yield* decodeProviderTurnPayload(existing.payload_json)],
                       event.payload,
                     )[0]!;
-              const payloadJson = yield* encodeProviderTurnPayload(providerTurn);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson =
+                (providerTurn === event.payload ? storedJson : undefined) ??
+                (yield* encodeProviderTurnPayload(providerTurn));
               yield* sql`
               INSERT INTO orchestration_v2_projection_provider_turns (
                 provider_turn_id,
@@ -3010,8 +3008,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${providerTurn.runAttemptId},
                 ${providerTurn.ordinal},
                 ${providerTurn.status},
-                ${nullableStringField(payload, "startedAt")},
-                ${nullableStringField(payload, "completedAt")},
+                ${isoOrNull(providerTurn.startedAt)},
+                ${isoOrNull(providerTurn.completedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(provider_turn_id)
@@ -3029,8 +3027,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "runtime-request.updated": {
-              const payloadJson = yield* encodeRuntimeRequestPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeRuntimeRequestPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_runtime_requests (
                 runtime_request_id,
@@ -3050,8 +3047,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.providerTurnId},
                 ${event.payload.kind},
                 ${event.payload.status},
-                ${stringField(payload, "createdAt")},
-                ${nullableStringField(payload, "resolvedAt")},
+                ${DateTime.formatIso(event.payload.createdAt)},
+                ${isoOrNull(event.payload.resolvedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(runtime_request_id)
@@ -3068,9 +3065,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "message.updated": {
-              const payloadJson = yield* encodeMessagePayload(event.payload);
-              const createdAt = yield* encodePayloadTimestamp(event.payload.createdAt);
-              const updatedAt = yield* encodePayloadTimestamp(event.payload.updatedAt);
+              const payloadJson = storedJson ?? (yield* encodeMessagePayload(event.payload));
+              const createdAt = DateTime.formatIso(event.payload.createdAt);
+              const updatedAt = DateTime.formatIso(event.payload.updatedAt);
               yield* sql`
               INSERT INTO orchestration_v2_projection_messages (
                 message_id,
@@ -3111,7 +3108,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "plan.updated": {
-              const payloadJson = yield* encodePlanPayload(event.payload);
+              const payloadJson = storedJson ?? (yield* encodePlanPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_plans (
                 plan_id,
@@ -3143,8 +3140,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "turn-item.updated": {
-              const payloadJson = yield* encodeTurnItemPayload(event.payload);
-              const updatedAt = yield* encodePayloadTimestamp(event.payload.updatedAt);
+              const payloadJson = storedJson ?? (yield* encodeTurnItemPayload(event.payload));
+              const updatedAt = DateTime.formatIso(event.payload.updatedAt);
               yield* sql`
               INSERT INTO orchestration_v2_projection_turn_items (
                 turn_item_id,
@@ -3194,8 +3191,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "checkpoint-scope.created": {
-              const payloadJson = yield* encodeCheckpointScopePayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson =
+                storedJson ?? (yield* encodeCheckpointScopePayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_checkpoint_scopes (
                 scope_id,
@@ -3218,7 +3215,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.kind},
                 ${event.payload.ordinalWithinParent},
                 ${booleanInt(event.payload.advancesAppRunCount)},
-                ${stringField(payload, "createdAt")},
+                ${DateTime.formatIso(event.payload.createdAt)},
                 ${payloadJson}
               )
               ON CONFLICT(scope_id)
@@ -3236,8 +3233,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               break;
             }
             case "checkpoint.captured": {
-              const payloadJson = yield* encodeCheckpointPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeCheckpointPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_checkpoints (
                 checkpoint_id,
@@ -3260,7 +3256,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.ordinalWithinScope},
                 ${event.payload.appRunOrdinal},
                 ${event.payload.status},
-                ${stringField(payload, "capturedAt")},
+                ${DateTime.formatIso(event.payload.capturedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(checkpoint_id)
@@ -3280,8 +3276,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             case "checkpoint.rollback-requested":
               break;
             case "context-handoff.updated": {
-              const payloadJson = yield* encodeContextHandoffPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson = storedJson ?? (yield* encodeContextHandoffPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_context_handoffs (
                 context_handoff_id,
@@ -3300,7 +3295,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.toProviderThreadId},
                 ${event.payload.strategy},
                 ${event.payload.status},
-                ${stringField(payload, "updatedAt")},
+                ${DateTime.formatIso(event.payload.updatedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(context_handoff_id)
@@ -3317,8 +3312,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             }
             case "context-transfer.created":
             case "context-transfer.updated": {
-              const payloadJson = yield* encodeContextTransferPayload(event.payload);
-              const payload = parseEncodedPayload(payloadJson);
+              const payloadJson =
+                storedJson ?? (yield* encodeContextTransferPayload(event.payload));
               yield* sql`
               INSERT INTO orchestration_v2_projection_context_transfers (
                 context_transfer_id,
@@ -3337,7 +3332,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ${event.payload.targetRunId},
                 ${event.payload.type},
                 ${event.payload.status},
-                ${stringField(payload, "updatedAt")},
+                ${DateTime.formatIso(event.payload.updatedAt)},
                 ${payloadJson}
               )
               ON CONFLICT(context_transfer_id)
@@ -7085,7 +7080,39 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       "ProjectionStore.readTimelineIndex",
     )(
       function* (threadId: ThreadId, seen: ReadonlySet<ThreadId>, includeAttempts = false) {
-        const records = yield* getThreadRecords(threadId, ["runs", "attempts"]);
+        const { thread } = yield* getThreadRecords(threadId, []);
+        const [runRows, attemptRows] = yield* Effect.all([
+          sql<{
+            readonly id: RunId;
+            readonly ordinal: number;
+            readonly status: OrchestrationV2Run["status"];
+            readonly completed_at: string | null;
+          }>`SELECT run_id AS id, ordinal, status, completed_at FROM orchestration_v2_projection_runs
+            WHERE thread_id = ${threadId} ORDER BY ordinal ASC`,
+          sql<{
+            readonly attemptId: string;
+            readonly runId: RunId;
+            readonly rootNodeId: NodeId;
+            readonly status: OrchestrationV2RunAttempt["status"];
+          }>`SELECT attempt_id AS attemptId, run_id AS runId, root_node_id AS rootNodeId, status
+            FROM orchestration_v2_projection_run_attempts
+            WHERE thread_id = ${threadId} ORDER BY run_id ASC, attempt_ordinal ASC`,
+        ]);
+        const records: TimelineIndex["records"] = {
+          thread,
+          runs: runRows.map((run) => ({
+            id: run.id,
+            ordinal: run.ordinal,
+            status: run.status,
+            completedAt: run.completed_at === null ? null : DateTime.makeUnsafe(run.completed_at),
+          })),
+          attempts: attemptRows,
+        };
+        // Ascending attempt order, so the last write per (run, root node) is the latest attempt.
+        const latestAttempts = new Map<string, (typeof attemptRows)[number]>();
+        if (includeAttempts)
+          for (const attempt of attemptRows)
+            latestAttempts.set(`${attempt.runId}\u0000${attempt.rootNodeId}`, attempt);
         const rows = yield* sql<{
           turn_item_id: string;
           run_id: string | null;
@@ -7097,44 +7124,43 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           message_id: string | null;
           status: OrchestrationV2TurnItem["status"];
           ordinal: number;
-          attempt_id: string | null;
-          attempt_status: string | null;
+          root_node_id: string | null;
         }>`SELECT item.turn_item_id, item.run_id, item.node_id, item.parent_item_id, item.type, item.status, item.ordinal,
-          ${includeAttempts ? sql`attempt.attempt_id` : sql`NULL`} AS attempt_id,
-          ${includeAttempts ? sql`attempt.status` : sql`NULL`} AS attempt_status,
+          ${includeAttempts ? sql`COALESCE(node.root_node_id, item.node_id)` : sql`NULL`} AS root_node_id,
           CASE WHEN item.type = 'user_message' THEN json_extract(item.payload_json, '$.inputIntent') END AS input_intent,
           CASE WHEN item.type = 'user_message' THEN json_extract(item.payload_json, '$.createdBy') END AS created_by,
           CASE WHEN item.type IN ('user_message', 'assistant_message') THEN json_extract(item.payload_json, '$.messageId') END AS message_id
         FROM orchestration_v2_projection_turn_items AS item
         ${
           includeAttempts
-            ? sql`LEFT JOIN orchestration_v2_projection_nodes AS node ON node.node_id = item.node_id
-        LEFT JOIN orchestration_v2_projection_run_attempts AS attempt ON attempt.attempt_id = (
-          SELECT attempt_id FROM orchestration_v2_projection_run_attempts
-          WHERE run_id = item.run_id AND root_node_id = COALESCE(node.root_node_id, item.node_id)
-          ORDER BY attempt_ordinal DESC LIMIT 1
-        )`
+            ? sql`LEFT JOIN orchestration_v2_projection_nodes AS node ON node.node_id = item.node_id`
             : sql``
         }
         WHERE item.thread_id = ${threadId}
         ORDER BY item.ordinal ASC, item.turn_item_id ASC`;
         const runStatuses = new Map(records.runs.map((run) => [String(run.id), run.status]));
-        const items: Array<TimelineIndexItem> = rows.map((row) => ({
-          id: TurnItemId.make(row.turn_item_id),
-          threadId,
-          runId: row.run_id === null ? null : RunId.make(row.run_id),
-          nodeId: row.node_id === null ? null : NodeId.make(row.node_id),
-          parentItemId: row.parent_item_id === null ? null : TurnItemId.make(row.parent_item_id),
-          type: row.type,
-          status: row.status,
-          ordinal: row.ordinal,
-          runStatus: row.run_id === null ? undefined : runStatuses.get(row.run_id),
-          attemptId: row.attempt_id,
-          attemptStatus: row.attempt_status,
-          ...(row.input_intent === null ? {} : { inputIntent: row.input_intent }),
-          ...(row.created_by === null ? {} : { createdBy: row.created_by }),
-          ...(row.message_id === null ? {} : { messageId: MessageId.make(row.message_id) }),
-        }));
+        const items: Array<TimelineIndexItem> = rows.map((row) => {
+          const attempt =
+            row.run_id === null || row.root_node_id === null
+              ? undefined
+              : latestAttempts.get(`${row.run_id}\u0000${row.root_node_id}`);
+          return {
+            id: TurnItemId.make(row.turn_item_id),
+            threadId,
+            runId: row.run_id === null ? null : RunId.make(row.run_id),
+            nodeId: row.node_id === null ? null : NodeId.make(row.node_id),
+            parentItemId: row.parent_item_id === null ? null : TurnItemId.make(row.parent_item_id),
+            type: row.type,
+            status: row.status,
+            ordinal: row.ordinal,
+            runStatus: row.run_id === null ? undefined : runStatuses.get(row.run_id),
+            attemptId: attempt?.attemptId ?? null,
+            attemptStatus: attempt?.status ?? null,
+            ...(row.input_intent === null ? {} : { inputIntent: row.input_intent }),
+            ...(row.created_by === null ? {} : { createdBy: row.created_by }),
+            ...(row.message_id === null ? {} : { messageId: MessageId.make(row.message_id) }),
+          };
+        });
         const local: Array<TimelineIndexRow> = items.map((item) => ({
           sourceThreadId: threadId,
           sourceItemId: item.id,
@@ -7245,8 +7271,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       },
     );
 
+    // Find reads inside its read transaction, so repeated searches reuse the snapshot's index.
     const { searchThread, searchThreadStream } = yield* makeThreadFind((threadId) =>
-      readTimelineIndex(threadId, new Set()).pipe(Effect.map((index) => index.visible)),
+      readSnapshotTimelineIndex(threadId, false).pipe(Effect.map((index) => index.visible)),
     );
 
     /**

@@ -8,7 +8,7 @@ import {
   isKnownOrchestrationV2EventType,
   NonNegativeInt,
   OrchestrationV2DomainEventJson,
-  OrchestrationV2StoredEvent,
+  type OrchestrationV2StoredEvent,
   ProjectId,
   StoredProjectIcon,
   ThreadId,
@@ -180,7 +180,9 @@ interface ApplicationEventRow {
 
 const decodeV2EventJson = Schema.decodeUnknownEffect(OrchestrationV2DomainEventJson);
 const encodeV2EventJson = Schema.encodeEffect(OrchestrationV2DomainEventJson);
-const decodeV2StoredEvent = Schema.decodeUnknownEffect(OrchestrationV2StoredEvent);
+
+/** Payload JSON appendAgentEvents encoded for each appended event, so projection need not re-encode it. */
+export const storedPayloadJson = new WeakMap<OrchestrationV2DomainEvent, string>();
 const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
@@ -196,9 +198,8 @@ function metadataForV2Event(event: OrchestrationV2DomainEvent): Record<string, u
   };
 }
 
-const rowToV2StoredEvent = Effect.fn("OrchestrationEventStore.rowToV2StoredEvent")(function* (
-  row: ApplicationEventRow,
-) {
+// Per-row decode during replay; the read or replay stream owns the span.
+const rowToV2StoredEvent = Effect.fnUntraced(function* (row: ApplicationEventRow) {
   const payload = yield* decodeJson(row.payload_json);
   const metadata = yield* decodeJson(row.metadata_json);
   const values =
@@ -217,16 +218,15 @@ const rowToV2StoredEvent = Effect.fn("OrchestrationEventStore.rowToV2StoredEvent
       : { providerInstanceId: values.providerInstanceId }),
     ...(values.rawEventId === undefined ? {} : { rawEventId: values.rawEventId }),
   });
-  return yield* decodeV2StoredEvent({
+  // `event` is already decoded; the stored envelope adds only trusted SQLite columns.
+  return {
     sequence: row.sequence,
-    commandId: row.command_id,
+    commandId: row.command_id as OrchestrationV2StoredEvent["commandId"],
     event,
-  });
+  } satisfies OrchestrationV2StoredEvent;
 });
 
-const rowToProjectEvent = Effect.fn("OrchestrationEventStore.rowToProjectEvent")(function* (
-  row: ApplicationEventRow,
-) {
+const rowToProjectEvent = Effect.fnUntraced(function* (row: ApplicationEventRow) {
   return yield* decodeProjectEvent({
     sequence: row.sequence,
     eventId: row.event_id,
@@ -527,11 +527,15 @@ const makeEventStore = Effect.gen(function* () {
               if (oldest !== undefined) promptHints.delete(oldest);
             }
           }
-          return yield* decodeV2StoredEvent({
-            sequence: rows[0]?.sequence,
+          if (row === undefined) {
+            return yield* Effect.die(`Appending event ${event.id} returned no sequence.`);
+          }
+          storedPayloadJson.set(event, payloadJson);
+          return {
+            sequence: row.sequence,
             commandId: input.commandId ?? null,
             event,
-          });
+          } satisfies OrchestrationV2StoredEvent;
         }),
       { concurrency: 1 },
     ).pipe(

@@ -594,12 +594,19 @@ it.effect("shell groups read distinct threads once and keep each event's own seq
     assert.deepEqual(yield* collectSummary(after), expectedGroup);
     assert.deepEqual(shellReads, [["thread:archived", "thread:active", "thread:missing"]]);
 
+    // Another subscriber reuses those items briefly, then reads its own.
+    shellReads.length = 0;
+    assert.deepEqual(yield* collectSummary(after), expectedGroup);
+    assert.deepEqual(shellReads, []);
+    yield* TestClock.adjust("2 seconds");
+
     shellReads.length = 0;
     assert.deepEqual(yield* collectSummary(active), [
       ["thread.removed", missing, "thread:missing"],
     ]);
     assert.deepEqual(shellReads, [["scalar:thread:missing"]]);
 
+    yield* TestClock.adjust("2 seconds");
     shellReads.length = 0;
     batchFails = true;
     assert.deepEqual(yield* collectSummary(after), expectedGroup);

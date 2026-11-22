@@ -142,6 +142,7 @@ import {
   loadShellSnapshotParts,
   shellStreamItemFromEnrichmentRefresh,
   shellStreamItemFromThreadShell,
+  projectSharedShellItems,
   shellStreamItemsFromInitialSnapshot,
   loadSubscriberShellSnapshot,
   canResumeShellFrom,
@@ -1282,7 +1283,13 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
     const toShellStream = <E, R>(stream: Stream.Stream<ShellApplicationEvent, E, R>) =>
       stream.pipe(
         Stream.groupedWithin(512, Duration.millis(50)),
-        Stream.mapEffect((events) => projectShellItems(Array.from(events))),
+        Stream.mapEffect((events) =>
+          projectSharedShellItems(
+            applicationEvents,
+            coalesceShellApplicationEvents(Array.from(events)),
+            projectShellItems,
+          ),
+        ),
         Stream.flatMap(Stream.fromIterable),
         skipUnchangedThreadShells,
       );
@@ -3522,11 +3529,11 @@ export const layerWsRpc = (
                 ),
                 // Compare initial paired values with the snapshot; blindly dropping them loses changes between snapshot and subscription.
                 (updates) => Stream.concat(rpcInitialItems([config.providers]), updates),
-                Stream.changesWith(
-                  (previous, next) => JSON.stringify(previous) === JSON.stringify(next),
-                ),
+                // Serialize each value once; comparing pairs would stringify every value twice.
+                Stream.map((providers) => [providers, JSON.stringify(providers)] as const),
+                Stream.changesWith((previous, next) => previous[1] === next[1]),
                 Stream.drop(1),
-                Stream.map((providers) => ({
+                Stream.map(([providers]) => ({
                   version: 1 as const,
                   type: "providerStatuses" as const,
                   payload: { providers },
@@ -3716,6 +3723,11 @@ export const layer = Layer.unwrap(
     const peerThreadRelay = yield* PeerThreadRelay.PeerThreadRelay;
     const peerClientPairing = yield* PeerClientPairing.PeerClientPairing;
     const sql = yield* SqlClient.SqlClient;
+    // Built once: each holds only server-lifetime state (update locks, PATH cache, caches).
+    const acpRegistrySessions = yield* AcpRegistrySessions.AcpRegistrySessions;
+    const providerMaintenance = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
+    const otlpEndpointCheck = yield* OtlpEndpointCheck.OtlpEndpointCheck;
+    const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -3794,9 +3806,16 @@ export const layer = Layer.unwrap(
               Layer.provideMerge(RpcSerialization.layerJson),
               // Handler-context reporters see only request defects, not server-wide defects.
               Layer.provide(DefectReporter.layer),
-              Layer.provide(AcpRegistrySessions.layer),
+              Layer.provide(
+                Layer.succeed(AcpRegistrySessions.AcpRegistrySessions, acpRegistrySessions),
+              ),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
-              Layer.provide(ProviderMaintenanceRunner.layer),
+              Layer.provide(
+                Layer.succeed(
+                  ProviderMaintenanceRunner.ProviderMaintenanceRunner,
+                  providerMaintenance,
+                ),
+              ),
               Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
               // Share server-lifetime PR caches so WS mutations invalidate every client's HTTP diffs.
@@ -3806,7 +3825,7 @@ export const layer = Layer.unwrap(
               Layer.provide(
                 Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
               ),
-              Layer.provide(OtlpEndpointCheck.layer),
+              Layer.provide(Layer.succeed(OtlpEndpointCheck.OtlpEndpointCheck, otlpEndpointCheck)),
               Layer.provide(
                 Layer.succeed(
                   PullRequestReviewGuideService.PullRequestReviewGuideService,
@@ -3818,22 +3837,18 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(PeerThreadRelay.PeerThreadRelay, peerThreadRelay)),
               Layer.provide(Layer.succeed(PeerClientPairing.PeerClientPairing, peerClientPairing)),
               Layer.provide(
-                SourceControlDiscovery.layer.pipe(
-                  Layer.provide(
-                    SourceControlProviderRegistry.layer.pipe(
-                      Layer.provide(SourceControlBuiltInDrivers.layer),
-                      Layer.provideMerge(GitVcsDriver.layer),
-                      Layer.provide(
-                        VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),
-                      ),
-                    ),
-                  ),
+                Layer.succeed(
+                  SourceControlDiscovery.SourceControlDiscovery,
+                  sourceControlDiscovery,
                 ),
               ),
             ),
           ),
         );
-        const wrapServerWireFraming = (socket: Socket.Socket, binaryOut: boolean): Socket.Socket => {
+        const wrapServerWireFraming = (
+          socket: Socket.Socket,
+          binaryOut: boolean,
+        ): Socket.Socket => {
           const reader = Effect.map(socket.reader, (base) => ({
             upgrade: base.upgrade,
             pull: Effect.map(base.pull, decodeWireChunks),
@@ -3893,4 +3908,22 @@ export const layer = Layer.unwrap(
       ),
     );
   }),
-).pipe(Layer.provide(NpmRelease.layer));
+).pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      NpmRelease.layer,
+      AcpRegistrySessions.layer,
+      ProviderMaintenanceRunner.layer,
+      OtlpEndpointCheck.layer,
+      SourceControlDiscovery.layer.pipe(
+        Layer.provide(
+          SourceControlProviderRegistry.layer.pipe(
+            Layer.provide(SourceControlBuiltInDrivers.layer),
+            Layer.provideMerge(GitVcsDriver.layer),
+            Layer.provide(VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer))),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
